@@ -227,6 +227,12 @@ synthetic. The moment a physical tracker posts to `/telemetry/gps`, its fixes ar
 **[CONCEPT.md](CONCEPT.md)** — or **[CONCEPT.fr.md](CONCEPT.fr.md)** en français. It is blunt about
 which features learn, which are stated priors, and which are not AI at all.
 
+**If the question is "how do I actually get my trucks onto the map":**
+**[TRACKING.md](TRACKING.md)** — or **[TRACKING.fr.md](TRACKING.fr.md)** en français. It compares
+the three intake paths (the driver's phone at €0, a €15–50 GT06 tracker, an existing telematics
+feed), states what each one costs, what it requires, and — for the phone — what it honestly cannot
+do.
+
 Deeper detail: [ARCHITECTURE.md](ARCHITECTURE.md) · [DATABASE.md](DATABASE.md) ·
 [AI.md](AI.md) · [API.md](API.md) · [DEPLOYMENT.md](DEPLOYMENT.md).
 

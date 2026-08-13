@@ -229,6 +229,84 @@ const en = {
   'rec.proposedSplit': 'Proposed split',
   'rec.expires': 'expires {when}',
   'rec.nothingNeeded': 'Nothing needs attention',
+
+  /* ----------------------------------------------------------------- devices */
+  'dev.title': 'Tracking devices',
+  'dev.intro':
+    'Three ways to put a truck on the map. They all feed the same validated pipeline, so a fix from a €15 tracker is checked exactly as hard as one from the API.',
+  'dev.nav': 'Devices',
+  'dev.kind': 'Type',
+  'dev.identifier': 'Identifier',
+  'dev.vehicle': 'Vehicle',
+  'dev.status': 'Status',
+  'dev.lastSeen': 'Last seen',
+  'dev.battery': 'Battery',
+  'dev.accepted': 'Accepted',
+  'dev.rejected': 'Rejected',
+  'dev.interval': 'Interval',
+  'dev.late': 'reporting late',
+  'dev.unbound': 'no vehicle',
+  'dev.none': 'No device enrolled yet',
+  'dev.noneHint': 'Enrol one below. A driver’s phone costs nothing and works today.',
+  'dev.enrol': 'Enrol a device',
+  'dev.enrolling': 'enrolling…',
+  'dev.disable': 'disable',
+  'dev.label': 'Label',
+  'dev.labelHint': 'e.g. “Kwame’s phone”',
+  'dev.identifierHint': 'IMEI printed on a hardware tracker. Any stable string for a phone.',
+  'dev.pickVehicle': 'Vehicle this device travels with',
+  'dev.kind.PHONE': 'Driver’s phone',
+  'dev.kind.GT06': 'GT06 / Concox tracker',
+  'dev.kind.TELTONIKA': 'Teltonika tracker',
+  'dev.kind.MANUAL': 'Manual entry',
+  'dev.kindHint.PHONE': 'No hardware. The driver opens a web page and presses start.',
+  'dev.kindHint.GT06':
+    'A €15–50 hardwired box. Speaks a binary protocol on a raw TCP socket, not HTTP.',
+  'dev.kindHint.TELTONIKA': 'Not decoded yet — enrolling one records it but stores no positions.',
+  'dev.kindHint.MANUAL': 'Positions posted by hand or by another system through the API.',
+  'dev.gateway': 'Hardware gateway',
+  'dev.gatewayUp': 'listening on tcp/{port}',
+  'dev.gatewayDown': 'not listening',
+  'dev.gatewayStats': '{decoded} packets decoded · {stored} positions stored · {rejected} rejected',
+  'dev.setup': 'Setup',
+  'dev.secretOnce':
+    'This pairing secret is shown once and never again. Give it to the driver now, or enrol the device again.',
+  'dev.copyLink': 'copy the driver link',
+  'dev.copied': 'copied',
+
+  /* ------------------------------------------------------------------- drive */
+  'drive.title': 'Driver',
+  'drive.pair': 'Pair this phone',
+  'drive.pairIntro':
+    'Enter the identifier and pairing secret your dispatcher gave you. This phone then reports its position for as long as the page is open.',
+  'drive.identifier': 'Identifier',
+  'drive.secret': 'Pairing secret',
+  'drive.start': 'Start tracking',
+  'drive.stop': 'Stop tracking',
+  'drive.tracking': 'Tracking',
+  'drive.stopped': 'Stopped',
+  'drive.forget': 'unpair this phone',
+  'drive.speed': 'Speed',
+  'drive.accuracy': 'Accuracy',
+  'drive.fixes': 'Fixes taken',
+  'drive.queued': 'Waiting to send',
+  'drive.sent': 'Sent',
+  'drive.lastSent': 'Last sent',
+  'drive.never': 'never',
+  'drive.offline': 'No connection — positions are being saved on the phone',
+  'drive.online': 'Connected',
+  'drive.permissionDenied':
+    'Location permission was refused. Allow it in the browser settings for this site, then press start again.',
+  'drive.unsupported': 'This browser has no geolocation. Use Chrome, Safari or Firefox.',
+  'drive.screenWarning':
+    'Keep this screen on. A phone browser stops receiving positions once the page is hidden — positions already taken are kept and sent when you come back.',
+  'drive.wakeLockOn': 'Screen kept awake',
+  'drive.batteryHint': 'Plug the phone in. Continuous GPS uses roughly 5–10% of a battery per hour.',
+  'drive.rejectedHint': '{n} rejected by the server',
+  'drive.install': 'Add this page to your home screen to open it in one tap.',
+
+  /* ----------------------------------------------------------------- generic */
+  'common.cancel': 'Cancel',
 } as const;
 
 export type TranslationKey = keyof typeof en;
@@ -421,6 +499,88 @@ const fr: Record<TranslationKey, string> = {
   'rec.proposedSplit': 'Répartition proposée',
   'rec.expires': 'expire {when}',
   'rec.nothingNeeded': 'Rien ne requiert d’attention',
+
+  'dev.title': 'Boîtiers de suivi',
+  'dev.intro':
+    'Trois façons de mettre un camion sur la carte. Toutes alimentent la même chaîne de validation : une position venue d’un traceur à 15 € est contrôlée aussi sévèrement qu’une position venue de l’API.',
+  'dev.nav': 'Boîtiers',
+  'dev.kind': 'Type',
+  'dev.identifier': 'Identifiant',
+  'dev.vehicle': 'Véhicule',
+  'dev.status': 'État',
+  'dev.lastSeen': 'Vu pour la dernière fois',
+  'dev.battery': 'Batterie',
+  'dev.accepted': 'Acceptées',
+  'dev.rejected': 'Rejetées',
+  'dev.interval': 'Intervalle',
+  'dev.late': 'en retard d’émission',
+  'dev.unbound': 'aucun véhicule',
+  'dev.none': 'Aucun boîtier enregistré',
+  'dev.noneHint':
+    'Enregistrez-en un ci-dessous. Le téléphone du chauffeur ne coûte rien et fonctionne aujourd’hui.',
+  'dev.enrol': 'Enregistrer un boîtier',
+  'dev.enrolling': 'enregistrement…',
+  'dev.disable': 'désactiver',
+  'dev.label': 'Libellé',
+  'dev.labelHint': 'ex. « téléphone de Kwame »',
+  'dev.identifierHint':
+    'IMEI imprimé sur un traceur matériel. N’importe quelle chaîne stable pour un téléphone.',
+  'dev.pickVehicle': 'Véhicule accompagné par ce boîtier',
+  'dev.kind.PHONE': 'Téléphone du chauffeur',
+  'dev.kind.GT06': 'Traceur GT06 / Concox',
+  'dev.kind.TELTONIKA': 'Traceur Teltonika',
+  'dev.kind.MANUAL': 'Saisie manuelle',
+  'dev.kindHint.PHONE':
+    'Aucun matériel. Le chauffeur ouvre une page web et appuie sur démarrer.',
+  'dev.kindHint.GT06':
+    'Un boîtier filaire de 15 à 50 €. Parle un protocole binaire sur socket TCP brut, pas HTTP.',
+  'dev.kindHint.TELTONIKA':
+    'Pas encore décodé — l’enregistrer le référence mais ne stocke aucune position.',
+  'dev.kindHint.MANUAL': 'Positions envoyées à la main ou par un autre système via l’API.',
+  'dev.gateway': 'Passerelle matérielle',
+  'dev.gatewayUp': 'à l’écoute sur tcp/{port}',
+  'dev.gatewayDown': 'pas à l’écoute',
+  'dev.gatewayStats':
+    '{decoded} paquets décodés · {stored} positions stockées · {rejected} rejetés',
+  'dev.setup': 'Mise en service',
+  'dev.secretOnce':
+    'Ce code d’appairage est affiché une seule fois. Transmettez-le au chauffeur maintenant, ou réenregistrez le boîtier.',
+  'dev.copyLink': 'copier le lien chauffeur',
+  'dev.copied': 'copié',
+
+  'drive.title': 'Chauffeur',
+  'drive.pair': 'Appairer ce téléphone',
+  'drive.pairIntro':
+    'Saisissez l’identifiant et le code d’appairage donnés par votre exploitation. Ce téléphone transmettra ensuite sa position tant que la page reste ouverte.',
+  'drive.identifier': 'Identifiant',
+  'drive.secret': 'Code d’appairage',
+  'drive.start': 'Démarrer le suivi',
+  'drive.stop': 'Arrêter le suivi',
+  'drive.tracking': 'Suivi en cours',
+  'drive.stopped': 'Arrêté',
+  'drive.forget': 'désappairer ce téléphone',
+  'drive.speed': 'Vitesse',
+  'drive.accuracy': 'Précision',
+  'drive.fixes': 'Positions relevées',
+  'drive.queued': 'En attente d’envoi',
+  'drive.sent': 'Envoyées',
+  'drive.lastSent': 'Dernier envoi',
+  'drive.never': 'jamais',
+  'drive.offline': 'Pas de réseau — les positions sont conservées dans le téléphone',
+  'drive.online': 'Connecté',
+  'drive.permissionDenied':
+    'La localisation a été refusée. Autorisez-la dans les réglages du navigateur pour ce site, puis appuyez de nouveau sur démarrer.',
+  'drive.unsupported':
+    'Ce navigateur n’a pas de géolocalisation. Utilisez Chrome, Safari ou Firefox.',
+  'drive.screenWarning':
+    'Gardez cet écran allumé. Un navigateur de téléphone cesse de recevoir des positions dès que la page est masquée — celles déjà relevées sont conservées et envoyées à votre retour.',
+  'drive.wakeLockOn': 'Écran maintenu allumé',
+  'drive.batteryHint':
+    'Branchez le téléphone. Le GPS en continu consomme environ 5 à 10 % de batterie par heure.',
+  'drive.rejectedHint': '{n} rejetées par le serveur',
+  'drive.install': 'Ajoutez cette page à votre écran d’accueil pour l’ouvrir en un geste.',
+
+  'common.cancel': 'Annuler',
 };
 
 const CATALOGUE: Record<Locale, Record<TranslationKey, string>> = { en, fr };
