@@ -39,9 +39,10 @@
     "@nestjs/terminus": "^11.0.0",
     "@nestjs/throttler": "^6.4.0",
     "@nestjs/websockets": "^11.0.6",
+    "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.3.1",
     "@scip/shared": "*",
-    "@node-rs/argon2": "^2.0.2",
+    "@types/ws": "^8.18.1",
     "axios": "^1.7.9",
     "bullmq": "^5.34.10",
     "class-transformer": "^0.5.1",
@@ -53,7 +54,8 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.2",
@@ -74,13 +76,22 @@
     "typescript": "^5.7.3"
   },
   "jest": {
-    "moduleFileExtensions": ["js", "json", "ts"],
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": ["ts-jest", {}]
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {}
+      ]
     },
-    "collectCoverageFrom": ["**/*.(t|j)s"],
+    "collectCoverageFrom": [
+      "**/*.(t|j)s"
+    ],
     "coverageDirectory": "../coverage",
     "testEnvironment": "node",
     "moduleNameMapper": {

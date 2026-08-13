@@ -75,6 +75,8 @@ model Company {
   inventoryAlerts  InventoryAlert[]
   domainEvents     DomainEvent[]
   deliveries       Delivery[]
+  vessels          Vessel[]
+  voyages          Voyage[]
 
   @@index([isActive])
   @@map("companies")
@@ -783,6 +785,193 @@ model Route {
   @@map("routes")
 }
 
+// ===========================================================================
+// Maritime
+//
+// Ocean freight is a different physical problem from road freight and gets its own models
+// rather than being forced into `Vehicle`/`Shipment`. A truck belongs to one company and is
+// dispatched; a vessel is a shared public asset that hundreds of shippers book space on, is
+// identified worldwide by IMO/MMSI rather than by a plate you assigned it, and broadcasts its
+// own position over AIS whether or not you own it. Modelling a container ship as a `Vehicle`
+// would mean either pretending you own the Ever Given or losing the identifiers that make a
+// vessel findable at all.
+//
+// A `Shipment` may carry an optional `voyageId`: that is the ocean leg of a door-to-door
+// movement, with road legs either side.
+// ===========================================================================
+
+enum VesselType {
+  CONTAINER
+  BULK_CARRIER
+  TANKER
+  GENERAL_CARGO
+  RORO
+  REEFER
+  FEEDER
+  OTHER
+}
+
+enum VesselStatus {
+  UNDERWAY
+  AT_ANCHOR
+  MOORED
+  AGROUND
+  NOT_UNDER_COMMAND
+  UNKNOWN
+}
+
+/// A ship. Identity follows the international standards so a vessel can be found by whichever
+/// identifier the user happens to have on the bill of lading.
+model Vessel {
+  id          String       @id @default(cuid())
+  /// Null for vessels tracked from a public AIS feed that the company does not operate.
+  companyId   String?
+  /// IMO number: permanent, survives renaming and reflagging. The identifier that actually
+  /// identifies a hull.
+  imoNumber   String?      @unique
+  /// MMSI: the radio identity AIS broadcasts. Changes with the flag state, so it is not a
+  /// stable key — but it is what arrives in the feed.
+  mmsi        String?      @unique
+  name        String
+  /// Previous names, so a search for the old name still finds the ship.
+  formerNames String[]     @default([])
+  callSign    String?
+  type        VesselType   @default(CONTAINER)
+  flag        String?
+  status      VesselStatus @default(UNKNOWN)
+
+  /// TEU for container ships, deadweight tonnes otherwise.
+  capacityTeu Int?
+  deadweightTonnes Int?
+  lengthM     Float?
+  beamM       Float?
+  builtYear   Int?
+  operator    String?
+
+  /// Denormalised last known position, so the live map is one cheap query.
+  lastLatitude   Float?
+  lastLongitude  Float?
+  lastSpeedKnots Float?
+  lastCourseDegrees Float?
+  lastHeadingDegrees Float?
+  lastDraughtM   Float?
+  lastPositionAt DateTime?
+  /// Which provider supplied the last fix: AIS_STREAM, SIMULATOR, MANUAL.
+  positionSource String?
+
+  isDemoData Boolean  @default(false)
+  isTracked  Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company   Company?         @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  voyages   Voyage[]
+  positions VesselPosition[]
+
+  @@index([companyId, isTracked])
+  @@index([lastPositionAt])
+  @@map("vessels")
+}
+
+/// A seaport. Identified by UN/LOCODE, the five-character standard that appears on every
+/// booking, so a user can paste one straight from a bill of lading.
+model Port {
+  id        String   @id @default(cuid())
+  /// UN/LOCODE, e.g. GHTEM for Tema, NLRTM for Rotterdam.
+  locode    String   @unique
+  name      String
+  country   String
+  latitude  Float
+  longitude Float
+  timezone  String?
+  isDemoData Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  departures Voyage[] @relation("VoyageOrigin")
+  arrivals   Voyage[] @relation("VoyageDestination")
+
+  @@index([country])
+  @@map("ports")
+}
+
+enum VoyageStatus {
+  SCHEDULED
+  LOADING
+  AT_SEA
+  APPROACHING
+  BERTHED
+  DISCHARGING
+  COMPLETED
+  CANCELLED
+}
+
+/// One vessel sailing between two ports. The unit a shipper actually books against.
+model Voyage {
+  id            String       @id @default(cuid())
+  companyId     String?
+  vesselId      String
+  originPortId  String
+  destinationPortId String
+  /// Carrier's voyage number, e.g. "084W".
+  voyageNumber  String
+  status        VoyageStatus @default(SCHEDULED)
+
+  scheduledDepartureAt DateTime
+  actualDepartureAt    DateTime?
+  scheduledArrivalAt   DateTime
+  /// ETA as broadcast by the vessel or computed by the ETA engine.
+  estimatedArrivalAt   DateTime?
+  actualArrivalAt      DateTime?
+
+  /// Great-circle route sampled as [{latitude, longitude}] — the planned track.
+  plannedTrack  Json?
+  distanceNm    Float?
+  travelledNm   Float        @default(0)
+
+  isDemoData Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company         Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  vessel          Vessel     @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+  originPort      Port       @relation("VoyageOrigin", fields: [originPortId], references: [id], onDelete: Restrict)
+  destinationPort Port       @relation("VoyageDestination", fields: [destinationPortId], references: [id], onDelete: Restrict)
+  shipments       Shipment[]
+  positions       VesselPosition[]
+
+  @@unique([vesselId, voyageNumber, scheduledDepartureAt])
+  @@index([companyId, status])
+  @@index([status, estimatedArrivalAt])
+  @@map("voyages")
+}
+
+/// An AIS position report. Kept separate from `gps_positions` because the fields differ:
+/// AIS reports speed in knots, carries course *and* heading (a ship crabs in a current, so they
+/// are not the same), and includes navigational status and draught.
+model VesselPosition {
+  id             String   @id @default(cuid())
+  vesselId       String
+  voyageId       String?
+  latitude       Float
+  longitude      Float
+  speedKnots     Float?
+  courseDegrees  Float?
+  headingDegrees Float?
+  draughtM       Float?
+  navStatus      String?
+  /// AIS_STREAM, SIMULATOR or MANUAL — never inferred, always recorded.
+  source         String   @default("SIMULATOR")
+  recordedAt     DateTime
+  createdAt      DateTime @default(now())
+
+  vessel Vessel  @relation(fields: [vesselId], references: [id], onDelete: Cascade)
+  voyage Voyage? @relation(fields: [voyageId], references: [id], onDelete: SetNull)
+
+  @@index([vesselId, recordedAt])
+  @@index([voyageId, recordedAt])
+  @@map("vessel_positions")
+}
+
 enum ShipmentStatus {
   PLANNED
   LOADING
@@ -803,6 +992,8 @@ model Shipment {
   driverId             String?
   routeId              String?
   customerId           String?
+  /// Set when this shipment travels as part of an ocean leg.
+  voyageId             String?
   originWarehouseId    String?
   destinationWarehouseId String?
   trackingNumber       String
@@ -850,6 +1041,7 @@ model Shipment {
   driver               Driver?        @relation(fields: [driverId], references: [id], onDelete: SetNull)
   route                Route?         @relation(fields: [routeId], references: [id], onDelete: SetNull)
   customer             Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  voyage               Voyage?        @relation(fields: [voyageId], references: [id], onDelete: SetNull)
   originWarehouse      Warehouse?     @relation("ShipmentOrigin", fields: [originWarehouseId], references: [id], onDelete: SetNull)
   destinationWarehouse Warehouse?     @relation("ShipmentDestination", fields: [destinationWarehouseId], references: [id], onDelete: SetNull)
 
@@ -866,6 +1058,7 @@ model Shipment {
   @@index([status, estimatedArrivalAt])
   @@index([vehicleId, status])
   @@index([purchaseOrderId])
+  @@index([voyageId])
   @@map("shipments")
 }
 

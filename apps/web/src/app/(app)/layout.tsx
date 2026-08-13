@@ -6,11 +6,12 @@ import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { LOCALES, useI18n, type TranslationKey } from '@/lib/i18n';
 import type { Permission } from '@scip/shared';
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: TranslationKey;
   permission: Permission;
   context: 'TRACK' | 'OPTIMISE' | 'DATA';
 }
@@ -21,31 +22,33 @@ interface NavItem {
  * are different jobs, often different people.
  */
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Control', permission: 'analytics:read', context: 'TRACK' },
-  { href: '/map', label: 'Live map', permission: 'gps:read', context: 'TRACK' },
-  { href: '/shipments', label: 'Shipments', permission: 'shipment:read', context: 'TRACK' },
-  { href: '/deliveries', label: 'Deliveries', permission: 'delivery:read', context: 'TRACK' },
-  { href: '/incidents', label: 'Incidents', permission: 'incident:read', context: 'TRACK' },
+  { href: '/dashboard', labelKey: 'nav.control', permission: 'analytics:read', context: 'TRACK' },
+  { href: '/map', labelKey: 'nav.map', permission: 'gps:read', context: 'TRACK' },
+  { href: '/maritime', labelKey: 'nav.maritime', permission: 'gps:read', context: 'TRACK' },
+  { href: '/shipments', labelKey: 'nav.shipments', permission: 'shipment:read', context: 'TRACK' },
+  { href: '/deliveries', labelKey: 'nav.deliveries', permission: 'delivery:read', context: 'TRACK' },
+  { href: '/incidents', labelKey: 'nav.incidents', permission: 'incident:read', context: 'TRACK' },
 
-  { href: '/recommendations', label: 'Advice', permission: 'recommendation:read', context: 'OPTIMISE' },
-  { href: '/forecasting', label: 'Forecasting', permission: 'ai:read', context: 'OPTIMISE' },
-  { href: '/allocation', label: 'Allocation', permission: 'ai:read', context: 'OPTIMISE' },
-  { href: '/routing', label: 'Routing', permission: 'ai:read', context: 'OPTIMISE' },
-  { href: '/scenarios', label: 'Scenarios', permission: 'scenario:read', context: 'OPTIMISE' },
+  { href: '/recommendations', labelKey: 'nav.recommendations', permission: 'recommendation:read', context: 'OPTIMISE' },
+  { href: '/forecasting', labelKey: 'nav.forecasting', permission: 'ai:read', context: 'OPTIMISE' },
+  { href: '/allocation', labelKey: 'nav.allocation', permission: 'ai:read', context: 'OPTIMISE' },
+  { href: '/routing', labelKey: 'nav.routing', permission: 'ai:read', context: 'OPTIMISE' },
+  { href: '/scenarios', labelKey: 'nav.scenarios', permission: 'scenario:read', context: 'OPTIMISE' },
 
-  { href: '/inventory', label: 'Inventory', permission: 'inventory:read', context: 'DATA' },
-  { href: '/purchase-orders', label: 'Orders', permission: 'purchase_order:read', context: 'DATA' },
-  { href: '/suppliers', label: 'Suppliers', permission: 'supplier:read', context: 'DATA' },
+  { href: '/inventory', labelKey: 'nav.inventory', permission: 'inventory:read', context: 'DATA' },
+  { href: '/purchase-orders', labelKey: 'nav.orders', permission: 'purchase_order:read', context: 'DATA' },
+  { href: '/suppliers', labelKey: 'nav.suppliers', permission: 'supplier:read', context: 'DATA' },
 ];
 
-const CONTEXT_LABEL = {
-  TRACK: 'Track',
-  OPTIMISE: 'Optimise',
-  DATA: 'Master data',
-} as const;
+const CONTEXT_LABEL_KEY = {
+  TRACK: 'nav.group.track',
+  OPTIMISE: 'nav.group.optimise',
+  DATA: 'nav.group.data',
+} as const satisfies Record<string, TranslationKey>;
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, signOut, can } = useAuth();
+  const { t, locale, setLocale } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -71,7 +74,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
       <div className="deck-surface flex min-h-screen items-center justify-center">
         <span className="font-mono text-[0.6875rem] uppercase tracking-[0.2em] text-[var(--color-ink-faint)]">
-          Establishing session…
+          {t('nav.establishing')}
         </span>
       </div>
     );
@@ -96,7 +99,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {groups.map((group) => (
             <div key={group.context} className="mb-4">
               <div className="px-4 pb-1.5 font-mono text-[0.5rem] uppercase tracking-[0.22em] text-[var(--color-ink-faint)]">
-                {CONTEXT_LABEL[group.context]}
+                {t(CONTEXT_LABEL_KEY[group.context])}
               </div>
               {group.items.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -113,7 +116,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {active && (
                       <span className="absolute inset-y-0 left-0 w-[2px] bg-[var(--color-signal)]" />
                     )}
-                    {item.label}
+                    {t(item.labelKey)}
                   </Link>
                 );
               })}
@@ -126,14 +129,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <span className={`live-dot ${aiStatus?.reachable ? '' : 'live-dot-stale'}`} />
             <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-              {aiStatus?.reachable ? 'AI online' : 'AI offline'}
+              {aiStatus?.reachable ? t('nav.aiOnline') : t('nav.aiOffline')}
             </span>
           </div>
           {aiStatus && !aiStatus.reachable && (
             <p className="mt-1 text-[0.625rem] leading-snug text-[var(--color-ink-faint)]">
-              Tracking and stock still work.
+              {t('nav.aiOfflineHint')}
             </p>
           )}
+        </div>
+
+        {/* Language switcher sits with the account controls: it is a personal preference, not
+            navigation, and it belongs where a user looks for "my settings". */}
+        <div className="flex items-center gap-1 border-t border-[var(--color-hairline)] px-4 py-2">
+          {LOCALES.map((option) => (
+            <button
+              key={option}
+              onClick={() => setLocale(option)}
+              aria-pressed={locale === option}
+              className={`px-1.5 py-0.5 font-mono text-[0.5625rem] uppercase tracking-[0.14em] transition-colors ${
+                locale === option
+                  ? 'text-[var(--color-signal)]'
+                  : 'text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]'
+              }`}
+            >
+              {option}
+            </button>
+          ))}
         </div>
 
         <div className="border-t border-[var(--color-hairline)] px-4 py-3">
@@ -147,7 +169,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             onClick={() => void signOut()}
             className="mt-2 font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)] hover:text-[var(--color-alert)]"
           >
-            Sign out
+            {t('nav.signOut')}
           </button>
         </div>
       </aside>
@@ -156,14 +178,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-[var(--color-hairline)] bg-[color-mix(in_srgb,var(--color-void)_88%,transparent)] px-5 py-2.5 backdrop-blur">
           <div className="font-mono text-[0.625rem] uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">
-            {visible.find((item) => pathname.startsWith(item.href))?.label ?? 'SCIP'}
+            {(() => {
+              const current = visible.find((item) => pathname.startsWith(item.href));
+              return current ? t(current.labelKey) : 'SCIP';
+            })()}
           </div>
 
           <Link
             href="/notifications"
             className="flex items-center gap-2 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-[var(--color-ink-dim)] hover:text-[var(--color-signal)]"
           >
-            Alerts
+            {t('nav.alerts')}
             {unread && unread.unread > 0 ? (
               <span className="chip chip-alert tnum">{unread.unread}</span>
             ) : (

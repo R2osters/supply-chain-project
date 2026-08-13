@@ -301,6 +301,11 @@ function demandFor(
  * the rest.
  */
 async function teardown(companyId: string): Promise<void> {
+  // Voyages pin their ports with onDelete: Restrict, so they go before the company cascade.
+  await prisma.vesselPosition.deleteMany({ where: { vessel: { companyId } } });
+  await prisma.shipment.updateMany({ where: { companyId }, data: { voyageId: null } });
+  await prisma.voyage.deleteMany({ where: { companyId } });
+  await prisma.vessel.deleteMany({ where: { companyId } });
   await prisma.shipmentItem.deleteMany({ where: { shipment: { companyId } } });
   await prisma.purchaseOrderItem.deleteMany({ where: { purchaseOrder: { companyId } } });
   await prisma.stockMovement.deleteMany({ where: { companyId } });
@@ -1035,6 +1040,15 @@ async function main(): Promise<void> {
     });
   }
   console.log('Incidents created');
+
+  /* -------------------------------------------------------------- maritime */
+
+  const { seedMaritime } = await import('./seed-maritime');
+  const maritime = await seedMaritime(prisma, company.id, true);
+  console.log(
+    `Maritime: ${maritime.ports} ports, ${maritime.vessels} vessels, ` +
+      `${maritime.voyages} voyages, ${maritime.positions} position reports`,
+  );
 
   /* ------------------------------------------------ supplier performance --- */
 
