@@ -18,6 +18,14 @@ import { InventoryModule } from './modules/inventory/inventory.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
 import { ShipmentsModule } from './modules/shipments/shipments.module';
 import { GpsModule } from './modules/gps/gps.module';
+import { AiModule } from './modules/ai/ai.module';
+import { StorageModule } from './modules/storage/storage.module';
+import { DeliveriesModule } from './modules/deliveries/deliveries.module';
+import { IncidentsModule } from './modules/incidents/incidents.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { RecommendationsModule } from './modules/recommendations/recommendations.module';
+import { JobsModule } from './modules/jobs/jobs.module';
 
 @Module({
   imports: [
@@ -53,6 +61,15 @@ import { GpsModule } from './modules/gps/gps.module';
     PurchaseOrdersModule,
     ShipmentsModule,
     GpsModule,
+    StorageModule,
+    NotificationsModule,
+    AiModule,
+    DeliveriesModule,
+    IncidentsModule,
+    AnalyticsModule,
+    RecommendationsModule,
+    // Last: it depends on almost everything above.
+    JobsModule,
   ],
   providers: [
     // Order matters: throttle first (cheapest rejection), then authenticate, then authorise.

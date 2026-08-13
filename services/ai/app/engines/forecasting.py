@@ -568,16 +568,97 @@ def forecast_demand(
     )
 
 
+#: Cap on the number of one-step refits used to estimate residual spread.
+#:
+#: This estimate is the basis of the prediction interval, and the honest way to compute it is a
+#: rolling one-step-ahead refit. Done at every point of a two-year series that is ~365 refits, and
+#: for HOLT_WINTERS or GRADIENT_BOOSTING each refit is a full optimisation — the first version of
+#: this function took over 30 seconds and timed out the API's HTTP client.
+#:
+#: Sampling evenly-spaced origins instead costs a bounded number of refits. The standard error of
+#: a standard deviation estimated from n points falls as 1/sqrt(2n), so 60 samples pin the spread
+#: to roughly ±9 % — far inside the uncertainty already present in the forecast itself, and not
+#: worth another 25 seconds of compute.
+RESIDUAL_SAMPLE_LIMIT = 60
+
+#: Holt-Winters runs a full likelihood optimisation per fit, so it gets a tighter budget.
+RESIDUAL_SAMPLE_LIMIT_EXPENSIVE = 16
+
+
+def _gradient_boosting_residual_std(
+    values: np.ndarray, start_date: pd.Timestamp | None
+) -> float | None:
+    """Residual spread for the boosted model from a **single** fit.
+
+    Refitting a gradient-boosted model 60 times costs ~18 seconds and times out the caller. It is
+    also unnecessary: fit once on the first 80 % of the series, then predict each held-out day
+    one step ahead using that day's *true* lags. Those are genuine out-of-sample one-step
+    residuals — the recursive error compounding that affects a multi-day forecast does not apply
+    to a one-step residual, so nothing is lost by not refitting.
+
+    Returns ``None`` when the series is too short, so the caller falls back to the sampled path.
+    """
+    from sklearn.ensemble import HistGradientBoostingRegressor
+
+    lags = [1, 2, 3, 7, 14, 28]
+    if values.size < max(lags) + 60:
+        return None
+
+    frame = _build_features(values, lags, start_date).dropna()
+    if frame.shape[0] < 50:
+        return None
+
+    split = int(frame.shape[0] * 0.8)
+    train, holdout = frame.iloc[:split], frame.iloc[split:]
+    if holdout.shape[0] < 10:
+        return None
+
+    feature_columns = [c for c in frame.columns if c != "y"]
+    model = HistGradientBoostingRegressor(
+        max_iter=200,
+        learning_rate=0.08,
+        max_depth=4,
+        min_samples_leaf=10,
+        l2_regularization=1.0,
+        random_state=42,
+    )
+    model.fit(train[feature_columns], train["y"])
+
+    predictions = np.maximum(model.predict(holdout[feature_columns]), 0.0)
+    residuals = holdout["y"].to_numpy(dtype=float) - predictions
+
+    spread = float(np.std(residuals, ddof=1))
+    return spread if spread > 0 else None
+
+
 def _residual_std(
     values: np.ndarray, model: ModelName, period: int, start_date: pd.Timestamp | None
 ) -> float:
-    """One-step-ahead in-sample residual spread — the basis of the prediction interval."""
+    """One-step-ahead residual spread, estimated from a bounded sample of refit origins."""
     if values.size < 3:
         return float(np.std(values)) or 1.0
 
-    residuals: list[float] = []
+    if model == "GRADIENT_BOOSTING":
+        single_fit = _gradient_boosting_residual_std(values, start_date)
+        if single_fit is not None:
+            return single_fit
+
+    limit = (
+        RESIDUAL_SAMPLE_LIMIT_EXPENSIVE if model == "HOLT_WINTERS" else RESIDUAL_SAMPLE_LIMIT
+    )
     start = max(MIN_HISTORY.get(model, 2), int(values.size * 0.5))
-    for index in range(start, values.size):
+    origins = list(range(start, values.size))
+    if not origins:
+        return float(np.std(values)) or 1.0
+
+    if len(origins) > limit:
+        # Evenly spaced rather than the most recent N: the spread should reflect the whole
+        # validation region, not just the tail, which may be unrepresentatively calm or wild.
+        step = len(origins) / limit
+        origins = [origins[int(i * step)] for i in range(limit)]
+
+    residuals: list[float] = []
+    for index in origins:
         predicted = _forecast_with(
             model, values[:index], 1, seasonal_period=period, start_date=start_date
         )[0]
