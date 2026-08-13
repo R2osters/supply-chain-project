@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators';
-import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { RecommendationQueryDto } from '../../common/dto/filter-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { RecommendationsService } from './recommendations.service';
 
@@ -25,17 +25,12 @@ export class RecommendationsController {
     summary: 'Open recommendations, most urgent first',
     description: 'Defaults to OPEN. Ordering is CRITICAL → HIGH → MEDIUM → LOW, then newest.',
   })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'priority', required: false })
-  @ApiQuery({ name: 'type', required: false })
-  list(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query() query: PaginationQueryDto,
-    @Query('status') status?: string,
-    @Query('priority') priority?: string,
-    @Query('type') type?: string,
-  ) {
-    return this.service.list(user, query, { status, priority, type });
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: RecommendationQueryDto) {
+    return this.service.list(user, query, {
+      status: query.status,
+      priority: query.priority,
+      type: query.type,
+    });
   }
 
   @Get('stats')

@@ -1,7 +1,7 @@
 import { Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, RequirePermissions } from '../../common/decorators';
-import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { NotificationQueryDto } from '../../common/dto/filter-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { NotificationsService } from './notifications.service';
 
@@ -14,13 +14,8 @@ export class NotificationsController {
   @Get()
   @RequirePermissions('notification:read')
   @ApiOperation({ summary: 'Your notifications, newest first' })
-  @ApiQuery({ name: 'unreadOnly', required: false })
-  list(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query() query: PaginationQueryDto,
-    @Query('unreadOnly') unreadOnly?: string,
-  ) {
-    return this.service.list(user, query, unreadOnly === 'true');
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: NotificationQueryDto) {
+    return this.service.list(user, query, query.unreadOnly === true);
   }
 
   @Get('unread-count')
