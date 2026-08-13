@@ -10,6 +10,25 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
 import { PrismaService } from './prisma/prisma.service';
 
+/**
+ * Teach `JSON.stringify` how to handle BigInt.
+ *
+ * Postgres `COUNT(*)::bigint` comes back from a Prisma raw query as a JavaScript BigInt, and
+ * `JSON.stringify` throws on one — which turns an otherwise-working analytics endpoint into a
+ * 500 the first time somebody adds an aggregate. Converting at each call site works until
+ * someone forgets; doing it once here means no aggregate query can produce that failure again.
+ *
+ * Values inside the safe-integer range become numbers, which is what a count is. Anything larger
+ * becomes a string rather than a silently-wrong number: 2^53 rows is not a count, it is a bug or
+ * an id, and neither should be quietly rounded.
+ */
+(BigInt.prototype as unknown as { toJSON(): number | string }).toJSON = function toJSON() {
+  const value = this as unknown as bigint;
+  return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(value)
+    : value.toString();
+};
+
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const config = app.get(ConfigService<AppConfig, true>);
