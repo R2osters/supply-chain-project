@@ -877,9 +877,13 @@ async function main(): Promise<void> {
         plannedDeparture.getTime() + corridor.durationMinutes * 60_000,
       );
 
-      // Delivered shipments land on a distribution centred slightly late — real freight is.
+      // Arrival is drawn relative to the promise, centred ~2 h early with a 2 h spread. That
+      // puts about 84 % of deliveries on time, which is where competent road freight actually
+      // sits. Centring on the promise itself — the obvious-looking choice — would make half of
+      // every carrier's deliveries late by construction and produce a demo whose on-time rate
+      // reads 41 %, which no operator would believe.
       const deliveredAt = isHistorical
-        ? new Date(plannedArrival.getTime() + normal(0.4, 2.2) * 3_600_000)
+        ? new Date(plannedArrival.getTime() + normal(-2.0, 2.0) * 3_600_000)
         : null;
 
       const items = Array.from({ length: intBetween(1, 4) }, () => pick(PRODUCTS))

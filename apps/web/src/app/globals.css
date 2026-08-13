@@ -1,0 +1,378 @@
+@import 'tailwindcss';
+
+/* ===========================================================================
+   SCIP — control-room design system.
+
+   The aesthetic is an instrument panel, not a marketing site: an operator has this open
+   for eight hours, so the surface is dark to cut glare, the density is high because the
+   information density genuinely is, and every status is carried by a signal colour that
+   maps onto the domain (green on time, amber at risk, red late, blue planned) rather than
+   by decoration. Numbers are tabular and monospaced so columns of quantities line up and
+   a changing digit does not shift the ones beside it.
+   =========================================================================== */
+
+@theme {
+  /* --- surfaces: four steps of depth, no gradients ------------------------ */
+  --color-void: #08090a;
+  --color-deck: #0c0e10;
+  --color-panel: #121517;
+  --color-panel-raised: #171b1e;
+  --color-hairline: #21272b;
+  --color-hairline-bright: #2e363b;
+
+  /* --- ink ---------------------------------------------------------------- */
+  --color-ink: #e6e9ea;
+  --color-ink-dim: #97a1a6;
+  --color-ink-faint: #5c666b;
+
+  /* --- signal palette: each colour means one thing ------------------------ */
+  --color-signal: #ffb020; /* primary accent — cargo, amber warning light */
+  --color-signal-dim: #6b4a12;
+  --color-ok: #3fcf8e;
+  --color-ok-dim: #14402f;
+  --color-warn: #ffa53d;
+  --color-warn-dim: #4a3212;
+  --color-alert: #ff5f56;
+  --color-alert-dim: #4a1d1b;
+  --color-info: #4ea8ff;
+  --color-info-dim: #14314d;
+
+  --font-display: var(--font-archivo), 'Arial Narrow', sans-serif;
+  --font-mono: var(--font-jetbrains), 'SF Mono', Consolas, monospace;
+
+  /* Sharp corners. This is an instrument, not a pill. */
+  --radius-sm: 2px;
+  --radius-md: 3px;
+}
+
+/* ===========================================================================
+   Base
+   =========================================================================== */
+
+* {
+  border-color: var(--color-hairline);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'ss01', 'cv01';
+}
+
+/* Numbers must not jitter as they update. */
+.tnum,
+table,
+input[type='number'] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* --- the room's texture: a faint grid and a film of grain ----------------- */
+.deck-surface {
+  background-color: var(--color-deck);
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.016) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.016) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+.grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.16;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ===========================================================================
+   Panels — the one detail that makes the whole app read as an instrument.
+   Corner ticks, like a viewfinder or a technical drawing.
+   =========================================================================== */
+
+.panel {
+  position: relative;
+  background-color: var(--color-panel);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+}
+
+.panel-ticked::before,
+.panel-ticked::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  pointer-events: none;
+  border-color: var(--color-hairline-bright);
+}
+
+.panel-ticked::before {
+  top: -1px;
+  left: -1px;
+  border-top: 1px solid;
+  border-left: 1px solid;
+  border-top-color: var(--color-signal);
+  border-left-color: var(--color-signal);
+}
+
+.panel-ticked::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 1px solid;
+  border-right: 1px solid;
+  border-bottom-color: var(--color-hairline-bright);
+  border-right-color: var(--color-hairline-bright);
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--color-hairline);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+
+/* ===========================================================================
+   Status
+   =========================================================================== */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.0625rem 0.375rem;
+  border: 1px solid;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chip-ok      { color: var(--color-ok);     border-color: var(--color-ok-dim);     background: color-mix(in srgb, var(--color-ok) 8%, transparent); }
+.chip-warn    { color: var(--color-warn);   border-color: var(--color-warn-dim);   background: color-mix(in srgb, var(--color-warn) 8%, transparent); }
+.chip-alert   { color: var(--color-alert);  border-color: var(--color-alert-dim);  background: color-mix(in srgb, var(--color-alert) 10%, transparent); }
+.chip-info    { color: var(--color-info);   border-color: var(--color-info-dim);   background: color-mix(in srgb, var(--color-info) 8%, transparent); }
+.chip-signal  { color: var(--color-signal); border-color: var(--color-signal-dim); background: color-mix(in srgb, var(--color-signal) 8%, transparent); }
+.chip-neutral { color: var(--color-ink-dim); border-color: var(--color-hairline);  background: transparent; }
+
+/* The live-telemetry indicator. Slow, so it reads as a heartbeat, not a distraction. */
+@keyframes pulse-ring {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-ok) 55%, transparent); }
+  70%  { box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-ok) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-ok) 0%, transparent); }
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-ok);
+  animation: pulse-ring 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.live-dot-stale {
+  background: var(--color-ink-faint);
+  animation: none;
+}
+
+/* ===========================================================================
+   Motion — one orchestrated reveal on load, then stillness.
+   =========================================================================== */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.rise {
+  animation: rise 0.36s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(400%); }
+}
+
+/* A scanline that crosses a panel while its data loads. */
+.loading-sweep {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-sweep::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  width: 25%;
+  background: linear-gradient(90deg, transparent, rgb(255 176 32 / 0.07), transparent);
+  animation: sweep 1.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise,
+  .live-dot,
+  .loading-sweep::after {
+    animation: none;
+  }
+}
+
+/* ===========================================================================
+   Tables — dense by design.
+   =========================================================================== */
+
+.grid-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.grid-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-hairline);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+  white-space: nowrap;
+}
+
+.grid-table tbody td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-hairline) 55%, transparent);
+  vertical-align: middle;
+}
+
+.grid-table tbody tr {
+  transition: background-color 0.12s ease;
+}
+
+.grid-table tbody tr:hover {
+  background: color-mix(in srgb, var(--color-signal) 3.5%, transparent);
+}
+
+/* ===========================================================================
+   Controls
+   =========================================================================== */
+
+.field {
+  width: 100%;
+  background: var(--color-void);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.625rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--color-ink);
+  outline: none;
+  transition: border-color 0.14s ease;
+}
+
+.field:focus {
+  border-color: var(--color-signal);
+}
+
+.field::placeholder {
+  color: var(--color-ink-faint);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: 1px solid var(--color-hairline-bright);
+  border-radius: var(--radius-sm);
+  padding: 0.4375rem 0.875rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-ink);
+  background: var(--color-panel-raised);
+  cursor: pointer;
+  transition: border-color 0.14s ease, color 0.14s ease, background-color 0.14s ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--color-signal);
+  color: var(--color-signal);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--color-signal);
+  border-color: var(--color-signal);
+  color: #16110a;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #ffc24d;
+  border-color: #ffc24d;
+  color: #16110a;
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: var(--color-alert);
+  color: var(--color-alert);
+}
+
+/* Custom scrollbar — a default chrome scrollbar breaks the instrument illusion. */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: var(--color-void); }
+::-webkit-scrollbar-thumb { background: var(--color-hairline-bright); border: 2px solid var(--color-void); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-ink-faint); }
+
+/* MapLibre chrome, restyled to match the room. */
+.maplibregl-ctrl-attrib {
+  background: rgb(8 9 10 / 0.82) !important;
+  color: var(--color-ink-faint) !important;
+  font-family: var(--font-mono) !important;
+  font-size: 9px !important;
+}
+.maplibregl-ctrl-attrib a { color: var(--color-ink-dim) !important; }
+.maplibregl-ctrl-group {
+  background: var(--color-panel) !important;
+  border: 1px solid var(--color-hairline) !important;
+  border-radius: var(--radius-sm) !important;
+}
+.maplibregl-ctrl-group button + button { border-top-color: var(--color-hairline) !important; }
+.maplibregl-ctrl-group button span { filter: invert(1) opacity(0.6); }
+.maplibregl-popup-content {
+  background: var(--color-panel) !important;
+  border: 1px solid var(--color-hairline-bright) !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 0 !important;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.6) !important;
+}
+.maplibregl-popup-tip { border-top-color: var(--color-hairline-bright) !important; }
+.maplibregl-popup-close-button { color: var(--color-ink-faint) !important; font-size: 16px !important; }
