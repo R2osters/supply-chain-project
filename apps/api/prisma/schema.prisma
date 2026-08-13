@@ -1,0 +1,1434 @@
+// SCIP database schema.
+//
+// Conventions
+//  - Every tenant-owned row carries `companyId`; the API's company-scoping interceptor adds the
+//    filter, and SUPER_ADMIN is the only role that can bypass it.
+//  - Coordinates are stored as plain doubles so Prisma stays fully typed. Migration
+//    `20260813_postgis` adds a *generated* `geography(Point,4326)` column plus a GiST index on
+//    each table that needs spatial search, so PostGIS does the indexing without Prisma losing
+//    type safety. See DATABASE.md.
+//  - `isDemoData` marks rows produced by the seed/simulator. Nothing synthetic is ever presented
+//    as real: the UI badges these rows and analytics can exclude them.
+//  - Money is Decimal(18,4); quantities are Decimal(18,3) because partial units exist (kg, litres).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// PostGIS is intentionally NOT declared via the `postgresqlExtensions` preview feature.
+// The postgis/postgis Docker image pre-installs postgis, postgis_topology, fuzzystrmatch and
+// postgis_tiger_geocoder into the database at first boot; with extension tracking enabled Prisma
+// reports those three undeclared extensions as schema drift on every command and demands a reset.
+// Instead, `CREATE EXTENSION IF NOT EXISTS postgis` lives in the first migration, which works on
+// both the postgis image and a plain postgres image with the extension available.
+
+// ===========================================================================
+// Tenancy & identity
+// ===========================================================================
+
+model Company {
+  id           String   @id @default(cuid())
+  name         String
+  slug         String   @unique
+  country      String
+  city         String?
+  addressLine  String?
+  timezone     String   @default("UTC")
+  currency     String   @default("USD")
+  contactEmail String?
+  contactPhone String?
+  isActive     Boolean  @default(true)
+  isDemoData   Boolean  @default(false)
+  settings     Json     @default("{}")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users            User[]
+  suppliers        Supplier[]
+  customers        Customer[]
+  carriers         Carrier[]
+  warehouses       Warehouse[]
+  vehicles         Vehicle[]
+  drivers          Driver[]
+  products         Product[]
+  categories       ProductCategory[]
+  purchaseOrders   PurchaseOrder[]
+  shipments        Shipment[]
+  inventories      Inventory[]
+  stockMovements   StockMovement[]
+  incidents        Incident[]
+  notifications    Notification[]
+  auditLogs        AuditLog[]
+  routes           Route[]
+  demandHistory    DemandHistory[]
+  forecasts        Forecast[]
+  optimizationRuns OptimizationRun[]
+  scenarios        Scenario[]
+  risks            Risk[]
+  recommendations  Recommendation[]
+  aiPredictions    AiPrediction[]
+  inventoryAlerts  InventoryAlert[]
+  domainEvents     DomainEvent[]
+  deliveries       Delivery[]
+
+  @@index([isActive])
+  @@map("companies")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  SUPPLY_CHAIN_MANAGER
+  LOGISTICS_MANAGER
+  PROCUREMENT_MANAGER
+  WAREHOUSE_MANAGER
+  DRIVER
+  SUPPLIER
+  CUSTOMER
+  VIEWER
+}
+
+model User {
+  id                String    @id @default(cuid())
+  companyId         String?
+  email             String    @unique
+  passwordHash      String
+  firstName         String
+  lastName          String
+  phone             String?
+  role              UserRole  @default(VIEWER)
+  isActive          Boolean   @default(true)
+  emailVerifiedAt   DateTime?
+  lastLoginAt       DateTime?
+  failedLoginCount  Int       @default(0)
+  lockedUntil       DateTime?
+  /// Set when role = SUPPLIER: restricts visibility to that supplier's own rows.
+  linkedSupplierId  String?
+  /// Set when role = CUSTOMER.
+  linkedCustomerId  String?
+  isDemoData        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  company        Company?  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  linkedSupplier Supplier? @relation("SupplierPortalUsers", fields: [linkedSupplierId], references: [id], onDelete: SetNull)
+  linkedCustomer Customer? @relation("CustomerPortalUsers", fields: [linkedCustomerId], references: [id], onDelete: SetNull)
+
+  refreshTokens       RefreshToken[]
+  passwordResets      PasswordResetToken[]
+  verificationTokens  EmailVerificationToken[]
+  driverProfile       Driver?
+  auditLogs           AuditLog[]
+  notifications       Notification[]
+  createdPurchaseOrders PurchaseOrder[]  @relation("PurchaseOrderCreatedBy")
+  approvedPurchaseOrders PurchaseOrder[] @relation("PurchaseOrderApprovedBy")
+  reportedIncidents   Incident[]         @relation("IncidentReporter")
+  assignedIncidents   Incident[]         @relation("IncidentAssignee")
+  stockMovements      StockMovement[]
+  decidedRecommendations Recommendation[]
+
+  @@index([companyId, role])
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(cuid())
+  userId      String
+  /// SHA-256 of the token. The raw token is only ever in the client's possession.
+  tokenHash   String    @unique
+  /// Rotation family: a reused token revokes the whole family (token-theft detection).
+  familyId    String
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  replacedById String?
+  userAgent   String?
+  ipAddress   String?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+// ===========================================================================
+// Partners
+// ===========================================================================
+
+model Supplier {
+  id                  String   @id @default(cuid())
+  companyId           String
+  code                String
+  name                String
+  contactName         String?
+  contactEmail        String?
+  contactPhone        String?
+  country             String
+  city                String?
+  addressLine         String?
+  latitude            Float?
+  longitude           Float?
+  /// Contractual lead time in days, as quoted by the supplier.
+  quotedLeadTimeDays  Int      @default(7)
+  paymentTerms        String   @default("NET_30")
+  currency            String   @default("USD")
+  isActive            Boolean  @default(true)
+  isDemoData          Boolean  @default(false)
+
+  /// --- Derived performance, recomputed by SupplierPerformanceService ---
+  /// 0..1 share of POs delivered on or before the promised date.
+  onTimeDeliveryRate  Float    @default(1)
+  /// 0..1 share of received quantity accepted by QC.
+  qualityAcceptanceRate Float  @default(1)
+  /// 0..1 share of ordered quantity actually delivered.
+  fillRate            Float    @default(1)
+  cancellationRate    Float    @default(0)
+  /// Observed mean lead time, days. Diverges from `quotedLeadTimeDays` when the supplier slips.
+  observedLeadTimeDays Float   @default(7)
+  observedLeadTimeStdDays Float @default(1)
+  /// 0..100 composite. Formula documented in AI.md.
+  reliabilityScore    Float    @default(100)
+  performanceUpdatedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company        Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  products       SupplierProduct[]
+  purchaseOrders PurchaseOrder[]
+  performance    SupplierPerformance[]
+  portalUsers    User[]                @relation("SupplierPortalUsers")
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+  @@map("suppliers")
+}
+
+model SupplierProduct {
+  id                  String   @id @default(cuid())
+  supplierId          String
+  productId           String
+  unitPrice           Decimal  @db.Decimal(18, 4)
+  currency            String   @default("USD")
+  minimumOrderQuantity Decimal @default(1) @db.Decimal(18, 3)
+  /// Units the supplier can deliver within one lead-time cycle.
+  capacityPerCycle    Decimal  @db.Decimal(18, 3)
+  leadTimeDays        Int
+  isPreferred         Boolean  @default(false)
+  validFrom           DateTime @default(now())
+  validUntil          DateTime?
+  isDemoData          Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, productId, validFrom])
+  @@index([productId])
+  @@map("supplier_products")
+}
+
+model SupplierPerformance {
+  id                   String   @id @default(cuid())
+  supplierId           String
+  periodStart          DateTime
+  periodEnd            DateTime
+  ordersTotal          Int
+  ordersOnTime         Int
+  ordersLate           Int
+  ordersCancelled      Int
+  quantityOrdered      Decimal  @db.Decimal(18, 3)
+  quantityReceived     Decimal  @db.Decimal(18, 3)
+  quantityRejected     Decimal  @db.Decimal(18, 3)
+  averageDelayDays     Float
+  onTimeDeliveryRate   Float
+  qualityAcceptanceRate Float
+  fillRate             Float
+  reliabilityScore     Float
+  isDemoData           Boolean  @default(false)
+  createdAt            DateTime @default(now())
+
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([supplierId, periodStart, periodEnd])
+  @@index([supplierId])
+  @@map("supplier_performance")
+}
+
+model Customer {
+  id           String   @id @default(cuid())
+  companyId    String
+  code         String
+  name         String
+  contactName  String?
+  contactEmail String?
+  contactPhone String?
+  country      String
+  city         String?
+  addressLine  String?
+  latitude     Float?
+  longitude    Float?
+  /// Minutes from midnight local time; used as VRP delivery windows.
+  windowStartMinutes Int?
+  windowEndMinutes   Int?
+  isActive     Boolean  @default(true)
+  isDemoData   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company     Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shipments   Shipment[]
+  deliveries  Delivery[]
+  portalUsers User[]     @relation("CustomerPortalUsers")
+  demandHistory DemandHistory[]
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+  @@map("customers")
+}
+
+model Carrier {
+  id                 String   @id @default(cuid())
+  companyId          String
+  code               String
+  name               String
+  contactEmail       String?
+  contactPhone       String?
+  country            String
+  /// Derived from completed shipments by CarrierPerformanceService.
+  onTimeRate         Float    @default(1)
+  averageDelayHours  Float    @default(0)
+  shipmentsCompleted Int      @default(0)
+  costPerKm          Decimal  @default(0) @db.Decimal(18, 4)
+  isActive           Boolean  @default(true)
+  isDemoData         Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicles  Vehicle[]
+  shipments Shipment[]
+  drivers   Driver[]
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+  @@map("carriers")
+}
+
+// ===========================================================================
+// Fleet
+// ===========================================================================
+
+enum VehicleType {
+  VAN
+  TRUCK_SMALL
+  TRUCK_MEDIUM
+  TRUCK_LARGE
+  REFRIGERATED
+  CONTAINER
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  IN_TRANSIT
+  MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+model Vehicle {
+  id                    String        @id @default(cuid())
+  companyId             String
+  carrierId             String?
+  plateNumber           String
+  label                 String?
+  type                  VehicleType   @default(TRUCK_MEDIUM)
+  status                VehicleStatus @default(AVAILABLE)
+  capacityUnits         Decimal       @db.Decimal(18, 3)
+  capacityKg            Decimal?      @db.Decimal(18, 3)
+  fuelConsumptionLPer100Km Float      @default(28)
+  costPerKm             Decimal       @default(0.9) @db.Decimal(18, 4)
+  /// Prior used by the ETA engine before trip observations exist.
+  nominalSpeedKmh       Float         @default(60)
+  /// Denormalised last known position, kept in step with GpsPosition writes so the live map
+  /// needs one cheap query instead of a per-vehicle LATERAL over millions of rows.
+  lastLatitude          Float?
+  lastLongitude         Float?
+  lastSpeedKmh          Float?
+  lastHeadingDegrees    Float?
+  lastPositionAt        DateTime?
+  isDemoData            Boolean       @default(false)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  carrier   Carrier?       @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  shipments Shipment[]
+  positions GpsPosition[]
+  drivers   Driver[]
+
+  @@unique([companyId, plateNumber])
+  @@index([companyId, status])
+  @@index([lastPositionAt])
+  @@map("vehicles")
+}
+
+model Driver {
+  id             String   @id @default(cuid())
+  companyId      String
+  userId         String?  @unique
+  carrierId      String?
+  defaultVehicleId String?
+  firstName      String
+  lastName       String
+  phone          String?
+  licenseNumber  String?
+  /// 0..1, share of this driver's shipments delivered on time. Feeds the ETA prior.
+  onTimeRate     Float    @default(1)
+  tripsCompleted Int      @default(0)
+  isActive       Boolean  @default(true)
+  isDemoData     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company        Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user           User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  carrier        Carrier?   @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  defaultVehicle Vehicle?   @relation(fields: [defaultVehicleId], references: [id], onDelete: SetNull)
+  shipments      Shipment[]
+
+  @@index([companyId, isActive])
+  @@map("drivers")
+}
+
+// ===========================================================================
+// Network & catalogue
+// ===========================================================================
+
+model Warehouse {
+  id            String   @id @default(cuid())
+  companyId     String
+  code          String
+  name          String
+  country       String
+  city          String?
+  addressLine   String?
+  latitude      Float
+  longitude     Float
+  capacityUnits Decimal? @db.Decimal(18, 3)
+  /// Metres. A vehicle inside this radius counts as "at the warehouse" for arrival detection.
+  geofenceRadiusM Int    @default(300)
+  isActive      Boolean  @default(true)
+  isDemoData    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company        Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  locations      WarehouseLocation[]
+  inventories    Inventory[]
+  stockMovements StockMovement[]
+  originShipments Shipment[]         @relation("ShipmentOrigin")
+  destinationShipments Shipment[]    @relation("ShipmentDestination")
+  purchaseOrders PurchaseOrder[]
+  demandHistory  DemandHistory[]
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+  @@map("warehouses")
+}
+
+model WarehouseLocation {
+  id          String   @id @default(cuid())
+  warehouseId String
+  code        String
+  zone        String?
+  aisle       String?
+  rack        String?
+  shelf       String?
+  isActive    Boolean  @default(true)
+  isDemoData  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  warehouse Warehouse        @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  batches   InventoryBatch[]
+
+  @@unique([warehouseId, code])
+  @@map("warehouse_locations")
+}
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  parentId  String?
+  isDemoData Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent   ProductCategory?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children ProductCategory[] @relation("CategoryTree")
+  products Product[]
+
+  @@unique([companyId, name])
+  @@map("product_categories")
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  companyId     String
+  categoryId    String?
+  sku           String
+  name          String
+  description   String?
+  barcode       String?
+  unitOfMeasure String   @default("EA")
+  /// Value used for inventory valuation and stockout penalties.
+  unitCost      Decimal  @db.Decimal(18, 4)
+  unitPrice     Decimal  @db.Decimal(18, 4)
+  currency      String   @default("USD")
+  weightKg      Float?
+  volumeM3      Float?
+  shelfLifeDays Int?
+  /// Target cycle-service level for the reorder policy, 0..1.
+  serviceLevel  Float    @default(0.95)
+  isPerishable  Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  isDemoData    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company          Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  category         ProductCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  inventories      Inventory[]
+  suppliers        SupplierProduct[]
+  purchaseOrderItems PurchaseOrderItem[]
+  shipmentItems    ShipmentItem[]
+  stockMovements   StockMovement[]
+  batches          InventoryBatch[]
+  demandHistory    DemandHistory[]
+  forecasts        Forecast[]
+  alerts           InventoryAlert[]
+
+  @@unique([companyId, sku])
+  @@index([companyId, isActive])
+  @@index([barcode])
+  @@map("products")
+}
+
+// ===========================================================================
+// Inventory
+// ===========================================================================
+
+model Inventory {
+  id             String   @id @default(cuid())
+  companyId      String
+  productId      String
+  warehouseId    String
+  /// On-hand, sellable.
+  availableStock Decimal  @default(0) @db.Decimal(18, 3)
+  /// Committed to open orders but still physically present.
+  reservedStock  Decimal  @default(0) @db.Decimal(18, 3)
+  damagedStock   Decimal  @default(0) @db.Decimal(18, 3)
+  /// Ordered but not yet received. Counts toward the reorder decision.
+  incomingStock  Decimal  @default(0) @db.Decimal(18, 3)
+  reorderPoint   Decimal  @default(0) @db.Decimal(18, 3)
+  safetyStock    Decimal  @default(0) @db.Decimal(18, 3)
+  maxStock       Decimal? @db.Decimal(18, 3)
+  lastCountedAt  DateTime?
+  isDemoData     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, warehouseId])
+  @@index([companyId])
+  @@map("inventory")
+}
+
+model InventoryBatch {
+  id          String    @id @default(cuid())
+  productId   String
+  warehouseId String?
+  locationId  String?
+  batchNumber String
+  quantity    Decimal   @db.Decimal(18, 3)
+  expiryDate  DateTime?
+  receivedAt  DateTime  @default(now())
+  isDemoData  Boolean   @default(false)
+
+  product  Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  location WarehouseLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@unique([productId, batchNumber])
+  @@index([expiryDate])
+  @@map("inventory_batches")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  TRANSFER
+  ADJUSTMENT
+}
+
+model StockMovement {
+  id             String            @id @default(cuid())
+  companyId      String
+  productId      String
+  warehouseId    String
+  toWarehouseId  String?
+  type           StockMovementType
+  quantity       Decimal           @db.Decimal(18, 3)
+  /// Snapshot of availableStock after this movement — makes the ledger auditable without replay.
+  balanceAfter   Decimal           @db.Decimal(18, 3)
+  reference      String?
+  reason         String?
+  batchNumber    String?
+  performedById  String?
+  purchaseOrderId String?
+  shipmentId     String?
+  isDemoData     Boolean           @default(false)
+  occurredAt     DateTime          @default(now())
+  createdAt      DateTime          @default(now())
+
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product     Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  performedBy User?          @relation(fields: [performedById], references: [id], onDelete: SetNull)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  shipment    Shipment?      @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, occurredAt])
+  @@index([productId, warehouseId, occurredAt])
+  @@map("inventory_movements")
+}
+
+enum InventoryAlertType {
+  LOW_STOCK
+  OUT_OF_STOCK
+  EXPIRING_SOON
+  OVERSTOCK
+}
+
+model InventoryAlert {
+  id           String             @id @default(cuid())
+  companyId    String
+  productId    String
+  warehouseId  String?
+  type         InventoryAlertType
+  severity     String             @default("MEDIUM")
+  message      String
+  currentValue Decimal            @db.Decimal(18, 3)
+  threshold    Decimal            @db.Decimal(18, 3)
+  resolvedAt   DateTime?
+  isDemoData   Boolean            @default(false)
+  createdAt    DateTime           @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, type, resolvedAt])
+  @@map("inventory_alerts")
+}
+
+// ===========================================================================
+// Procurement
+// ===========================================================================
+
+enum PurchaseOrderStatus {
+  DRAFT
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id                   String              @id @default(cuid())
+  companyId            String
+  supplierId           String
+  warehouseId          String?
+  orderNumber          String
+  status               PurchaseOrderStatus @default(DRAFT)
+  currency             String              @default("USD")
+  subtotal             Decimal             @default(0) @db.Decimal(18, 4)
+  taxAmount            Decimal             @default(0) @db.Decimal(18, 4)
+  shippingCost         Decimal             @default(0) @db.Decimal(18, 4)
+  totalAmount          Decimal             @default(0) @db.Decimal(18, 4)
+  orderedAt            DateTime?
+  expectedShippingDate DateTime?
+  expectedDeliveryDate DateTime?
+  actualDeliveryDate   DateTime?
+  confirmedAt          DateTime?
+  cancelledAt          DateTime?
+  cancellationReason   String?
+  notes                String?
+  createdById          String?
+  approvedById         String?
+  /// Set when the row was created by accepting a Recommendation — closes the TRACK↔OPTIMIZE loop.
+  sourceRecommendationId String?
+  isDemoData           Boolean             @default(false)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  supplier   Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  warehouse  Warehouse?          @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  createdBy  User?               @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  approvedBy User?               @relation("PurchaseOrderApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  items      PurchaseOrderItem[]
+  shipments  Shipment[]
+  movements  StockMovement[]
+
+  @@unique([companyId, orderNumber])
+  @@index([companyId, status])
+  @@index([supplierId, status])
+  @@index([expectedDeliveryDate])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id               String   @id @default(cuid())
+  purchaseOrderId  String
+  productId        String
+  quantity         Decimal  @db.Decimal(18, 3)
+  receivedQuantity Decimal  @default(0) @db.Decimal(18, 3)
+  rejectedQuantity Decimal  @default(0) @db.Decimal(18, 3)
+  unitPrice        Decimal  @db.Decimal(18, 4)
+  lineTotal        Decimal  @db.Decimal(18, 4)
+  isDemoData       Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  product       Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseOrderId, productId])
+  @@index([productId])
+  @@map("purchase_order_items")
+}
+
+// ===========================================================================
+// Transport
+// ===========================================================================
+
+model Route {
+  id             String   @id @default(cuid())
+  companyId      String
+  name           String
+  originLatitude Float
+  originLongitude Float
+  destinationLatitude Float
+  destinationLongitude Float
+  /// Ordered [{latitude, longitude}] describing the planned corridor.
+  polyline       Json
+  distanceKm     Float
+  /// Nominal duration in minutes under normal conditions.
+  durationMinutes Float
+  /// Metres of lateral drift tolerated before ROUTE_DEVIATION fires.
+  corridorToleranceM Int  @default(2000)
+  /// Historic incidents per 100 trips on this corridor; feeds the delay model.
+  incidentRate   Float    @default(0)
+  tripsCompleted Int      @default(0)
+  isDemoData     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shipments Shipment[]
+
+  @@index([companyId])
+  @@map("routes")
+}
+
+enum ShipmentStatus {
+  PLANNED
+  LOADING
+  DEPARTED
+  IN_TRANSIT
+  DELAYED
+  ARRIVED
+  DELIVERED
+  CANCELLED
+}
+
+model Shipment {
+  id                   String         @id @default(cuid())
+  companyId            String
+  purchaseOrderId      String?
+  carrierId            String?
+  vehicleId            String?
+  driverId             String?
+  routeId              String?
+  customerId           String?
+  originWarehouseId    String?
+  destinationWarehouseId String?
+  trackingNumber       String
+  status               ShipmentStatus @default(PLANNED)
+
+  originName           String
+  originLatitude       Float
+  originLongitude      Float
+  destinationName      String
+  destinationLatitude  Float
+  destinationLongitude Float
+
+  plannedDepartureAt   DateTime
+  actualDepartureAt    DateTime?
+  estimatedArrivalAt   DateTime?
+  plannedArrivalAt     DateTime
+  actualArrivalAt      DateTime?
+  deliveredAt          DateTime?
+
+  /// Straight-line or OSRM road distance at planning time, km.
+  plannedDistanceKm    Float
+  /// Sum of consecutive GPS fixes, km. Diverges from planned when the vehicle detours.
+  travelledDistanceKm  Float          @default(0)
+  totalWeightKg        Decimal?       @db.Decimal(18, 3)
+  totalUnits           Decimal        @default(0) @db.Decimal(18, 3)
+  cargoValue           Decimal        @default(0) @db.Decimal(18, 4)
+  currency             String         @default("USD")
+
+  /// Latest AI outputs, denormalised so lists render without N calls to the AI service.
+  delayProbability     Float?
+  delayRisk            String?
+  etaConfidence        Float?
+  lastEtaComputedAt    DateTime?
+  hasOpenAnomaly       Boolean        @default(false)
+
+  notes                String?
+  isDemoData           Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  company              Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  purchaseOrder        PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  carrier              Carrier?       @relation(fields: [carrierId], references: [id], onDelete: SetNull)
+  vehicle              Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  driver               Driver?        @relation(fields: [driverId], references: [id], onDelete: SetNull)
+  route                Route?         @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  customer             Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  originWarehouse      Warehouse?     @relation("ShipmentOrigin", fields: [originWarehouseId], references: [id], onDelete: SetNull)
+  destinationWarehouse Warehouse?     @relation("ShipmentDestination", fields: [destinationWarehouseId], references: [id], onDelete: SetNull)
+
+  items      ShipmentItem[]
+  events     ShipmentEvent[]
+  positions  GpsPosition[]
+  delivery   Delivery?
+  incidents  Incident[]
+  anomalies  Anomaly[]
+  movements  StockMovement[]
+
+  @@unique([companyId, trackingNumber])
+  @@index([companyId, status])
+  @@index([status, estimatedArrivalAt])
+  @@index([vehicleId, status])
+  @@index([purchaseOrderId])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id         String   @id @default(cuid())
+  shipmentId String
+  productId  String
+  quantity   Decimal  @db.Decimal(18, 3)
+  unitValue  Decimal  @default(0) @db.Decimal(18, 4)
+  batchNumber String?
+  isDemoData Boolean  @default(false)
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@unique([shipmentId, productId, batchNumber])
+  @@index([productId])
+  @@map("shipment_items")
+}
+
+enum ShipmentEventType {
+  CREATED
+  STATUS_CHANGED
+  DEPARTED
+  CHECKPOINT
+  DELAY_DETECTED
+  ANOMALY_DETECTED
+  ARRIVED
+  DELIVERED
+  INCIDENT
+  ETA_UPDATED
+}
+
+model ShipmentEvent {
+  id          String            @id @default(cuid())
+  shipmentId  String
+  type        ShipmentEventType
+  description String
+  fromStatus  String?
+  toStatus    String?
+  latitude    Float?
+  longitude   Float?
+  metadata    Json              @default("{}")
+  isDemoData  Boolean           @default(false)
+  occurredAt  DateTime          @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, occurredAt])
+  @@map("shipment_events")
+}
+
+model GpsPosition {
+  id             String   @id @default(cuid())
+  vehicleId      String
+  shipmentId     String?
+  latitude       Float
+  longitude      Float
+  speedKmh       Float?
+  headingDegrees Float?
+  altitudeM      Float?
+  accuracyM      Float?
+  /// True when produced by the built-in simulator rather than a physical device.
+  isSimulated    Boolean  @default(false)
+  recordedAt     DateTime
+  createdAt      DateTime @default(now())
+
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  shipment Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, recordedAt])
+  @@index([shipmentId, recordedAt])
+  @@map("gps_positions")
+}
+
+// ===========================================================================
+// Delivery
+// ===========================================================================
+
+enum DeliveryStatus {
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  ARRIVED
+  DELIVERED
+  FAILED
+}
+
+model Delivery {
+  id           String         @id @default(cuid())
+  companyId    String
+  shipmentId   String         @unique
+  customerId   String?
+  status       DeliveryStatus @default(ASSIGNED)
+  assignedAt   DateTime       @default(now())
+  pickedUpAt   DateTime?
+  arrivedAt    DateTime?
+  deliveredAt  DateTime?
+  failedAt     DateTime?
+  failureReason String?
+  attemptCount Int            @default(0)
+  isDemoData   Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shipment Shipment         @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  customer Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  proof    ProofOfDelivery?
+
+  @@index([companyId, status])
+  @@map("deliveries")
+}
+
+model ProofOfDelivery {
+  id             String   @id @default(cuid())
+  deliveryId     String   @unique
+  receiverName   String
+  /// S3/MinIO object keys. Files are never stored in the database.
+  signatureKey   String?
+  photoKeys      String[] @default([])
+  latitude       Float?
+  longitude      Float?
+  /// Metres between the capture point and the declared destination. Large values are suspicious.
+  distanceToDestinationM Float?
+  notes          String?
+  capturedAt     DateTime @default(now())
+  isDemoData     Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@map("proof_of_delivery")
+}
+
+// ===========================================================================
+// Incidents, anomalies, notifications
+// ===========================================================================
+
+enum IncidentType {
+  DELAY
+  ACCIDENT
+  VEHICLE_BREAKDOWN
+  DAMAGED_CARGO
+  LOST_CARGO
+  WRONG_ROUTE
+  CUSTOMS_DELAY
+  WEATHER
+  OTHER
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+  CLOSED
+}
+
+model Incident {
+  id           String           @id @default(cuid())
+  companyId    String
+  shipmentId   String?
+  type         IncidentType
+  severity     IncidentSeverity @default(MEDIUM)
+  status       IncidentStatus   @default(OPEN)
+  title        String
+  description  String
+  latitude     Float?
+  longitude    Float?
+  reportedById String?
+  assignedToId String?
+  resolution   String?
+  /// Estimated financial impact, in the company's currency.
+  estimatedCost Decimal?        @db.Decimal(18, 4)
+  occurredAt   DateTime         @default(now())
+  resolvedAt   DateTime?
+  isDemoData   Boolean          @default(false)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  shipment   Shipment? @relation(fields: [shipmentId], references: [id], onDelete: SetNull)
+  reportedBy User?     @relation("IncidentReporter", fields: [reportedById], references: [id], onDelete: SetNull)
+  assignedTo User?     @relation("IncidentAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, severity])
+  @@index([shipmentId])
+  @@map("incidents")
+}
+
+enum AnomalyType {
+  UNUSUAL_STOP
+  ROUTE_DEVIATION
+  ABNORMAL_SPEED
+  GPS_LOSS
+  EXCESSIVE_DURATION
+  PROLONGED_STOP
+  SUSPICIOUS_DELIVERY
+  GEOFENCE_BREACH
+}
+
+model Anomaly {
+  id          String      @id @default(cuid())
+  shipmentId  String
+  type        AnomalyType
+  severity    String      @default("MEDIUM")
+  score       Float
+  description String
+  latitude    Float?
+  longitude   Float?
+  evidence    Json        @default("{}")
+  acknowledgedAt DateTime?
+  resolvedAt  DateTime?
+  isDemoData  Boolean     @default(false)
+  detectedAt  DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId, detectedAt])
+  @@index([type, resolvedAt])
+  @@map("anomalies")
+}
+
+model Notification {
+  id         String    @id @default(cuid())
+  companyId  String
+  userId     String?
+  type       String
+  channel    String    @default("DASHBOARD")
+  severity   String    @default("INFO")
+  title      String
+  body       String
+  /// Deep-link target, e.g. { "entity": "shipment", "id": "..." }.
+  target     Json      @default("{}")
+  readAt     DateTime?
+  sentAt     DateTime?
+  /// Populated when an external channel refused the message.
+  deliveryError String?
+  isDemoData Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([companyId, createdAt])
+  @@map("notifications")
+}
+
+// ===========================================================================
+// Analytics / AI
+// ===========================================================================
+
+model DemandHistory {
+  id          String   @id @default(cuid())
+  companyId   String
+  productId   String
+  warehouseId String?
+  customerId  String?
+  date        DateTime @db.Date
+  quantity    Decimal  @db.Decimal(18, 3)
+  revenue     Decimal  @default(0) @db.Decimal(18, 4)
+  unitPrice   Decimal? @db.Decimal(18, 4)
+  promotion   Boolean  @default(false)
+  holiday     Boolean  @default(false)
+  isDemoData  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  warehouse Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  customer  Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@unique([productId, warehouseId, date])
+  @@index([companyId, date])
+  @@map("demand_history")
+}
+
+model Forecast {
+  id            String   @id @default(cuid())
+  companyId     String
+  productId     String
+  warehouseId   String?
+  horizonDays   Int
+  modelName     String
+  modelVersionId String?
+  /// [{date, demand, lowerBound, upperBound}]
+  points        Json
+  /// Per-model metrics from the walk-forward comparison.
+  evaluations   Json     @default("[]")
+  residualStd   Float
+  mae           Float
+  rmse          Float
+  mape          Float?
+  wape          Float
+  dataQuality   Json     @default("{}")
+  explanation   Json     @default("{}")
+  generatedAt   DateTime @default(now())
+  isDemoData    Boolean  @default(false)
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  modelVersion ModelVersion? @relation(fields: [modelVersionId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, productId, generatedAt])
+  @@map("forecasts")
+}
+
+model ModelVersion {
+  id            String   @id @default(cuid())
+  name          String
+  version       String
+  task          String
+  trainedAt     DateTime @default(now())
+  datasetHash   String?
+  rowsTrained   Int      @default(0)
+  features      String[] @default([])
+  hyperparameters Json   @default("{}")
+  metrics       Json     @default("{}")
+  artifactPath  String?
+  isActive      Boolean  @default(false)
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  forecasts Forecast[]
+  metricRows ModelMetric[]
+
+  @@unique([name, version])
+  @@index([task, isActive])
+  @@map("model_versions")
+}
+
+model ModelMetric {
+  id             String   @id @default(cuid())
+  modelVersionId String
+  name           String
+  value          Float
+  /// "TRAIN" | "VALIDATION" | "PRODUCTION"
+  phase          String   @default("VALIDATION")
+  recordedAt     DateTime @default(now())
+
+  modelVersion ModelVersion @relation(fields: [modelVersionId], references: [id], onDelete: Cascade)
+
+  @@index([modelVersionId, name, recordedAt])
+  @@map("model_metrics")
+}
+
+model AiPrediction {
+  id           String   @id @default(cuid())
+  companyId    String
+  /// "DELAY" | "ETA" | "ANOMALY" | "FORECAST" | "RISK"
+  task         String
+  subjectType  String
+  subjectId    String
+  input        Json
+  output       Json
+  modelName    String?
+  modelVersion String?
+  confidence   Float?
+  latencyMs    Int?
+  /// Filled in later by the accuracy monitor once ground truth exists.
+  actualOutcome Json?
+  errorValue   Float?
+  isDemoData   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, task, createdAt])
+  @@index([subjectType, subjectId])
+  @@map("ai_predictions")
+}
+
+enum OptimizationKind {
+  SUPPLIER_ALLOCATION
+  ROUTE_VRP
+  INVENTORY_POLICY
+  SCENARIO_SIMULATION
+}
+
+model OptimizationRun {
+  id             String           @id @default(cuid())
+  companyId      String
+  kind           OptimizationKind
+  status         String
+  input          Json
+  output         Json
+  objectiveValue Float?
+  constraints    String[]         @default([])
+  assumptions    String[]         @default([])
+  solverName     String?
+  solverWallTimeMs Int?
+  triggeredById  String?
+  isDemoData     Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, kind, createdAt])
+  @@map("optimization_runs")
+}
+
+model Scenario {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  productId   String?
+  levers      Json
+  /// [{name, totalCost, stockoutRisk, ...}] for BASE/BEST/WORST.
+  results     Json     @default("[]")
+  iterations  Int      @default(1000)
+  randomSeed  Int?
+  isDemoData  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@map("scenarios")
+}
+
+enum RiskCategory {
+  SUPPLIER_RISK
+  STOCKOUT_RISK
+  TRANSPORT_RISK
+  DEMAND_RISK
+  GEOPOLITICAL_RISK
+  WEATHER_RISK
+}
+
+model Risk {
+  id                String       @id @default(cuid())
+  companyId         String
+  category          RiskCategory
+  subjectType       String
+  subjectId         String
+  subjectLabel      String
+  probability       Float
+  impact            Float
+  score             Float
+  level             String
+  recommendedAction String
+  explanation       Json         @default("{}")
+  resolvedAt        DateTime?
+  isDemoData        Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, category, createdAt])
+  @@map("risks")
+}
+
+enum RecommendationType {
+  ORDER_NOW
+  WAIT
+  CHANGE_SUPPLIER
+  SPLIT_ORDER
+  INCREASE_SAFETY_STOCK
+  REDUCE_INVENTORY
+  CHANGE_ROUTE
+  ADD_SUPPLIER
+  EXPEDITE_SHIPMENT
+}
+
+enum RecommendationStatus {
+  OPEN
+  ACCEPTED
+  REJECTED
+  EXPIRED
+  EXECUTED
+}
+
+model Recommendation {
+  id          String               @id @default(cuid())
+  companyId   String
+  type        RecommendationType
+  status      RecommendationStatus @default(OPEN)
+  priority    String               @default("MEDIUM")
+  title       String
+  subjectType String
+  subjectId   String
+  /// Structured payload the API can execute (e.g. draft PO lines per supplier).
+  payload     Json                 @default("{}")
+  /// { summary, reasons[], assumptions[] } — never empty, enforced in the service.
+  explanation Json
+  estimatedCostDelta        Float?
+  estimatedRiskDelta        Float?
+  estimatedServiceLevelDelta Float?
+  decidedById String?
+  decidedAt   DateTime?
+  decisionNote String?
+  /// Set once ACCEPTED produced a real PurchaseOrder.
+  executedEntityType String?
+  executedEntityId   String?
+  expiresAt   DateTime?
+  isDemoData  Boolean              @default(false)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  decidedBy User?   @relation(fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status, priority])
+  @@index([subjectType, subjectId])
+  @@map("recommendations")
+}
+
+// ===========================================================================
+// Cross-context event bus & audit
+// ===========================================================================
+
+/// Durable log of domain events. TRACK writes them (shipment delayed, PO received);
+/// OPTIMIZE consumes them to decide when to re-run forecasts, risks and recommendations.
+/// Persisting them means a restart cannot lose a trigger, unlike an in-memory emitter.
+model DomainEvent {
+  id           String    @id @default(cuid())
+  companyId    String
+  type         String
+  subjectType  String
+  subjectId    String
+  payload      Json      @default("{}")
+  processedAt  DateTime?
+  processError String?
+  attempts     Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([processedAt, createdAt])
+  @@index([companyId, type, createdAt])
+  @@map("domain_events")
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  companyId  String?
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  /// Field-level before/after for mutations. Secrets are redacted before writing.
+  changes    Json     @default("{}")
+  ipAddress  String?
+  userAgent  String?
+  statusCode Int?
+  createdAt  DateTime @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+  @@map("audit_logs")
+}

@@ -1,0 +1,29 @@
+{
+  "name": "scip",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SCIP — Supply Chain Intelligence Platform (tracking + optimization)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @scip/shared && npm run build --workspace @scip/api && npm run build --workspace @scip/web",
+    "dev:api": "npm run start:dev --workspace @scip/api",
+    "dev:web": "npm run dev --workspace @scip/web",
+    "test": "npm run test --workspace @scip/api",
+    "test:e2e": "npm run test:e2e --workspace @scip/api",
+    "db:migrate": "npm run db:migrate --workspace @scip/api",
+    "db:seed": "npm run db:seed --workspace @scip/api",
+    "infra:up": "docker compose up -d postgres redis minio mailhog",
+    "infra:down": "docker compose down",
+    "stack:up": "docker compose up -d --build",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
