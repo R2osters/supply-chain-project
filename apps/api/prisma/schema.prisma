@@ -77,6 +77,7 @@ model Company {
   deliveries       Delivery[]
   vessels          Vessel[]
   voyages          Voyage[]
+  trackingDevices  TrackingDevice[]
 
   @@index([isActive])
   @@map("companies")
@@ -404,6 +405,7 @@ model Vehicle {
   shipments Shipment[]
   positions GpsPosition[]
   drivers   Driver[]
+  devices   TrackingDevice[]
 
   @@unique([companyId, plateNumber])
   @@index([companyId, status])
@@ -783,6 +785,88 @@ model Route {
 
   @@index([companyId])
   @@map("routes")
+}
+
+// ===========================================================================
+// Tracking devices
+//
+// How a position physically reaches this system. Three paths, and the model exists so the answer
+// to "why did this truck stop reporting?" is a row rather than a guess:
+//
+//   PHONE      the driver's own smartphone running the PWA. No hardware, no SIM, no install.
+//   GT06       a €15–50 hardwired tracker speaking the Concox/GT06 binary protocol over TCP.
+//   TELTONIKA  a mid-range tracker; the codec is not implemented yet, the enum reserves it.
+//   MANUAL     an operator typing a position in, for a vehicle with neither.
+//
+// A device is bound to a vehicle, not to a driver, because the tracker stays with the truck when
+// the driver changes — except for PHONE devices, where the opposite is true and the binding
+// follows whichever driver is signed in.
+// ===========================================================================
+
+enum DeviceKind {
+  PHONE
+  GT06
+  TELTONIKA
+  MANUAL
+}
+
+enum DeviceStatus {
+  /// Registered but never seen.
+  PENDING
+  ONLINE
+  /// Seen before, silent for longer than its expected reporting interval.
+  OFFLINE
+  DISABLED
+}
+
+model TrackingDevice {
+  id        String       @id @default(cuid())
+  companyId String
+  vehicleId String?
+  kind      DeviceKind
+  status    DeviceStatus @default(PENDING)
+
+  /// The identity the device presents. IMEI for a hardware tracker, a generated id for a phone.
+  /// Unique across the whole system: an IMEI is globally unique, and two companies claiming the
+  /// same one is a mistake worth blocking rather than silently splitting positions between them.
+  identifier String @unique
+
+  label String?
+
+  /// Shared secret a PHONE device presents instead of a user session, so a driver's phone can
+  /// keep posting after its access token expires mid-route with no signal to refresh it.
+  /// Stored hashed; the plaintext is shown once at enrolment.
+  pairingSecretHash String?
+  pairedAt          DateTime?
+
+  /// How often this device is expected to report, in seconds. Drives the OFFLINE decision:
+  /// a phone at 30 s and a parked tracker at 3600 s are both healthy, at very different silences.
+  reportIntervalSeconds Int @default(60)
+
+  lastSeenAt      DateTime?
+  lastLatitude    Float?
+  lastLongitude   Float?
+  /// 0–100 where the device reports it. Phones report a real percentage; GT06 reports 0–6 scaled.
+  lastBatteryPercent Int?
+  lastIgnitionOn  Boolean?
+  /// Positions accepted from this device, for spotting a device that connects but never fixes.
+  positionsAccepted Int @default(0)
+  positionsRejected Int @default(0)
+
+  /// Remote IP of the last connection, for supporting a device that dialled the wrong host.
+  lastIpAddress String?
+
+  isDemoData Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, status])
+  @@index([vehicleId])
+  @@index([lastSeenAt])
+  @@map("tracking_devices")
 }
 
 // ===========================================================================

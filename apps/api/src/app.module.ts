@@ -27,6 +27,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { RecommendationsModule } from './modules/recommendations/recommendations.module';
 import { JobsModule } from './modules/jobs/jobs.module';
 import { MaritimeModule } from './modules/maritime/maritime.module';
+import { DevicesModule } from './modules/devices/devices.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { MaritimeModule } from './modules/maritime/maritime.module';
     AnalyticsModule,
     RecommendationsModule,
     MaritimeModule,
+    DevicesModule,
     // Last: it depends on almost everything above.
     JobsModule,
   ],

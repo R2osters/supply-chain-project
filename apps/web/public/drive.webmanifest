@@ -1,0 +1,21 @@
+{
+  "name": "SCIP Driver",
+  "short_name": "SCIP Drive",
+  "description": "Report this vehicle's position while the screen is open.",
+  "start_url": "/drive",
+  "scope": "/drive",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#08090a",
+  "theme_color": "#08090a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

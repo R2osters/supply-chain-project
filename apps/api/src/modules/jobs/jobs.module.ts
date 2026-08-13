@@ -14,6 +14,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { SpatialRepository } from '../gps/spatial.repository';
 import { TokenService } from '../auth/token.service';
 import { AuthModule } from '../auth/auth.module';
+import { DevicesModule } from '../devices/devices.module';
+import { DevicesService } from '../devices/devices.service';
 import { DomainEventWorker } from './domain-event.worker';
 import { TelemetrySimulatorService } from './telemetry-simulator.service';
 
@@ -36,6 +38,7 @@ export class ScheduledTasksService {
     private readonly notifications: NotificationsService,
     private readonly spatial: SpatialRepository,
     private readonly tokens: TokenService,
+    private readonly devices: DevicesService,
   ) {}
 
   private activeCompanies() {
@@ -110,6 +113,28 @@ export class ScheduledTasksService {
   }
 
   /**
+   * Marks silent trackers OFFLINE.
+   *
+   * A device that loses power or coverage never says goodbye — the TCP socket dies without a
+   * FIN, or a phone simply stops posting. Without this sweep the devices screen would show a
+   * truck as ONLINE indefinitely, which is worse than showing nothing: an operator reads a green
+   * dot as "I would know if it stopped".
+   *
+   * Every minute, because the shortest reporting interval in use is 30 s and the service allows
+   * five missed reports before declaring silence; a slower sweep would add its own period on top
+   * of that and blunt the signal.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async sweepSilentDevices(): Promise<void> {
+    try {
+      const marked = await this.devices.sweepOffline();
+      if (marked > 0) this.logger.log(`Marked ${marked} silent tracking device(s) offline`);
+    } catch (error) {
+      this.logger.error(`Device sweep failed: ${error}`);
+    }
+  }
+
+  /**
    * Nightly retention. GPS history is the table that grows without bound — one vehicle at one
    * fix every five seconds is ~6 million rows a year — so it is trimmed on a schedule rather
    * than left to become an outage.
@@ -140,6 +165,7 @@ export class ScheduledTasksService {
     SuppliersModule,
     RecommendationsModule,
     AuthModule,
+    DevicesModule,
   ],
   providers: [ScheduledTasksService, DomainEventWorker, TelemetrySimulatorService],
   exports: [TelemetrySimulatorService],

@@ -37,6 +37,10 @@ describe('SCIP API (e2e)', () => {
   let http: ReturnType<typeof request>;
 
   let owner: Session;
+  // A second tenant, registered once and shared. Registration is rate-limited to 10 per minute,
+  // so every block that needs an outsider registering its own would trip the throttle and fail
+  // a test for a reason that has nothing to do with what it is testing.
+  let otherOwner: Session;
   let companyId: string;
   const created: { companies: string[] } = { companies: [] };
 
@@ -178,7 +182,6 @@ describe('SCIP API (e2e)', () => {
   /* ================================================================== tenancy */
 
   describe('tenant isolation', () => {
-    let otherOwner: Session;
     let ourWarehouseId: string;
 
     beforeAll(async () => {
@@ -657,6 +660,172 @@ describe('SCIP API (e2e)', () => {
         .set(auth(owner))
         .expect(200);
     });
+  });
+
+  /* ================================================================== devices */
+
+  /**
+   * The phone intake path.
+   *
+   * This endpoint is the one place in the API authenticated by something other than a user
+   * session — a device identifier and a pairing secret — because a phone in a coverage gap cannot
+   * refresh an expired access token, which is exactly where tracking matters most. That makes it
+   * worth pinning down: it is public, it accepts bulk writes, and getting its authentication
+   * wrong would let anyone write positions for anyone's truck.
+   */
+  describe('tracking devices', () => {
+    const identifier = `e2e-phone-${stamp}`;
+    let pairingSecret: string;
+    let vehicleId: string;
+
+    const fix = (minutesAgo: number, latitude: number, longitude: number) => ({
+      latitude,
+      longitude,
+      speedKmh: 54,
+      headingDegrees: 218,
+      accuracyM: 9,
+      batteryPercent: 77,
+      recordedAt: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+    });
+
+    beforeAll(async () => {
+      const vehicle = await prisma.vehicle.create({
+        data: {
+          companyId,
+          plateNumber: `E2E-${stamp}`,
+          type: 'TRUCK_MEDIUM',
+          status: 'AVAILABLE',
+          capacityKg: 12000,
+          capacityUnits: 480,
+        },
+        select: { id: true },
+      });
+      vehicleId = vehicle.id;
+
+      const response = await http
+        .post('/api/v1/devices')
+        .set(auth(owner))
+        .send({ kind: 'PHONE', identifier, vehicleId, label: 'E2E phone' })
+        .expect(201);
+
+      expect(response.body.pairingSecret).toEqual(expect.any(String));
+      expect(response.body.setupInstructions.length).toBeGreaterThan(0);
+      pairingSecret = response.body.pairingSecret;
+    });
+
+    afterAll(async () => {
+      await prisma.gpsPosition.deleteMany({ where: { vehicleId } });
+      await prisma.trackingDevice.deleteMany({ where: { identifier } });
+      await prisma.vehicle.delete({ where: { id: vehicleId } }).catch(() => undefined);
+    });
+
+    it('refuses a hardware tracker whose identifier is not an IMEI', () =>
+      http
+        .post('/api/v1/devices')
+        .set(auth(owner))
+        .send({ kind: 'GT06', identifier: 'not-an-imei' })
+        .expect(400));
+
+    it('refuses to enrol the same identifier twice', () =>
+      http
+        .post('/api/v1/devices')
+        .set(auth(owner))
+        .send({ kind: 'PHONE', identifier })
+        .expect(400));
+
+    it('accepts a batch of fixes from the paired phone', async () => {
+      const response = await http
+        .post('/api/v1/devices/phone/positions')
+        .send({
+          identifier,
+          secret: pairingSecret,
+          // Ordered oldest first and far enough apart in time that the leg is drivable, which is
+          // what a real flush after a coverage gap looks like.
+          fixes: [fix(40, 5.6667, -0.0167), fix(25, 5.6402, -0.0812), fix(10, 5.6037, -0.187)],
+        })
+        .expect(201);
+
+      expect(response.body.accepted).toBe(3);
+      expect(response.body.rejected).toBe(0);
+    });
+
+    it('stores those positions against the vehicle, not as simulated data', async () => {
+      const stored = await prisma.gpsPosition.findMany({
+        where: { vehicleId },
+        orderBy: { recordedAt: 'asc' },
+      });
+      expect(stored).toHaveLength(3);
+      expect(stored.every((position) => position.isSimulated === false)).toBe(true);
+      expect(stored[0].latitude).toBeCloseTo(5.6667, 4);
+    });
+
+    it('refuses a batch signed with the wrong secret', async () => {
+      const response = await http
+        .post('/api/v1/devices/phone/positions')
+        .send({ identifier, secret: 'wrong', fixes: [fix(5, 5.6, -0.18)] })
+        .expect(201);
+
+      // Deliberately a 201 with a vague body rather than a 401: a precise failure tells someone
+      // probing which half of the credential to keep guessing at.
+      expect(response.body.accepted).toBe(0);
+      expect(response.body.error).toBeDefined();
+    });
+
+    it('rejects a physically impossible jump', async () => {
+      const response = await http
+        .post('/api/v1/devices/phone/positions')
+        .send({
+          identifier,
+          secret: pairingSecret,
+          // Ghana to Kenya, a minute after the last stored fix.
+          fixes: [fix(9, -1.2921, 36.8219)],
+        })
+        .expect(201);
+
+      expect(response.body.accepted).toBe(0);
+      expect(response.body.rejected).toBe(1);
+    });
+
+    it('rejects null island, which a tracker reports when it has no fix', async () => {
+      const response = await http
+        .post('/api/v1/devices/phone/positions')
+        .send({ identifier, secret: pairingSecret, fixes: [fix(8, 0, 0)] })
+        .expect(201);
+
+      expect(response.body.accepted).toBe(0);
+      expect(response.body.rejected).toBe(1);
+    });
+
+    it('counts accepted and rejected fixes on the device', async () => {
+      const response = await http.get('/api/v1/devices').set(auth(owner)).expect(200);
+      const device = response.body.find(
+        (row: { identifier: string }) => row.identifier === identifier,
+      );
+      expect(device.positionsAccepted).toBe(3);
+      expect(device.positionsRejected).toBe(2);
+      expect(device.vehicle.id).toBe(vehicleId);
+    });
+
+    it('reports whether the hardware gateway is listening', async () => {
+      const response = await http
+        .get('/api/v1/devices/gateway/status')
+        .set(auth(owner))
+        .expect(200);
+      expect(response.body).toHaveProperty('listening');
+      expect(response.body.protocol).toContain('GT06');
+    });
+
+    it('does not expose another company’s devices', async () => {
+      const response = await http.get('/api/v1/devices').set(auth(otherOwner)).expect(200);
+      expect(response.body).toHaveLength(0);
+    });
+
+    it('refuses to bind a device to another company’s vehicle', () =>
+      http
+        .post('/api/v1/devices')
+        .set(auth(otherOwner))
+        .send({ kind: 'PHONE', identifier: `e2e-cross-${stamp}`, vehicleId })
+        .expect(400));
   });
 
   /* =================================================================== health */

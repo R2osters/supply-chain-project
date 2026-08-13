@@ -70,6 +70,11 @@ export interface AppConfig {
     roadWindingFactor: number;
   };
   simulator: { enabled: boolean; tickMs: number; speedMultiplier: number };
+  deviceGateway: {
+    /** TCP listener for hardware GPS trackers. Off in development unless asked for. */
+    enabled: boolean;
+    port: number;
+  };
   maritime: {
     aisStreamApiKey: string | null;
     /** [[lat1, lon1], [lat2, lon2]] pairs. Empty subscribes worldwide. */
@@ -178,6 +183,13 @@ export default (): AppConfig => {
       // 12× keeps simulated vehicles visibly moving without finishing every trip within minutes
       // and leaving the live map empty.
       speedMultiplier: float(process.env.SIMULATOR_SPEED_MULTIPLIER, 12),
+    },
+
+    deviceGateway: {
+      enabled: bool(process.env.DEVICE_GATEWAY_ENABLED, true),
+      // 5023 is the port Traccar uses for GT06, so a device already configured for a Traccar
+      // installation points here without being re-flashed by SMS.
+      port: int(process.env.DEVICE_GATEWAY_PORT, 5023),
     },
 
     maritime: {
