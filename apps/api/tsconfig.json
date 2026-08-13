@@ -28,6 +28,9 @@
       "src/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "prisma/**/*", "test/**/*"],
-  "exclude": ["node_modules", "dist"]
+  // Build input is `src` only. Including `prisma/seed.ts` or `test/` here would widen the
+  // inferred rootDir to apps/api and emit `dist/src/main.js` instead of `dist/main.js`.
+  // Those files are still typechecked — by tsconfig.tools.json, via `npm run typecheck`.
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "prisma", "test"]
 }

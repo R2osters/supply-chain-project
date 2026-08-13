@@ -159,7 +159,9 @@ export default (): AppConfig => {
     simulator: {
       enabled: bool(process.env.SIMULATOR_ENABLED, true),
       tickMs: int(process.env.SIMULATOR_TICK_MS, 5000),
-      speedMultiplier: float(process.env.SIMULATOR_SPEED_MULTIPLIER, 60),
+      // 12× keeps simulated vehicles visibly moving without finishing every trip within minutes
+      // and leaving the live map empty.
+      speedMultiplier: float(process.env.SIMULATOR_SPEED_MULTIPLIER, 12),
     },
   };
 };

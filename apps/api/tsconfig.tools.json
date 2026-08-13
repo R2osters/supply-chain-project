@@ -1,0 +1,12 @@
+{
+  // Typecheck-only project covering the files the build deliberately excludes: the Prisma seed
+  // and the e2e suite. `noEmit` is the whole point — this never produces output, so it cannot
+  // affect the shape of `dist`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": ["src/**/*", "prisma/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
