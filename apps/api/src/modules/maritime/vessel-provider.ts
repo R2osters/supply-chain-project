@@ -39,7 +39,7 @@ export interface VesselFix {
   navStatus: string | null;
   destination?: string | null;
   recordedAt: Date;
-  source: 'AIS_STREAM' | 'SIMULATOR' | 'MANUAL';
+  source: 'AIS_STREAM' | 'MARINE_TRAFFIC' | 'SIMULATOR' | 'MANUAL';
 }
 
 export interface VesselProvider {

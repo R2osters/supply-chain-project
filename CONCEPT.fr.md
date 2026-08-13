@@ -67,6 +67,30 @@ D'où deux mécanismes de suivi distincts, et une recherche de navire par **nom,
 indicatif** — parce qu'un chargeur qui tient un connaissement a *un* identifiant et ne sait pas
 lequel c'est.
 
+#### Trois sources de position, et pourquoi ce n'est pas « MarineTraffic ou rien »
+
+| Source | Coût | Couverture | Ce qu'on en retire |
+|---|---|---|---|
+| **MarineTraffic** | payant, au crédit | terrestre **+ satellite** | des données JSON, en base |
+| **AISStream** | gratuit | terrestre, ~40–60 NM des côtes | des données brutes, en base |
+| **Simulateur** | — | orthodromies, marquées `SIMULATOR` | démonstration |
+| *Iframe / lien MarineTraffic* | gratuit | — | **une image, pas des données** |
+
+La distinction qui compte : un iframe vous **montre** le navire, il ne met pas sa position **dans
+votre base**. Or l'ETA, la détection d'anomalies et le rattachement à une expédition ont tous
+besoin de la position comme donnée. C'est pourquoi l'iframe est une couche de *vérification*, pas
+une source.
+
+L'apport réel de MarineTraffic en tant que source est l'**AIS satellitaire** : un récepteur
+terrestre porte à 40–60 milles nautiques, et au milieu de l'Atlantique un navire disparaît
+purement et simplement. Sur une traversée transocéanique, cet écart est la différence entre une
+trace continue et deux morceaux déconnectés — précisément au moment où le chargeur veut savoir que
+le navire avance encore.
+
+Les **liens profonds** vers MarineTraffic et VesselFinder sont eux gratuits, sans clé, et présents
+sur chaque navire. Ils restent utiles même avec un flux payant : un second avis, une photo de la
+coque, l'historique des escales que ce système ne conserve pas.
+
 ---
 
 ## 2. Où l'IA intervient — précisément

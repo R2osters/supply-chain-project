@@ -74,8 +74,17 @@ export interface AppConfig {
     aisStreamApiKey: string | null;
     /** [[lat1, lon1], [lat2, lon2]] pairs. Empty subscribes worldwide. */
     aisBoundingBoxes: number[][][];
-    /** Time compression for simulated voyages. Ignored entirely when a live AIS feed is configured. */
+    /** Time compression for simulated voyages. Ignored entirely when a live feed is configured. */
     speedMultiplier: number;
+    /** MarineTraffic API key. Paid — their service has no free tier. */
+    marineTrafficApiKey: string | null;
+    marineTrafficPollSeconds: number;
+    /**
+     * Whether to embed MarineTraffic's live map in the vessel screen. Off by default: embedding a
+     * third party's map is governed by *their* terms, which is an operator's decision, not a code
+     * default. Deep links carry no such question and are always on.
+     */
+    marineTrafficEmbedEnabled: boolean;
   };
 }
 
@@ -182,6 +191,11 @@ export default (): AppConfig => {
       // the fleet does not empty while you look at it. Far higher than the road multiplier
       // because road legs are hours, not weeks.
       speedMultiplier: float(process.env.MARITIME_SPEED_MULTIPLIER, 240),
+      marineTrafficApiKey: process.env.MARINETRAFFIC_API_KEY || null,
+      // Every poll costs credits per vessel, so the default is deliberately unhurried. A ship at
+      // 18 knots covers 1.5 nautical miles in five minutes — nothing a planner needs sooner.
+      marineTrafficPollSeconds: int(process.env.MARINETRAFFIC_POLL_SECONDS, 300),
+      marineTrafficEmbedEnabled: bool(process.env.MARINETRAFFIC_EMBED_ENABLED, false),
     },
   };
 };

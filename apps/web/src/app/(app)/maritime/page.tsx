@@ -72,6 +72,11 @@ interface FleetVessel {
   positionSource: string | null;
   isDemoData: boolean;
   isOwnFleet: boolean;
+  externalLinks: {
+    marineTraffic: string | null;
+    vesselFinder: string | null;
+    identifierUsed: 'IMO' | 'MMSI' | 'NAME' | null;
+  } | null;
   voyage: {
     id: string;
     voyageNumber: string;
@@ -605,6 +610,42 @@ export default function MaritimePage() {
                     <p className="border-t border-[var(--color-hairline)] pt-3 text-[0.75rem] text-[var(--color-ink-faint)]">
                       {t('sea.noVoyage')}
                     </p>
+                  )}
+
+                  {/* Public trackers. Ordinary hyperlinks — no key, no cost — and genuinely
+                      useful alongside our own data: a second opinion, a photograph of the hull,
+                      or the port-call history this system does not store. */}
+                  {selected.externalLinks?.marineTraffic && (
+                    <div className="border-t border-[var(--color-hairline)] pt-2.5">
+                      <div className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
+                        {t('sea.externalTrackers')}
+                      </div>
+                      <div className="mt-1.5 flex flex-wrap gap-2">
+                        <a
+                          href={selected.externalLinks.marineTraffic}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn !px-2.5 !py-1 !text-[0.5625rem]"
+                        >
+                          MarineTraffic ↗
+                        </a>
+                        {selected.externalLinks.vesselFinder && (
+                          <a
+                            href={selected.externalLinks.vesselFinder}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn !px-2.5 !py-1 !text-[0.5625rem]"
+                          >
+                            VesselFinder ↗
+                          </a>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-[0.5625rem] leading-relaxed text-[var(--color-ink-faint)]">
+                        {t('sea.externalHint', {
+                          id: selected.externalLinks.identifierUsed ?? '—',
+                        })}
+                      </p>
+                    </div>
                   )}
 
                   {track.data && (

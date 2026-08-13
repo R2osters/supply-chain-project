@@ -10,7 +10,13 @@ import {
 import type { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MaritimeService } from './maritime.service';
-import { AisStreamProvider, SimulatedVesselProvider, type VesselProvider } from './vessel-provider';
+import {
+  AisStreamProvider,
+  SimulatedVesselProvider,
+  type VesselFix,
+  type VesselProvider,
+} from './vessel-provider';
+import { MarineTrafficProvider } from './marinetraffic.provider';
 
 /**
  * Simulator tick. Fixed because `@Interval` needs a compile-time constant; how far a vessel moves
@@ -35,6 +41,7 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
 
   private provider: VesselProvider;
   private ais: AisStreamProvider | null = null;
+  private marineTraffic: MarineTrafficProvider | null = null;
   private ticking = false;
 
   private fixesRecorded = 0;
@@ -57,25 +64,47 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     const maritimeConfig = this.config.get('maritime', { infer: true });
 
+    /*
+     * Source precedence: MarineTraffic, then AISStream, then the simulator.
+     *
+     * MarineTraffic comes first when configured because it is the only one of the three that
+     * fuses *satellite* AIS. Terrestrial receivers reach roughly 40–60 nautical miles offshore;
+     * mid-Atlantic a ship simply disappears from them. On a trans-ocean voyage that gap is the
+     * difference between a continuous track and two disconnected ends, and it is precisely the
+     * middle of the passage where a shipper most wants to know the ship is still making way.
+     *
+     * Only one source ever runs. Mixing feeds for the same vessel produces a track whose points
+     * disagree about where it was, and nobody can untangle that afterwards.
+     */
+    if (maritimeConfig.marineTrafficApiKey) {
+      const marineTraffic = new MarineTrafficProvider(
+        maritimeConfig.marineTrafficApiKey,
+        (fix) => this.handleFix(fix),
+        maritimeConfig.marineTrafficPollSeconds,
+        () => this.trackedMmsi(),
+      );
+      this.marineTraffic = marineTraffic;
+      this.provider = marineTraffic;
+      marineTraffic.start();
+      this.logger.log(
+        `MarineTraffic tracking enabled, polling every ${maritimeConfig.marineTrafficPollSeconds}s. ` +
+          'Each poll consumes credits.',
+      );
+      return;
+    }
+
     if (!maritimeConfig.aisStreamApiKey) {
       this.logger.warn(
-        'No AISSTREAM_API_KEY configured — vessel positions are simulated along great-circle ' +
-          'tracks and stamped SIMULATOR. Get a free key at aisstream.io for live global AIS.',
+        'No AISSTREAM_API_KEY or MARINETRAFFIC_API_KEY configured — vessel positions are ' +
+          'simulated along great-circle tracks and stamped SIMULATOR. aisstream.io issues a free ' +
+          'key for live global AIS; MarineTraffic offers wider satellite coverage, for a fee.',
       );
       return;
     }
 
     this.ais = new AisStreamProvider(
       maritimeConfig.aisStreamApiKey,
-      (fix) => {
-        void this.maritime
-          .recordFix(fix)
-          .then((result) => {
-            if (result.matched) this.fixesRecorded += 1;
-            else this.fixesUnmatched += 1;
-          })
-          .catch((error) => this.logger.debug(`Could not record AIS fix: ${error}`));
-      },
+      (fix) => this.handleFix(fix),
       maritimeConfig.aisBoundingBoxes,
     );
 
@@ -86,6 +115,33 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.ais?.disconnect();
+    this.marineTraffic?.stop();
+  }
+
+  /** One landing point for every provider, so all sources behave identically downstream. */
+  private handleFix(fix: VesselFix): void {
+    void this.maritime
+      .recordFix(fix)
+      .then((result) => {
+        if (result.matched) this.fixesRecorded += 1;
+        else this.fixesUnmatched += 1;
+      })
+      .catch((error) => this.logger.debug(`Could not record vessel fix: ${error}`));
+  }
+
+  /**
+   * MMSIs worth spending a paid poll on: vessels this deployment actually tracks.
+   *
+   * A worldwide poll would return tens of thousands of ships and cost credits for every one of
+   * them, when a company cares about a handful.
+   */
+  private async trackedMmsi(): Promise<string[]> {
+    const vessels = await this.prisma.vessel.findMany({
+      where: { isTracked: true, mmsi: { not: null }, isDemoData: false },
+      select: { mmsi: true },
+      take: 500,
+    });
+    return vessels.map((vessel) => vessel.mmsi!).filter(Boolean);
   }
 
   status() {
@@ -104,7 +160,15 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
       uptimeMinutes,
       howToGoLive: this.provider.isLive
         ? null
-        : 'Set AISSTREAM_API_KEY (free at aisstream.io) and restart the API. Positions then come from the vessels themselves.',
+        : 'Set AISSTREAM_API_KEY (free at aisstream.io) for live terrestrial AIS, or ' +
+          'MARINETRAFFIC_API_KEY (paid) for satellite coverage that also reaches mid-ocean. ' +
+          'Then restart the API.',
+      /**
+       * Always available, key or not: public vessel pages are ordinary hyperlinks. Useful even
+       * with a paid feed running, for a second opinion or the port-call history this system does
+       * not store.
+       */
+      externalTrackers: ['MarineTraffic', 'VesselFinder'],
     };
   }
 
