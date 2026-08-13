@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": false,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2022",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "noImplicitAny": true,
+    "strictBindCallApply": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    // `@scip/shared` is deliberately NOT path-mapped to its source. Mapping it would pull files
+    // from outside this project into the compilation, which pushes TypeScript's inferred rootDir
+    // up to the repo root and emits `dist/apps/api/src/main.js` instead of `dist/main.js`.
+    // npm workspaces already symlinks node_modules/@scip/shared -> packages/shared, so the normal
+    // module resolution finds its built `dist`. Build order is enforced by the root build script.
+    "paths": {
+      "src/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*", "prisma/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
