@@ -12,7 +12,12 @@ Nothing is listed as done unless it was actually executed — migrations applied
 | Prisma client generated, API typechecks clean | `tsc --noEmit` exits 0 |
 | API boots and serves | `GET /api/v1/health/ready` → `{"status":"ready"}` with database/redis/postgis `up` |
 | Auth end-to-end | `POST /api/v1/auth/register` returned a real JWT pair and created company + COMPANY_ADMIN |
-| Unit tests | 29 passing (supplier scoring 10, ETA engine 19) |
+| Unit tests (API) | 29 passing (supplier scoring 10, ETA engine 19) |
+| API surface | 90 routes mapped at boot |
+| AI service live | `GET :8000/health` → `{"status":"ok"}`; OR-Tools, scikit-learn, statsmodels, scipy all import and run on Python 3.12 |
+| Forecast model selection is real | On a synthetic trend+weekly series: Holt-Winters 6.06 % WAPE beat seasonal naive 6.78 % and gradient boosting 7.52 %; the winner was chosen automatically |
+| Allocation MILP is real | The brief's 20 000-unit example solved OPTIMAL in 4 ms. It **excluded the cheapest supplier** (B at 8.00/unit) because its 12-day lead time breaches the 7-day deadline and its 75 % reliability carries a heavy risk penalty — a non-obvious answer a scoring heuristic would have got wrong |
+| Allocation tests | 18 passing, covering MOQ all-or-nothing, capacity, budget, concentration, and each cost trade-off |
 
 ## Done
 
@@ -37,18 +42,27 @@ Nothing is listed as done unless it was actually executed — migrations applied
 - **ETA engine**: distance from polyline or winding-adjusted great circle, speed blending by
   observation weight, traffic/weather/night multipliers, propagated uncertainty and an 80 % arrival window.
 
+- **Shipments**: lifecycle state machine (DELAYED reversible), origin/destination resolution,
+  ETA-derived promised arrival, unguessable tracking numbers, vehicle-availability coupling,
+  carrier on-time rate recompute, downsampled tracking trail.
+- **GPS**: batch ingest with clock-skew / implausible-speed / jitter rejection reported back to the
+  caller, forward-only denormalised position, driver-scoped authorisation.
+- **PostGIS queries**: radius search, per-warehouse lateral join, corridor deviation, travelled
+  distance, fleet snapshot — all against the GiST-indexed geography columns.
+- **WebSocket**: Socket.IO gateway, handshake-authenticated, company-room scoped.
+- **AI service**: FastAPI app with `/health`, `/forecast`, `/inventory/optimize`,
+  `/supplier/score`, `/supplier/allocation`; constant-time bearer check; every response carries an
+  explanation block.
+
 ## In progress / next
 
-1. Shipments module (CRUD, events, transitions) — status machine written, service pending.
-2. GPS ingest + WebSocket broadcast + PostGIS spatial queries.
-3. Anomaly detection service.
-4. Deliveries + proof of delivery (MinIO).
-5. Incidents + notifications.
-6. Analytics / dashboard aggregates.
-7. Python AI service: forecasting, safety stock, supplier scoring, MILP allocation, VRP, scenarios, risk.
-8. Recommendation engine + the closed loop.
-9. Telemetry simulator (labelled DEMO DATA).
-10. Seed generator, e2e tests, frontend, docs.
+1. Anomaly detection engine (the TS side has the geometry; the Python detector is next).
+2. Route/VRP optimisation, scenario simulator, risk engine (OR-Tools routing is installed and verified).
+3. Recommendation engine + the domain-event worker that closes the TRACK→OPTIMIZE loop.
+4. Deliveries + proof of delivery (MinIO), incidents, notifications.
+5. Analytics / dashboard aggregates.
+6. Telemetry simulator (labelled DEMO DATA).
+7. Seed generator, e2e tests, Next.js frontend with the MapLibre live map, docs.
 
 ## Deviations from the brief, and why
 
