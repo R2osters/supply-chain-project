@@ -234,8 +234,48 @@ export class InventoryLedgerService {
     `;
   }
 
-  /** Tracks goods that are ordered but not yet received, so the reorder engine does not double-order. */
-  async adjustIncoming(tx: TxClient, productId: string, warehouseId: string, delta: number) {
+  /**
+   * Tracks goods that are ordered but not yet received, so the reorder engine does not
+   * double-order.
+   *
+   * The row is created if it does not exist. Confirming a purchase order for a product that has
+   * never been stocked in that warehouse is completely ordinary — it is how a new SKU arrives —
+   * and an UPDATE alone would silently affect zero rows, losing the inbound quantity and letting
+   * the reorder engine recommend the same order again.
+   */
+  async adjustIncoming(
+    tx: TxClient,
+    productId: string,
+    warehouseId: string,
+    delta: number,
+    companyId?: string,
+  ) {
+    const existing = await tx.inventory.findUnique({
+      where: { productId_warehouseId: { productId, warehouseId } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      if (delta <= 0) return; // nothing to decrement; do not create an empty row for a no-op
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { companyId: true, isDemoData: true },
+      });
+      if (!product) return;
+
+      await tx.inventory.create({
+        data: {
+          companyId: companyId ?? product.companyId,
+          productId,
+          warehouseId,
+          availableStock: 0,
+          incomingStock: delta,
+          isDemoData: product.isDemoData,
+        },
+      });
+      return;
+    }
+
     await tx.$executeRaw`
       UPDATE "inventory"
          SET "incomingStock" = GREATEST("incomingStock" + ${delta}, 0)

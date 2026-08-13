@@ -36,6 +36,23 @@ export class InventoryQueryDto extends PaginationQueryDto {
   outOfStock?: boolean;
 }
 
+/**
+ * The global ValidationPipe runs with `forbidNonWhitelisted`, so any query parameter that is not
+ * declared on the bound DTO is rejected outright. Filters therefore have to live on the DTO —
+ * reading them with a separate `@Query('productId')` looks like it works and produces a 400.
+ */
+export class MovementQueryDto extends PaginationQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  productId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  warehouseId?: string;
+}
+
 export class StockAdjustmentDto {
   @ApiProperty()
   @IsString()

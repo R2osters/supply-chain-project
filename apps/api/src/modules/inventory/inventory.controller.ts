@@ -7,6 +7,7 @@ import {
   AlertQueryDto,
   InventoryQueryDto,
   ManualMovementDto,
+  MovementQueryDto,
   SetStockPolicyDto,
   StockAdjustmentDto,
   StockTransferDto,
@@ -39,15 +40,11 @@ export class InventoryController {
     summary: 'The stock ledger',
     description: 'Every movement carries the balance it produced, so the ledger is replayable.',
   })
-  @ApiQuery({ name: 'productId', required: false })
-  @ApiQuery({ name: 'warehouseId', required: false })
-  movements(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query() query: PaginationQueryDto,
-    @Query('productId') productId?: string,
-    @Query('warehouseId') warehouseId?: string,
-  ) {
-    return this.service.movements(user, query, { productId, warehouseId });
+  movements(@CurrentUser() user: AuthenticatedUser, @Query() query: MovementQueryDto) {
+    return this.service.movements(user, query, {
+      productId: query.productId,
+      warehouseId: query.warehouseId,
+    });
   }
 
   @Get('alerts')

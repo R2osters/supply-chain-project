@@ -372,6 +372,7 @@ export class PurchaseOrdersService {
             item.productId,
             order.warehouseId,
             sign * Number(item.quantity),
+            order.companyId,
           );
         }
       }
