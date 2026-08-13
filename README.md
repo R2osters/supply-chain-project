@@ -132,6 +132,19 @@ it back. Accepting performs the action — it does not tick a box.
 indicator reads `streaming` when the WebSocket is connected, and clicking one shows its driver,
 speed, shipment and ETA.
 
+**You can find a ship by typing its name.** Open *Vessels* and type `Ashanti`, or an IMO number, or
+an MMSI — one box, and the system works out which kind of identifier it was given. Former names are
+searched too, because ships are renamed on sale and old paperwork carries the old name. The eight
+demo vessels sail real great-circle tracks between real ports on a liner rotation: when one
+arrives, the return leg opens.
+
+Set `AISSTREAM_API_KEY` (free at [aisstream.io](https://aisstream.io)) and restart the API — vessel
+positions then come live from the ships' own AIS broadcasts instead of the simulator. The
+*Vessels* screen tells you which source is active; the two are never mixed for one vessel.
+
+**It speaks French.** The `EN`/`FR` switch sits on the login screen and at the foot of the rail.
+Numbers and dates follow the locale, not just the words: 2 906 717 and *13 août 26*.
+
 **Turn the AI service off and watch it degrade, not fall over.** Stop the uvicorn process. The
 rail shows `AI offline`; tracking, receiving and stock keep working; forecasting and advice
 return a clear 503 instead of a stack trace.
@@ -195,6 +208,10 @@ synthetic. The moment a physical tracker posts to `/telemetry/gps`, its fixes ar
 - **The seam** — a durable `domain_events` table. A worker claims rows with
   `FOR UPDATE SKIP LOCKED`, so a restart between "shipment delayed" and "risk recomputed" cannot
   lose the trigger, and running two workers is safe.
+
+**Start here if you want to know what the AI actually is and how it was trained:**
+**[CONCEPT.md](CONCEPT.md)** — or **[CONCEPT.fr.md](CONCEPT.fr.md)** en français. It is blunt about
+which features learn, which are stated priors, and which are not AI at all.
 
 Deeper detail: [ARCHITECTURE.md](ARCHITECTURE.md) · [DATABASE.md](DATABASE.md) ·
 [AI.md](AI.md) · [API.md](API.md) · [DEPLOYMENT.md](DEPLOYMENT.md).
