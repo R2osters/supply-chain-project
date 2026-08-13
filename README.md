@@ -1,0 +1,253 @@
+# SCIP — Supply Chain Intelligence Platform
+
+Track cargo from a supplier's gate to a customer's dock, and decide what to order, from whom,
+when and by which route. One product, two bounded contexts, and a closed loop between them.
+
+```
+TRACK observes      shipment SHP-… will miss its promise
+      ↓ durable domain event
+OPTIMIZE recomputes stockout risk for the SKUs on board
+      ↓
+OPTIMIZE recommends order 3 000 units from Supplier C — with reasons and assumptions
+      ↓ a human accepts
+TRACK executes      a real draft purchase order exists and is tracked
+```
+
+That loop is not a diagram in a slide deck. It runs, and the section
+[**Verify it yourself**](#verify-it-yourself) walks the whole thing end to end in about
+three minutes.
+
+---
+
+## Quick start
+
+**You need:** Docker Desktop (running), Node 20+, Python 3.12.
+
+```bash
+git clone <this repo> && cd "supply chain project"
+cp .env.example .env
+```
+
+**1 — infrastructure** (Postgres 16 + PostGIS, Redis, MinIO, MailHog):
+
+```bash
+docker compose up -d postgres redis minio mailhog
+```
+
+**2 — dependencies, schema and demo data:**
+
+```bash
+npm install
+npm run build --workspace @scip/shared
+npm run db:migrate:deploy --workspace @scip/api
+npm run db:seed --workspace @scip/api
+```
+
+**3 — the AI service** (Python 3.12 — OR-Tools and scipy ship wheels for it; 3.13 would build
+from source):
+
+```bash
+cd services/ai
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt   # Windows
+# .venv/bin/python -m pip install -r requirements.txt     # macOS / Linux
+.venv/Scripts/python -m uvicorn app.main:app --port 8000
+```
+
+**4 — the API and the web app**, each in its own terminal from the repo root:
+
+```bash
+npm run dev:api
+```
+
+```bash
+npm run dev:web
+```
+
+Then open **http://localhost:3000** and sign in as `admin@demo-scip.com` /
+`DemoPassw0rd!2026`. Every seeded account uses that passphrase; the login screen lists them.
+
+<details>
+<summary>Everything in containers instead</summary>
+
+```bash
+docker compose --profile full up -d --build
+```
+
+Brings up all six services. The API applies its own migrations on start; seed it once with
+`npm run db:seed --workspace @scip/api`.
+</details>
+
+### Where things listen
+
+| | URL |
+|---|---|
+| Web app | http://localhost:3000 |
+| API | http://localhost:3001/api/v1 |
+| API reference (Swagger) | http://localhost:3001/api/v1/docs |
+| AI service | http://localhost:8000 · docs at `/docs` |
+| Mail (MailHog) | http://localhost:8025 |
+| Object storage (MinIO) | http://localhost:9001 |
+| Postgres | `localhost:5433` |
+| Redis | `localhost:6380` |
+
+Postgres and Redis use non-default host ports on purpose, so this stack cannot collide with
+one already running on your machine.
+
+---
+
+## Verify it yourself
+
+Claims are cheap. Each of these takes under a minute and either works or doesn't.
+
+**The forecast really compares models.** Open *Forecasting*, pick `SKU-006`, run it. Six models
+are scored by walk-forward validation and the table shows every WAPE, not just the winner's.
+Selection is by WAPE rather than MAPE because MAPE divides by the actual, so one zero-demand day
+makes it infinite — and zero-demand days are the norm for slow movers.
+
+**The allocator really solves.** Open *Allocation*, pick a product, ask for 20 000 units within
+7 days with a 50 % concentration cap. It solves in single-digit milliseconds and will often
+**exclude the cheapest supplier** — a 12-day lead time breaches the deadline and a 75 % on-time
+record carries a heavy risk penalty. That is the non-obvious answer, and it is the one a
+weighted-scoring heuristic gets wrong.
+
+**The supplier scores are measured, not asserted.** The seed generates each supplier from a known
+profile, then the platform derives reliability from the resulting purchase-order history using the
+same code path the API uses. Run `npm run db:seed --workspace @scip/api` and compare the two
+columns it prints:
+
+```
+SUP-C Tema Port Distributors    measured on-time 96.9%   (generated from 97%)
+SUP-A Volta Grain Cooperative   measured on-time 94.8%   (generated from 92%)
+SUP-D Ashanti Wholesale Group   measured on-time 89.3%   (generated from 86%)
+SUP-B Sahel Commodities Ltd     measured on-time 79.2%   (generated from 75%)
+SUP-E Abidjan Import Partners   measured on-time 74.2%   (generated from 70%)
+```
+
+**The loop really closes.** Open *Advice*, press **regenerate advice**, then **accept & execute**
+on an `ORDER_NOW`. A real draft purchase order appears under *Orders* with an `ai` marker linking
+it back. Accepting performs the action — it does not tick a box.
+
+**The map really moves.** Open *Live map*. Vehicles advance along real Ghanaian corridors, the
+indicator reads `streaming` when the WebSocket is connected, and clicking one shows its driver,
+speed, shipment and ETA.
+
+**Turn the AI service off and watch it degrade, not fall over.** Stop the uvicorn process. The
+rail shows `AI offline`; tracking, receiving and stock keep working; forecasting and advice
+return a clear 503 instead of a stack trace.
+
+---
+
+## What is real, and what is stubbed
+
+Real, computed, tested — not mocked:
+
+ETA with propagated uncertainty · delay probability · anomaly detection · demand forecasting with
+model selection · safety stock and reorder point · supplier scoring · multi-supplier allocation
+(MILP) · vehicle routing (CVRP with time windows) · Monte-Carlo scenarios · risk scoring · the
+recommendation engine and its execution path.
+
+Deliberately stubbed, because they need paid third-party accounts this build has no credentials
+for. Each sits behind an interface, returns clearly-labelled deterministic data, and is swapped in
+by setting one environment variable:
+
+| Stub | Swap in with |
+|---|---|
+| Weather | `OPENWEATHER_API_KEY` |
+| Road distance (great-circle × winding factor) | `OSRM_URL` |
+| Traffic (time-of-day model) | any provider behind the same interface |
+| SMS (logged, never silently dropped) | any gateway |
+| GPS hardware → the telemetry simulator | POST real fixes to `/telemetry/gps` |
+
+**Nothing synthetic is presented as real.** Every seeded row carries `isDemoData`, every simulated
+fix carries `isSimulated`, the UI badges them, and analytics report how much of a figure is
+synthetic. The moment a physical tracker posts to `/telemetry/gps`, its fixes are stored with
+`isSimulated = false` and the two stay distinguishable forever.
+
+---
+
+## Architecture
+
+```
+                    ┌──────────────────────────────┐
+                    │  apps/web · Next.js 15       │
+                    │  React Query · MapLibre      │
+                    └──────────────┬───────────────┘
+                          REST + WebSocket
+                    ┌──────────────┴───────────────┐
+                    │  apps/api · NestJS 11        │
+                    │  RBAC · Prisma · Socket.IO   │
+                    └───┬───────────┬───────────┬──┘
+                        │           │           │
+        ┌───────────────┘     ┌─────┘           └──────────┐
+        │                     │                            │
+┌───────┴────────┐   ┌────────┴─────────┐        ┌─────────┴────────┐
+│ Postgres 16    │   │ Redis            │        │ services/ai      │
+│ + PostGIS 3.4  │   │ cache · queues   │        │ FastAPI          │
+└────────────────┘   └──────────────────┘        │ OR-Tools/sklearn │
+                                                 └──────────────────┘
+```
+
+- **TRACK** — companies, suppliers, purchase orders, shipments, GPS, warehouses, inventory,
+  deliveries, incidents.
+- **OPTIMIZE** — forecasting, inventory policy, supplier scoring, allocation, routing, scenarios,
+  risk, recommendations.
+- **The seam** — a durable `domain_events` table. A worker claims rows with
+  `FOR UPDATE SKIP LOCKED`, so a restart between "shipment delayed" and "risk recomputed" cannot
+  lose the trigger, and running two workers is safe.
+
+Deeper detail: [ARCHITECTURE.md](ARCHITECTURE.md) · [DATABASE.md](DATABASE.md) ·
+[AI.md](AI.md) · [API.md](API.md) · [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Choices worth defending
+
+**One product, not two.** The two briefs shared roughly 70 % of their domain model. Two
+applications would have meant duplicating it and building a sync layer between two databases for
+no benefit — and the value is precisely in the loop between them.
+
+**MapLibre + OpenStreetMap, not Mapbox or Google.** Both alternatives need a paid API key. Without
+one, a Mapbox map is a screenshot, not a feature. `NEXT_PUBLIC_MAP_STYLE_URL` swaps in any
+MapLibre-compatible style the moment a key exists.
+
+**Refresh tokens are opaque database rows, not JWTs.** A stolen JWT refresh token stays valid until
+it expires no matter what the server decides. These are revocable, rotated on every use, and a
+replayed token burns the whole session family.
+
+**PostGIS through generated columns.** `latitude`/`longitude` stay plain doubles so the Prisma
+client is typed end to end; a `STORED GENERATED geography(Point,4326)` column derived from them
+carries the GiST index. The geography can never drift from the source of truth because it is
+computed from it.
+
+**Unmet demand is priced, not forbidden.** An allocation model that goes infeasible when suppliers
+cannot cover demand tells a buyer nothing. Pricing the shortfall makes the solver reveal *how much*
+is uncoverable and what it costs.
+
+---
+
+## Tests
+
+```bash
+npm test --workspace @scip/api                      # unit
+npm run test:e2e --workspace @scip/api              # end-to-end, needs the stack up
+cd services/ai && .venv/Scripts/python -m pytest -q  # AI service
+```
+
+The AI suite asserts the product rules directly, not just arithmetic: every response carries an
+explanation, no recommendation exists without reasons, minimum order quantity behaves as
+all-or-nothing, an over-subscribed fleet returns a partial plan rather than failing, and a scenario
+is reproducible for a given seed.
+
+---
+
+## Repository layout
+
+```
+apps/api          NestJS API — 128 routes, RBAC, Prisma, WebSocket, jobs
+apps/web          Next.js 15 app — 19 routes
+services/ai       FastAPI — 10 engines behind 10 endpoints
+packages/shared   enums, the RBAC matrix, spherical geometry, API↔AI contracts
+docker-compose.yml
+```
+
+`PROGRESS.md` is the running build log: what is done and *verified*, what is not, and every
+deviation from the brief with its reason.
