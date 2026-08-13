@@ -604,6 +604,61 @@ describe('SCIP API (e2e)', () => {
     });
   });
 
+  /* ================================================== documented query filters */
+
+  /**
+   * A regression guard for a whole bug class, not a single endpoint.
+   *
+   * The global ValidationPipe runs with `forbidNonWhitelisted`, which also applies to query
+   * strings. A controller that binds `@Query() query: PaginationQueryDto` and separately reads
+   * `@Query('status')` looks correct, passes review, and returns 400 for the very parameter its
+   * Swagger annotation advertises. Four endpoints shipped with exactly that shape.
+   *
+   * Every filter this API documents is exercised here, so adding a fifth without declaring it on
+   * a DTO fails the suite rather than the user.
+   */
+  describe('documented query filters are accepted', () => {
+    const cases: Array<[string, string]> = [
+      ['recommendations', '?status=OPEN&limit=5'],
+      ['recommendations', '?priority=HIGH'],
+      ['recommendations', '?type=ORDER_NOW'],
+      ['incidents', '?status=OPEN'],
+      ['incidents', '?severity=HIGH'],
+      ['incidents', '?type=DELAY'],
+      ['notifications', '?unreadOnly=true'],
+      ['notifications', '?unreadOnly=false'],
+      ['deliveries', '?status=DELIVERED'],
+      ['inventory', '?belowReorderPoint=true'],
+      ['inventory', '?outOfStock=true'],
+      ['inventory/movements', '?order=asc'],
+      ['inventory/alerts', '?includeResolved=true'],
+      ['shipments', '?status=DELAYED'],
+      ['shipments', '?activeOnly=true'],
+      ['shipments', '?minDelayProbability=0.5'],
+      ['purchase-orders', '?status=DRAFT'],
+      ['suppliers', '?search=e2e&sortBy=name&order=asc'],
+    ];
+
+    it.each(cases)('GET /%s%s', async (path, query) => {
+      await http.get(`/api/v1/${path}${query}`).set(auth(owner)).expect(200);
+    });
+
+    it('still rejects a genuinely unknown parameter', () =>
+      http.get('/api/v1/shipments?definitelyNotAFilter=1').set(auth(owner)).expect(400));
+
+    it('rejects an invalid value for a known filter', () =>
+      http.get('/api/v1/recommendations?status=NOT_A_STATUS').set(auth(owner)).expect(400));
+
+    it('does not let sortBy reach ORDER BY unchecked', async () => {
+      // Not on the allow-list, so it must fall back to the default column rather than error
+      // or interpolate.
+      await http
+        .get('/api/v1/suppliers?sortBy=(SELECT%201)&order=asc')
+        .set(auth(owner))
+        .expect(200);
+    });
+  });
+
   /* =================================================================== health */
 
   describe('health', () => {

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators';
-import { PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { DeliveryQueryDto } from '../../common/dto/filter-query.dto';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { CapturePodDto, TransitionDeliveryDto } from './deliveries.dto';
 import { DeliveriesService } from './deliveries.service';
@@ -18,13 +18,8 @@ export class DeliveriesController {
     summary: 'List deliveries',
     description: 'A DRIVER sees only their own; a CUSTOMER sees only deliveries addressed to them.',
   })
-  @ApiQuery({ name: 'status', required: false })
-  list(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query() query: PaginationQueryDto,
-    @Query('status') status?: string,
-  ) {
-    return this.service.list(user, query, status);
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: DeliveryQueryDto) {
+    return this.service.list(user, query, query.status);
   }
 
   @Get('today')

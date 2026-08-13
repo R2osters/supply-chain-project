@@ -23,6 +23,7 @@ import {
 } from '@scip/shared';
 import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators';
 import { PaginationQueryDto, paginated } from '../../common/dto/pagination.dto';
+import { IncidentQueryDto } from '../../common/dto/filter-query.dto';
 import { companyFilter, requireCompanyId } from '../../common/tenancy/tenant-scope';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -316,19 +317,13 @@ export class IncidentsController {
   @Get()
   @RequirePermissions('incident:read')
   @ApiOperation({ summary: 'List incidents' })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'severity', required: false })
-  @ApiQuery({ name: 'type', required: false })
-  @ApiQuery({ name: 'shipmentId', required: false })
-  list(
-    @CurrentUser() user: AuthenticatedUser,
-    @Query() query: PaginationQueryDto,
-    @Query('status') status?: string,
-    @Query('severity') severity?: string,
-    @Query('type') type?: string,
-    @Query('shipmentId') shipmentId?: string,
-  ) {
-    return this.service.list(user, query, { status, severity, type, shipmentId });
+  list(@CurrentUser() user: AuthenticatedUser, @Query() query: IncidentQueryDto) {
+    return this.service.list(user, query, {
+      status: query.status,
+      severity: query.severity,
+      type: query.type,
+      shipmentId: query.shipmentId,
+    });
   }
 
   @Get('summary')
