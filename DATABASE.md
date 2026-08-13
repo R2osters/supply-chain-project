@@ -47,8 +47,27 @@ CREATE INDEX "gps_positions_geog_gist" ON "gps_positions" USING GIST ("geog");
 The doubles remain the single writable source of truth, so the geography can never drift from
 them. Prisma does not know the column exists and will not try to drop it.
 
-Nine geography columns: `gps_positions`, `vehicles.last_geog`, `warehouses`, `suppliers`,
-`customers`, `shipments` (origin + destination), `incidents`, and `routes.corridor_geog`.
+Twelve geography columns: `gps_positions`, `vehicles.last_geog`, `warehouses`, `suppliers`,
+`customers`, `shipments` (origin + destination), `incidents`, `routes.corridor_geog`, plus the
+maritime three — `vessels.last_geog`, `vessel_positions`, `ports`.
+
+> ### ⚠ `prisma migrate diff` will delete this layer
+>
+> `migrate diff --to-schema-datamodel` reconciles the database to exactly what `schema.prisma`
+> declares. The generated geography columns are created by raw SQL and are deliberately *not* in
+> the datamodel, so `diff` reads all twelve columns, their GiST indexes and the route-corridor
+> trigger as drift and emits `DROP` statements for every one of them.
+>
+> This happened during the maritime migration and had to be repaired by
+> `20260813130000_restore_postgis`. The procedure, whenever a migration is generated with `diff`:
+>
+> 1. Generate the SQL with `--script`, do **not** apply it.
+> 2. `grep -E 'DROP (INDEX|COLUMN)' migration.sql` and delete anything touching `geog`,
+>    `last_geog`, `corridor_geog` or their indexes.
+> 3. Read what remains before applying it.
+>
+> `prisma migrate dev` in an interactive terminal does not have this problem — it asks. `diff`
+> does not ask, which is exactly why it needs reading.
 
 `routes.corridor_geog` is the exception — a `LineString` maintained by a trigger rather than
 generated, because the JSON→LineString conversion is not immutable. Route polylines change a

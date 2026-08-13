@@ -110,6 +110,11 @@ export class TrackingGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     }
   }
 
+  /** Vessel positions ride the same company room as vehicles; the payload shape distinguishes them. */
+  emitVesselPosition(companyId: string, position: unknown): void {
+    this.server?.to(`company:${companyId}`).emit('vessel:position', position);
+  }
+
   emitShipmentUpdate(companyId: string, shipmentId: string, update: unknown): void {
     this.server?.to(`company:${companyId}`).emit('shipment:update', update);
     this.server?.to(`shipment:${shipmentId}`).emit('shipment:update', update);

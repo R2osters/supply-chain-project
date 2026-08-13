@@ -3,14 +3,15 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { LOCALES, useI18n, type TranslationKey } from '@/lib/i18n';
 
-const DEMO_ACCOUNTS = [
-  { email: 'admin@demo-scip.com', role: 'Company admin', note: 'everything' },
-  { email: 'supplychain@demo-scip.com', role: 'Supply chain', note: 'planning and advice' },
-  { email: 'logistics@demo-scip.com', role: 'Logistics', note: 'fleet and shipments' },
-  { email: 'procurement@demo-scip.com', role: 'Procurement', note: 'suppliers and orders' },
-  { email: 'warehouse@demo-scip.com', role: 'Warehouse', note: 'stock and receipts' },
-  { email: 'driver@demo-scip.com', role: 'Driver', note: 'own deliveries only' },
+const DEMO_ACCOUNTS: Array<{ email: string; roleKey: TranslationKey; noteKey: TranslationKey }> = [
+  { email: 'admin@demo-scip.com', roleKey: 'login.role.admin', noteKey: 'login.note.admin' },
+  { email: 'supplychain@demo-scip.com', roleKey: 'login.role.supplychain', noteKey: 'login.note.supplychain' },
+  { email: 'logistics@demo-scip.com', roleKey: 'login.role.logistics', noteKey: 'login.note.logistics' },
+  { email: 'procurement@demo-scip.com', roleKey: 'login.role.procurement', noteKey: 'login.note.procurement' },
+  { email: 'warehouse@demo-scip.com', roleKey: 'login.role.warehouse', noteKey: 'login.note.warehouse' },
+  { email: 'driver@demo-scip.com', roleKey: 'login.role.driver', noteKey: 'login.note.driver' },
 ];
 
 const DEMO_PASSWORD = 'DemoPassw0rd!2026';
@@ -18,6 +19,7 @@ const DEMO_PASSWORD = 'DemoPassw0rd!2026';
 export default function LoginPage() {
   const router = useRouter();
   const { signIn, user, loading } = useAuth();
+  const { t, locale, setLocale } = useI18n();
 
   const [email, setEmail] = useState('admin@demo-scip.com');
   const [password, setPassword] = useState(DEMO_PASSWORD);
@@ -76,30 +78,27 @@ export default function LoginPage() {
             </div>
 
             <h1 className="mt-7 text-[1.7rem] font-semibold leading-[1.1] tracking-tight">
-              Supply Chain
-              <br />
-              <span className="text-[var(--color-ink-dim)]">Intelligence Platform</span>
+              {t('app.tagline')}
             </h1>
 
             <p className="mt-4 max-w-sm text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-              Two halves of one system. <span className="text-[var(--color-ink)]">Track</span> follows
-              cargo from a supplier’s gate to a customer’s dock.{' '}
-              <span className="text-[var(--color-ink)]">Optimise</span> decides what to order, from
-              whom, when, and by which route — and explains every answer.
+              {t('app.description')}
             </p>
 
             <dl className="mt-8 grid grid-cols-2 gap-px border border-[var(--color-hairline)] bg-[var(--color-hairline)]">
-              {[
-                ['Live GPS', 'PostGIS + WebSocket'],
-                ['Forecasting', '6 models compared'],
-                ['Allocation', 'MILP, OR-Tools'],
-                ['Routing', 'CVRP + windows'],
-              ].map(([label, value]) => (
-                <div key={label} className="bg-[var(--color-panel)] px-3 py-2.5">
+              {(
+                [
+                  ['login.feature.gps', 'login.feature.gpsValue'],
+                  ['login.feature.ais', 'login.feature.aisValue'],
+                  ['login.feature.forecast', 'login.feature.forecastValue'],
+                  ['login.feature.allocation', 'login.feature.allocationValue'],
+                ] as Array<[TranslationKey, TranslationKey]>
+              ).map(([labelKey, valueKey]) => (
+                <div key={labelKey} className="bg-[var(--color-panel)] px-3 py-2.5">
                   <dt className="font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-                    {label}
+                    {t(labelKey)}
                   </dt>
-                  <dd className="mt-0.5 text-[0.75rem] text-[var(--color-ink-dim)]">{value}</dd>
+                  <dd className="mt-0.5 text-[0.75rem] text-[var(--color-ink-dim)]">{t(valueKey)}</dd>
                 </div>
               ))}
             </dl>
@@ -108,10 +107,28 @@ export default function LoginPage() {
 
         {/* ------------------------------------------------------------- form */}
         <section className="bg-[var(--color-panel-raised)] p-8">
+          <div className="mb-5 flex justify-end gap-1">
+            {LOCALES.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setLocale(option)}
+                aria-pressed={locale === option}
+                className={`px-1.5 py-0.5 font-mono text-[0.5625rem] uppercase tracking-[0.14em] transition-colors ${
+                  locale === option
+                    ? 'text-[var(--color-signal)]'
+                    : 'text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]'
+                }`}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+
           <form onSubmit={submit} className="space-y-4">
             <div>
               <label className="mb-1.5 block font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">
-                Operator
+                {t('login.operator')}
               </label>
               <input
                 className="field"
@@ -125,7 +142,7 @@ export default function LoginPage() {
 
             <div>
               <label className="mb-1.5 block font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">
-                Passphrase
+                {t('login.passphrase')}
               </label>
               <input
                 className="field"
@@ -144,13 +161,13 @@ export default function LoginPage() {
             )}
 
             <button type="submit" className="btn btn-primary w-full" disabled={busy}>
-              {busy ? 'Authenticating…' : 'Sign in'}
+              {busy ? t('login.authenticating') : t('login.signIn')}
             </button>
           </form>
 
           <div className="mt-7 border-t border-[var(--color-hairline)] pt-5">
             <div className="font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">
-              Demo accounts · same passphrase
+              {t('login.demoAccounts')}
             </div>
             <ul className="mt-2.5 space-y-px">
               {DEMO_ACCOUNTS.map((account) => (
@@ -164,18 +181,17 @@ export default function LoginPage() {
                     className="group flex w-full items-baseline justify-between gap-3 px-1.5 py-1 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-signal)_6%,transparent)]"
                   >
                     <span className="font-mono text-[0.6875rem] text-[var(--color-ink-dim)] group-hover:text-[var(--color-signal)]">
-                      {account.role}
+                      {t(account.roleKey)}
                     </span>
                     <span className="text-[0.6875rem] text-[var(--color-ink-faint)]">
-                      {account.note}
+                      {t(account.noteKey)}
                     </span>
                   </button>
                 </li>
               ))}
             </ul>
             <p className="mt-3 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
-              Every role sees a different system. A driver sees only their own runs; a supplier only
-              their own orders. The interface hides what the API would refuse.
+              {t('login.roleNote')}
             </p>
           </div>
         </section>

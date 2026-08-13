@@ -190,6 +190,67 @@ export function interpolateAlongPolyline(polyline: LatLng[], fraction: number): 
   return polyline[polyline.length - 1];
 }
 
+/* ------------------------------------------------------------------ maritime */
+
+/** One international nautical mile, in metres. */
+export const METERS_PER_NAUTICAL_MILE = 1852;
+
+export const metersToNauticalMiles = (meters: number): number => meters / METERS_PER_NAUTICAL_MILE;
+export const nauticalMilesToMeters = (nm: number): number => nm * METERS_PER_NAUTICAL_MILE;
+export const knotsToKmh = (knots: number): number => knots * 1.852;
+export const kmhToKnots = (kmh: number): number => kmh / 1.852;
+
+export const greatCircleNauticalMiles = (a: LatLng, b: LatLng): number =>
+  metersToNauticalMiles(haversineMeters(a, b));
+
+/**
+ * Point at `fraction` along the great circle from `a` to `b`, by spherical linear interpolation.
+ *
+ * Not the same as interpolating latitude and longitude linearly, which is the tempting mistake:
+ * that produces a rhumb line, and on an ocean crossing a rhumb line can sit hundreds of miles
+ * from the route a ship actually sails. Tema→Rotterdam differs by enough to put the "planned
+ * track" over the wrong part of the Atlantic.
+ */
+export function greatCirclePoint(a: LatLng, b: LatLng, fraction: number): LatLng {
+  const clamped = Math.min(Math.max(fraction, 0), 1);
+
+  const lat1 = toRad(a.latitude);
+  const lon1 = toRad(a.longitude);
+  const lat2 = toRad(b.latitude);
+  const lon2 = toRad(b.longitude);
+
+  const delta = haversineMeters(a, b) / EARTH_RADIUS_M;
+  if (delta < 1e-9) return { latitude: a.latitude, longitude: a.longitude };
+
+  const sinDelta = Math.sin(delta);
+  const factorA = Math.sin((1 - clamped) * delta) / sinDelta;
+  const factorB = Math.sin(clamped * delta) / sinDelta;
+
+  const x = factorA * Math.cos(lat1) * Math.cos(lon1) + factorB * Math.cos(lat2) * Math.cos(lon2);
+  const y = factorA * Math.cos(lat1) * Math.sin(lon1) + factorB * Math.cos(lat2) * Math.sin(lon2);
+  const z = factorA * Math.sin(lat1) + factorB * Math.sin(lat2);
+
+  return {
+    latitude: toDeg(Math.atan2(z, Math.sqrt(x * x + y * y))),
+    longitude: toDeg(Math.atan2(y, x)),
+  };
+}
+
+/**
+ * Samples a great circle into `segments + 1` points, for drawing a planned ocean track.
+ *
+ * A two-point line drawn on a Mercator map is a straight line, which is *not* the route — the
+ * whole point of a great circle is that it looks curved in that projection. Sampling makes the
+ * drawn track match the sailed one.
+ */
+export function greatCircleTrack(a: LatLng, b: LatLng, segments = 64): LatLng[] {
+  const points: LatLng[] = [];
+  for (let i = 0; i <= segments; i += 1) {
+    points.push(greatCirclePoint(a, b, i / segments));
+  }
+  return points;
+}
+
 /** Bounding box padded by `padMeters`, for cheap pre-filtering before exact distance work. */
 export function boundingBox(points: LatLng[], padMeters = 0): {
   minLat: number;

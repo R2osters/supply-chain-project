@@ -24,10 +24,9 @@ import {
   Loading,
   Meter,
   Panel,
-  fmt,
   priorityTone,
-  riskTone,
 } from '@/components/ui';
+import { useFormat, useI18n } from '@/lib/i18n';
 
 interface DeliveryPerformance {
   windowDays: number;
@@ -83,6 +82,9 @@ function ChartTooltip({ active, payload, label }: any) {
 }
 
 export default function DashboardPage() {
+  const { t } = useI18n();
+  const fmt = useFormat();
+
   const overview = useQuery({
     queryKey: ['analytics', 'overview'],
     queryFn: () => api<Overview>('/analytics/overview'),
@@ -113,10 +115,10 @@ export default function DashboardPage() {
   const data = overview.data;
 
   const chartData = (perDay.data ?? []).map((row) => ({
-    day: new Date(row.day).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
-    Created: Number(row.created),
-    Delivered: Number(row.delivered),
-    Late: Number(row.delayed),
+    day: fmt.date(row.day).replace(/\s\d{2}$/, ''),
+    [t('dash.created')]: Number(row.created),
+    [t('dash.delivered')]: Number(row.delivered),
+    [t('dash.late')]: Number(row.delayed),
   }));
 
   return (
@@ -124,53 +126,58 @@ export default function DashboardPage() {
       {/* ------------------------------------------------------------- KPIs */}
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-6">
         <Kpi
-          label="Active shipments"
+          label={t('kpi.activeShipments')}
           value={data ? fmt.int(data.shipments.active) : '—'}
           sub={
             data && data.shipments.delayed > 0 ? (
-              <span className="text-[var(--color-warn)]">{data.shipments.delayed} running late</span>
+              <span className="text-[var(--color-warn)]">
+                {t('kpi.runningLate', { n: data.shipments.delayed })}
+              </span>
             ) : (
-              <span className="text-[var(--color-ok)]">none late</span>
+              <span className="text-[var(--color-ok)]">{t('kpi.noneLate')}</span>
             )
           }
           tone="info"
           delay={0}
         />
         <Kpi
-          label="At risk"
+          label={t('kpi.atRisk')}
           value={data ? fmt.int(data.shipments.atRisk) : '—'}
-          sub={<span>delay probability ≥ 50%</span>}
+          sub={<span>{t('kpi.delayThreshold')}</span>}
           tone={data && data.shipments.atRisk > 0 ? 'warn' : 'ok'}
           delay={40}
         />
         <Kpi
-          label="Delivered today"
+          label={t('kpi.deliveredToday')}
           value={data ? fmt.int(data.shipments.deliveredToday) : '—'}
           sub={
             performance.data?.onTimeRate !== null && performance.data?.onTimeRate !== undefined ? (
-              <span>{fmt.pct(performance.data.onTimeRate)} on time (90 d)</span>
+              <span>{t('kpi.onTime90d', { pct: fmt.pct(performance.data.onTimeRate) })}</span>
             ) : (
-              <span>no history yet</span>
+              <span>{t('kpi.noHistory')}</span>
             )
           }
           tone="ok"
           delay={80}
         />
         <Kpi
-          label="Inventory value"
+          label={t('kpi.inventoryValue')}
           value={data ? fmt.int(data.inventory.value) : '—'}
           unit="GHS"
-          sub={<span>{data ? fmt.int(data.inventory.distinctSkus) : '—'} SKUs</span>}
+          sub={<span>{t('kpi.skus', { n: data ? fmt.int(data.inventory.distinctSkus) : '—' })}</span>}
           tone="signal"
           delay={120}
         />
         <Kpi
-          label="Stock exceptions"
+          label={t('kpi.stockExceptions')}
           value={data ? fmt.int(data.inventory.lowStockProducts + data.inventory.outOfStockProducts) : '—'}
           sub={
             data ? (
               <span>
-                {data.inventory.outOfStockProducts} out · {data.inventory.lowStockProducts} low
+                {t('kpi.outAndLow', {
+                  out: data.inventory.outOfStockProducts,
+                  low: data.inventory.lowStockProducts,
+                })}
               </span>
             ) : null
           }
@@ -178,9 +185,9 @@ export default function DashboardPage() {
           delay={160}
         />
         <Kpi
-          label="Fleet reporting"
+          label={t('kpi.fleetReporting')}
           value={data ? `${data.fleet.reportingWithinTheHour}/${data.fleet.total}` : '—'}
-          sub={<span>{data ? fmt.int(data.fleet.inTransit) : '—'} in transit</span>}
+          sub={<span>{t('kpi.inTransit', { n: data ? fmt.int(data.fleet.inTransit) : '—' })}</span>}
           tone="neutral"
           delay={200}
         />
@@ -188,7 +195,7 @@ export default function DashboardPage() {
 
       {data?.demoData.note && (
         <div className="flex items-center gap-2 border border-[var(--color-hairline)] bg-[var(--color-panel)] px-3 py-2">
-          <Chip tone="neutral">demo data</Chip>
+          <Chip tone="neutral">{t('common.demoData')}</Chip>
           <span className="text-[0.75rem] text-[var(--color-ink-dim)]">{data.demoData.note}</span>
         </div>
       )}
@@ -197,14 +204,14 @@ export default function DashboardPage() {
         {/* --------------------------------------------------------- charts */}
         <div className="space-y-4">
           <Panel
-            title="Shipment flow · 30 days"
+            title={t('dash.shipmentFlow')}
             loading={perDay.isLoading}
             actions={
               <span className="flex items-center gap-3">
                 {[
-                  ['Created', 'var(--color-info)'],
-                  ['Delivered', 'var(--color-ok)'],
-                  ['Late', 'var(--color-alert)'],
+                  [t('dash.created'), 'var(--color-info)'],
+                  [t('dash.delivered'), 'var(--color-ok)'],
+                  [t('dash.late'), 'var(--color-alert)'],
                 ].map(([label, colour]) => (
                   <span key={label} className="flex items-center gap-1.5">
                     <span className="h-1.5 w-1.5" style={{ background: colour }} />
@@ -236,21 +243,21 @@ export default function DashboardPage() {
                     <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--color-hairline-bright)' }} />
                     <Area
                       type="monotone"
-                      dataKey="Created"
+                      dataKey={t('dash.created')}
                       stroke="var(--color-info)"
                       strokeWidth={1.5}
                       fill="url(#gCreated)"
                     />
                     <Area
                       type="monotone"
-                      dataKey="Delivered"
+                      dataKey={t('dash.delivered')}
                       stroke="var(--color-ok)"
                       strokeWidth={1.5}
                       fill="url(#gDelivered)"
                     />
                     <Area
                       type="monotone"
-                      dataKey="Late"
+                      dataKey={t('dash.late')}
                       stroke="var(--color-alert)"
                       strokeWidth={1.5}
                       fill="none"
@@ -262,12 +269,12 @@ export default function DashboardPage() {
           </Panel>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Panel title="Delivery performance · 90 days" loading={performance.isLoading}>
+            <Panel title={t('dash.deliveryPerformance')} loading={performance.isLoading}>
               <div className="space-y-3 p-3.5">
                 {performance.data ? (
                   <>
                     <MetricRow
-                      label="On time"
+                      label={t('dash.onTime')}
                       value={fmt.pct(performance.data.onTimeRate, 1)}
                       meter={performance.data.onTimeRate ?? 0}
                       tone={
@@ -279,15 +286,15 @@ export default function DashboardPage() {
                       }
                     />
                     <MetricRow
-                      label="Mean delay"
+                      label={t('dash.meanDelay')}
                       value={`${fmt.num(performance.data.averageDelayHours, 1)} h`}
                     />
                     <MetricRow
-                      label="p90 delay"
+                      label={t('dash.p90Delay')}
                       value={`${fmt.num(performance.data.p90DelayHours, 1)} h`}
                     />
                     <MetricRow
-                      label="ETA error"
+                      label={t('dash.etaError')}
                       value={
                         performance.data.etaAccuracyMinutes === null
                           ? '—'
@@ -304,7 +311,7 @@ export default function DashboardPage() {
               </div>
             </Panel>
 
-            <Panel title="Supplier reliability" loading={suppliers.isLoading}>
+            <Panel title={t('dash.supplierReliability')} loading={suppliers.isLoading}>
               <div className="h-[212px] p-2.5">
                 {suppliers.data && suppliers.data.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -346,15 +353,15 @@ export default function DashboardPage() {
 
         {/* ---------------------------------------------------------- advice */}
         <Panel
-          title="What to do next"
+          title={t('dash.whatNext')}
           meta={
             data && data.openRecommendations > 0 ? (
-              <Chip tone="signal">{data.openRecommendations} open</Chip>
+              <Chip tone="signal">{t('dash.open', { n: data.openRecommendations })}</Chip>
             ) : null
           }
           actions={
             <Link href="/recommendations" className="hover:text-[var(--color-signal)]">
-              all →
+              {t('dash.allAdvice')} →
             </Link>
           }
           loading={advice.isLoading}
@@ -381,7 +388,7 @@ export default function DashboardPage() {
                   </div>
                   {recommendation.estimatedCostDelta !== null && (
                     <div className="mt-2 font-mono text-[0.625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)]">
-                      {recommendation.estimatedCostDelta >= 0 ? 'commits' : 'releases'}{' '}
+                      {recommendation.estimatedCostDelta >= 0 ? t('dash.commits') : t('dash.releases')}{' '}
                       <span className="text-[var(--color-ink-dim)]">
                         {fmt.money(Math.abs(recommendation.estimatedCostDelta))}
                       </span>
@@ -391,10 +398,7 @@ export default function DashboardPage() {
               ))}
             </ul>
           ) : (
-            <Empty
-              title="Nothing needs attention"
-              hint="Generate advice from the Advice screen once there is enough history."
-            />
+            <Empty title={t('dash.nothingNeeded')} hint={t('dash.nothingNeededHint')} />
           )}
         </Panel>
       </div>

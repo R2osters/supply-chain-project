@@ -70,6 +70,13 @@ export interface AppConfig {
     roadWindingFactor: number;
   };
   simulator: { enabled: boolean; tickMs: number; speedMultiplier: number };
+  maritime: {
+    aisStreamApiKey: string | null;
+    /** [[lat1, lon1], [lat2, lon2]] pairs. Empty subscribes worldwide. */
+    aisBoundingBoxes: number[][][];
+    /** Time compression for simulated voyages. Ignored entirely when a live AIS feed is configured. */
+    speedMultiplier: number;
+  };
 }
 
 export default (): AppConfig => {
@@ -163,5 +170,31 @@ export default (): AppConfig => {
       // and leaving the live map empty.
       speedMultiplier: float(process.env.SIMULATOR_SPEED_MULTIPLIER, 12),
     },
+
+    maritime: {
+      aisStreamApiKey: process.env.AISSTREAM_API_KEY || null,
+      // Optional: restrict the AIS subscription to regions you care about. A worldwide
+      // subscription is tens of thousands of messages a minute, most of them for vessels
+      // nobody here tracks. Format: "lat1,lon1,lat2,lon2;lat1,lon1,lat2,lon2".
+      aisBoundingBoxes: parseBoundingBoxes(process.env.AIS_BOUNDING_BOXES),
+      // Ocean passages take days to weeks in reality. 240× turns a 9-day Tema→Rotterdam run into
+      // about 55 minutes of watching, which is fast enough to see movement and slow enough that
+      // the fleet does not empty while you look at it. Far higher than the road multiplier
+      // because road legs are hours, not weeks.
+      speedMultiplier: float(process.env.MARITIME_SPEED_MULTIPLIER, 240),
+    },
   };
 };
+
+/** Parses `"lat1,lon1,lat2,lon2;…"` into the nested-array shape the AIS feed expects. */
+function parseBoundingBoxes(raw: string | undefined): number[][][] {
+  if (!raw) return [];
+  return raw
+    .split(';')
+    .map((box) => box.split(',').map((value) => Number.parseFloat(value.trim())))
+    .filter((values) => values.length === 4 && values.every(Number.isFinite))
+    .map(([lat1, lon1, lat2, lon2]) => [
+      [lat1, lon1],
+      [lat2, lon2],
+    ]);
+}
