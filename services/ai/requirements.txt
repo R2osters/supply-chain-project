@@ -1,0 +1,29 @@
+# SCIP AI service.
+# Pinned to minor versions: a silent minor bump in numpy or scikit-learn changes model output,
+# and a forecasting service whose numbers move without a code change is not reproducible.
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.5
+pydantic-settings==2.7.1
+
+numpy==2.2.2
+pandas==2.2.3
+scipy==1.15.1
+scikit-learn==1.6.1
+statsmodels==0.14.4
+
+# Mixed-integer programming (supplier allocation) and vehicle routing (VRP).
+ortools==9.11.4210
+
+# Model registry persistence.
+joblib==1.4.2
+SQLAlchemy==2.0.37
+psycopg[binary]==3.2.4
+
+httpx==0.28.1
+python-dateutil==2.9.0.post0
+
+# Dev / test
+pytest==8.3.4
+pytest-asyncio==0.25.2
