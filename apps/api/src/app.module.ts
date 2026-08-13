@@ -16,6 +16,8 @@ import { SuppliersModule } from './modules/suppliers/suppliers.module';
 import { EventsModule } from './modules/events/events.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.module';
+import { ShipmentsModule } from './modules/shipments/shipments.module';
+import { GpsModule } from './modules/gps/gps.module';
 
 @Module({
   imports: [
@@ -49,6 +51,8 @@ import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.
     SuppliersModule,
     InventoryModule,
     PurchaseOrdersModule,
+    ShipmentsModule,
+    GpsModule,
   ],
   providers: [
     // Order matters: throttle first (cheapest rejection), then authenticate, then authorise.
