@@ -8,11 +8,15 @@ the brief with its reason. Nothing is listed as working unless it was actually r
 | | Evidence |
 |---|---|
 | Infrastructure | Postgres 16 + PostGIS 3.4, Redis 7, MinIO, MailHog — all healthy via `docker compose ps` |
-| Schema | 46 app tables, 2 migrations applied, 9 generated geography columns with GiST indexes |
-| API | boots with **128 mapped routes**; `/health/ready` reports each dependency separately |
-| Web | **19 routes** build; dashboard, map, advice and detail screens verified in-browser against live data |
+| Schema | 52 app tables, 6 migrations applied, 12 generated geography columns with GiST indexes |
+| API | boots with the REST routes plus a **TCP listener on 5023** for hardware trackers; `/health/ready` reports each dependency separately |
+| Web | **21 routes** build; dashboard, map, vessels, devices, advice and the driver screen verified in-browser against live data |
 | AI service | `/health` lists 10 engines; OR-Tools, scikit-learn, statsmodels, scipy all working on Python 3.12 |
-| **Tests** | **29 API unit · 36 API e2e · 47 AI service — 112 passing** |
+| **Tests** | **55 API unit · 68 API e2e · 47 AI service — 170 passing** |
+| Hardware trackers work | a script spoke GT06 over a real TCP socket to port 5023: **6 fixes sent, 6 accepted, 0 rejected**, coordinates exact to 4 dp, stored with `isSimulated = false` |
+| The plausibility check works | an earlier run of that same script had **5 of 6 rejected** — it stamped six fixes 700 ms apart across 250 km, implying 70 000 km/h |
+| Phone tracking works | driven in a real browser with only the GPS receiver stubbed: **5 fixes taken → queued in IndexedDB → flushed → stored**; the wrong pairing secret is refused |
+| Offline buffering works | a batch deliberately withheld to imitate a coverage gap and flushed late produced **7 contiguous positions, no hole in the track** |
 | Forecast selection is real | Holt-Winters 24.13 WAPE beat gradient boosting 24.72, seasonal naive 25.74, moving average 27.07, SES 28.11, naive 29.38 — chosen automatically |
 | Allocation is real | The brief's 20 000-unit question solved **OPTIMAL in 4 ms**, honouring a 7-day deadline and a 50 % concentration cap |
 | Supplier scoring validated against ground truth | measured on-time 96.9 / 94.8 / 89.3 / 79.2 / 74.2 % against generated 97 / 92 / 86 / 75 / 70 % |
@@ -98,8 +102,18 @@ both and analytics report how much of a figure is synthetic.
 - **Anomaly detection is rule-based, not learned** — a new deployment has no labelled anomalies, so
   a learned detector would start useless and stay useless.
 
+- **Background tracking from a phone is impossible, and the app says so.** A mobile browser
+  suspends timers and the geolocation watch for a page that is not visible. The driver screen holds
+  a wake lock, states the constraint in plain language, and keeps every fix for when the driver
+  returns — rather than showing a green light that means nothing. Only a native app with a
+  foreground service can do better, and that is a different product.
+
 ## Not built
 
+Teltonika Codec 8 (the device type is reserved and the enrolment screen says positions will not be
+stored) · a QR code for phone pairing (the copyable pairing link covers the same handoff; a
+hand-written Reed-Solomon encoder could not be verified here without a scanner) · vendor connectors
+for Webfleet/Samsara/Geotab (the documented ingest endpoint is the integration point) ·
 Kafka/RabbitMQ (the durable event table covers the requirement at this scale; the interface is the
 seam if it is ever needed) · OAuth2 social login (email + password is complete) · push
 notifications beyond the dashboard and email channels · a model registry UI (the tables exist and
