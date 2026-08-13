@@ -63,6 +63,28 @@ leg. The system models both, differently, because they *are* different:
 Hence two tracking mechanisms, and vessel search by **name, IMO, MMSI or call sign** — because a
 shipper holding a bill of lading has *one* identifier and does not know which kind it is.
 
+#### Three position sources, and why it is not "MarineTraffic or nothing"
+
+| Source | Cost | Coverage | What you get |
+|---|---|---|---|
+| **MarineTraffic** | paid, per credit | terrestrial **+ satellite** | JSON, in your database |
+| **AISStream** | free | terrestrial, ~40–60 nm offshore | raw data, in your database |
+| **Simulator** | — | great-circle tracks, marked `SIMULATOR` | demonstration |
+| *MarineTraffic iframe / link* | free | — | **a picture, not data** |
+
+The distinction that matters: an iframe **shows** you the vessel; it does not put its position
+**in your database**. ETA, anomaly detection and the shipment join all need the position as data.
+That is why the embed is a *verification* layer, not a source.
+
+What MarineTraffic genuinely adds as a source is **satellite AIS**. A terrestrial receiver reaches
+40–60 nautical miles; mid-Atlantic a ship simply vanishes. On a trans-ocean voyage that gap is the
+difference between a continuous track and two disconnected ends — precisely when the shipper most
+wants to know the ship is still making way.
+
+The **deep links** to MarineTraffic and VesselFinder are free, need no key, and appear on every
+vessel. They stay useful with a paid feed running: a second opinion, a photo of the hull, the
+port-call history this system does not keep.
+
 ---
 
 ## 2. Where the AI is — precisely

@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import type { AppConfig } from '../../config/configuration';
 import {
   greatCircleNauticalMiles,
   greatCircleTrack,
@@ -20,6 +22,7 @@ import type {
   VesselSearchDto,
 } from './maritime.dto';
 import type { VesselFix } from './vessel-provider';
+import { buildEmbedUrl, buildExternalLinks } from './marinetraffic.provider';
 
 /** Typical service speed by vessel class, in knots. Used to derive an ETA before AIS reports one. */
 const SERVICE_SPEED_KNOTS: Record<string, number> = {
@@ -43,10 +46,15 @@ const BERTHED_NM = 2;
 export class MaritimeService {
   private readonly logger = new Logger(MaritimeService.name);
 
+  private readonly embedEnabled: boolean;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: TrackingGateway,
-  ) {}
+    config: ConfigService<AppConfig, true>,
+  ) {
+    this.embedEnabled = config.get('maritime', { infer: true }).marineTrafficEmbedEnabled;
+  }
 
   /* ==================================================================== search */
 
@@ -135,6 +143,7 @@ export class MaritimeService {
         matchScore: score,
         isOwnFleet: vessel.companyId !== null,
         isDemoData: vessel.isDemoData,
+        externalLinks: buildExternalLinks(vessel),
         position:
           vessel.lastLatitude === null || vessel.lastLongitude === null
             ? null
@@ -225,7 +234,23 @@ export class MaritimeService {
       },
     });
     if (!vessel) throw new NotFoundException('Vessel not found');
-    return vessel;
+
+    return {
+      ...vessel,
+      // Free deep links to the public trackers. Useful even with a paid feed configured: an
+      // operator wanting a second opinion, a photograph of the hull, or the port-call history
+      // this system does not store gets it in one click.
+      externalLinks: buildExternalLinks(vessel),
+      embedUrl: buildEmbedUrl(
+        {
+          mmsi: vessel.mmsi,
+          imoNumber: vessel.imoNumber,
+          latitude: vessel.lastLatitude ?? undefined,
+          longitude: vessel.lastLongitude ?? undefined,
+        },
+        this.embedEnabled,
+      ),
+    };
   }
 
   /**
@@ -659,6 +684,7 @@ export class MaritimeService {
         positionSource: vessel.positionSource,
         isDemoData: vessel.isDemoData,
         isOwnFleet: vessel.companyId !== null,
+        externalLinks: buildExternalLinks(vessel),
         voyage: voyage
           ? {
               id: voyage.id,

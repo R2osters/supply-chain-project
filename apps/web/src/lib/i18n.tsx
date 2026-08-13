@@ -196,6 +196,9 @@ const en = {
   'sea.nauticalMiles': 'nm',
   'sea.ownFleet': 'own fleet',
   'sea.publicAis': 'public AIS',
+  'sea.externalTrackers': 'Check elsewhere',
+  'sea.externalHint':
+    'Opens the public tracker page for this vessel, matched on its {id}. Free, no account — useful for a second opinion, a photo of the hull, or the port-call history this system does not keep.',
 
   /* --------------------------------------------------------------- shipments */
   'ship.title': 'Shipments',
@@ -387,6 +390,9 @@ const fr: Record<TranslationKey, string> = {
   'sea.nauticalMiles': 'NM',
   'sea.ownFleet': 'flotte propre',
   'sea.publicAis': 'AIS public',
+  'sea.externalTrackers': 'Vérifier ailleurs',
+  'sea.externalHint':
+    'Ouvre la fiche publique de ce navire, retrouvée par son {id}. Gratuit, sans compte — utile pour un second avis, une photo de la coque, ou l’historique des escales que ce système ne conserve pas.',
 
   'ship.title': 'Expéditions',
   'ship.tracking': 'N° de suivi',

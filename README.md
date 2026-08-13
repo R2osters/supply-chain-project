@@ -138,9 +138,23 @@ searched too, because ships are renamed on sale and old paperwork carries the ol
 demo vessels sail real great-circle tracks between real ports on a liner rotation: when one
 arrives, the return leg opens.
 
-Set `AISSTREAM_API_KEY` (free at [aisstream.io](https://aisstream.io)) and restart the API — vessel
-positions then come live from the ships' own AIS broadcasts instead of the simulator. The
-*Vessels* screen tells you which source is active; the two are never mixed for one vessel.
+Three position sources, in precedence order. Only one ever runs — mixing feeds for one vessel
+produces a track whose points disagree about where it was.
+
+| Source | Cost | Coverage | Set |
+|---|---|---|---|
+| **MarineTraffic** | paid, per credit | terrestrial **+ satellite** — reaches mid-ocean | `MARINETRAFFIC_API_KEY` |
+| **AISStream** | free | terrestrial, ~40–60 nm offshore | `AISSTREAM_API_KEY` |
+| **Simulator** | — | great-circle tracks, stamped `SIMULATOR` | default |
+
+The satellite difference is not cosmetic: on a terrestrial-only feed a ship crossing the Atlantic
+disappears for a week in the middle of the passage, which is exactly when a shipper most wants to
+know it is still making way.
+
+Separately, and free with no key, every vessel carries **deep links to MarineTraffic and
+VesselFinder**, matched on IMO where one exists. Those are ordinary hyperlinks and stay useful even
+with a paid feed running — a second opinion, a photo of the hull, the port-call history this system
+does not store.
 
 **It speaks French.** The `EN`/`FR` switch sits on the login screen and at the foot of the rail.
 Numbers and dates follow the locale, not just the words: 2 906 717 and *13 août 26*.
