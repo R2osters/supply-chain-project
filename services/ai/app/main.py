@@ -18,18 +18,38 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
+from datetime import datetime
+
 from .config import get_settings
 from .engines import allocation as allocation_engine
+from .engines import anomaly as anomaly_engine
+from .engines import delay as delay_engine
 from .engines import forecasting, inventory
+from .engines import recommendations as recommendation_engine
+from .engines import risk as risk_engine
+from .engines import routing as routing_engine
+from .engines import scenario as scenario_engine
 from .engines import supplier as supplier_engine
 from .schemas import (
     AllocationRequest,
     AllocationResponse,
+    AnomalyDetectRequest,
+    AnomalyDetectResponse,
+    DelayPredictRequest,
+    DelayPredictResponse,
     Explanation,
     ForecastRequest,
     ForecastResponse,
     InventoryOptimizeRequest,
     InventoryOptimizeResponse,
+    RecommendationsGenerateRequest,
+    RecommendationsGenerateResponse,
+    RiskAnalyzeRequest,
+    RiskAnalyzeResponse,
+    RouteOptimizeRequest,
+    RouteOptimizeResponse,
+    ScenarioSimulateRequest,
+    ScenarioSimulateResponse,
     SupplierScoreRequest,
     SupplierScoreResponse,
     SupplierScoringWeights,
@@ -113,6 +133,12 @@ async def health() -> dict:
             "inventory",
             "supplier-scoring",
             "allocation",
+            "delay",
+            "anomaly",
+            "routing",
+            "scenario",
+            "risk",
+            "recommendations",
         ],
     }
 
@@ -323,5 +349,284 @@ async def allocate_order(request: AllocationRequest) -> AllocationResponse:
         solver_wall_time_ms=payload["solverWallTimeMs"],
         explanation=Explanation(
             summary=summary, reasons=result.reasons, assumptions=result.assumptions
+        ),
+    )
+
+
+# ----------------------------------------------------------------------- delay
+
+
+@app.post(
+    "/predict-delay",
+    response_model=DelayPredictResponse,
+    tags=["tracking"],
+    dependencies=[Depends(require_token)],
+)
+async def predict_delay(request: DelayPredictRequest) -> DelayPredictResponse:
+    """Probability that a shipment arrives late, with per-feature attribution."""
+    payload = request.model_dump(by_alias=True, exclude_none=False)
+    history = request.training_history or []
+
+    prediction = (
+        delay_engine.train_and_predict(payload, history)
+        if history
+        else delay_engine.predict_scorecard(payload)
+    )
+
+    return DelayPredictResponse(
+        **prediction.to_dict(),
+        explanation=Explanation(
+            summary=(
+                f"Delay probability {prediction.delay_probability:.1%} "
+                f"({prediction.risk} risk) from {prediction.model_name}."
+            ),
+            reasons=prediction.reasons,
+            assumptions=prediction.assumptions,
+        ),
+    )
+
+
+# --------------------------------------------------------------------- anomaly
+
+
+@app.post(
+    "/detect-anomaly",
+    response_model=AnomalyDetectResponse,
+    tags=["tracking"],
+    dependencies=[Depends(require_token)],
+)
+async def detect_anomaly(request: AnomalyDetectRequest) -> AnomalyDetectResponse:
+    """Rule-based anomaly detection over a shipment's GPS track."""
+    samples = []
+    for position in request.positions:
+        try:
+            recorded_at = datetime.fromisoformat(position.recorded_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError(f"recordedAt '{position.recorded_at}' is not a valid ISO datetime") from exc
+        samples.append(
+            anomaly_engine.GpsSample(
+                latitude=position.latitude,
+                longitude=position.longitude,
+                speed_kmh=position.speed_kmh,
+                heading_degrees=position.heading_degrees,
+                recorded_at=recorded_at,
+            )
+        )
+
+    report = anomaly_engine.detect_anomalies(
+        request.shipment_id,
+        samples,
+        planned_route=(
+            [(p.latitude, p.longitude) for p in request.planned_route]
+            if request.planned_route
+            else None
+        ),
+        planned_duration_hours=request.planned_duration_hours,
+        corridor_tolerance_m=request.corridor_tolerance_meters,
+        stop_tolerance_minutes=request.stop_tolerance_minutes,
+        expected_max_speed_kmh=request.expected_max_speed_kmh,
+        gps_gap_tolerance_minutes=request.gps_gap_tolerance_minutes,
+        delivery_point=(
+            (request.delivery_point.latitude, request.delivery_point.longitude)
+            if request.delivery_point
+            else None
+        ),
+        declared_destination=(
+            (request.declared_destination.latitude, request.declared_destination.longitude)
+            if request.declared_destination
+            else None
+        ),
+    )
+
+    highest = report.anomalies[0] if report.anomalies else None
+    summary = (
+        f"{len(report.anomalies)} anomaly(ies) across {report.positions_analysed} fixes; "
+        f"most severe: {highest.type} ({highest.severity})."
+        if highest
+        else f"No anomaly across {report.positions_analysed} fixes."
+    )
+
+    return AnomalyDetectResponse(
+        shipment_id=report.shipment_id,
+        anomalies=[a.to_dict() for a in report.anomalies],
+        positions_analysed=report.positions_analysed,
+        explanation=Explanation(
+            summary=summary, reasons=report.reasons, assumptions=report.assumptions
+        ),
+    )
+
+
+# ----------------------------------------------------------------------- route
+
+
+@app.post(
+    "/route/optimize",
+    response_model=RouteOptimizeResponse,
+    tags=["routing"],
+    dependencies=[Depends(require_token)],
+)
+async def optimize_route(request: RouteOptimizeRequest) -> RouteOptimizeResponse:
+    """Capacitated vehicle routing with time windows."""
+    result = routing_engine.optimize_routes(
+        depot=(request.depot.latitude, request.depot.longitude),
+        depot_name=request.depot_name,
+        stops=[
+            routing_engine.RouteStop(
+                id=stop.id,
+                name=stop.name,
+                latitude=stop.location.latitude,
+                longitude=stop.location.longitude,
+                demand_units=stop.demand_units,
+                service_minutes=stop.service_minutes,
+                window_start_minutes=stop.window_start_minutes,
+                window_end_minutes=stop.window_end_minutes,
+            )
+            for stop in request.stops
+        ],
+        vehicles=[
+            routing_engine.RouteVehicle(
+                id=vehicle.id,
+                name=vehicle.name,
+                capacity_units=vehicle.capacity_units,
+                cost_per_km=vehicle.cost_per_km,
+                fuel_consumption_l_per_100km=vehicle.fuel_consumption_l_per_100km,
+                max_driving_minutes=vehicle.max_driving_minutes,
+                average_speed_kmh=vehicle.average_speed_kmh,
+            )
+            for vehicle in request.vehicles
+        ],
+        fuel_price_per_liter=request.fuel_price_per_liter,
+        road_winding_factor=request.road_winding_factor,
+        solver_time_limit_seconds=request.solver_time_limit_seconds,
+    )
+
+    payload = result.to_dict()
+    summary = (
+        f"{len(result.routes)} route(s) covering "
+        f"{len(request.stops) - len(result.unassigned_stops)} of {len(request.stops)} stops, "
+        f"{result.total_distance_km:,.0f} km, estimated cost {result.total_cost:,.0f}."
+    )
+
+    return RouteOptimizeResponse(
+        **payload,
+        explanation=Explanation(
+            summary=summary, reasons=result.reasons, assumptions=result.assumptions
+        ),
+    )
+
+
+# -------------------------------------------------------------------- scenario
+
+
+@app.post(
+    "/scenario/simulate",
+    response_model=ScenarioSimulateResponse,
+    tags=["scenario"],
+    dependencies=[Depends(require_token)],
+)
+async def simulate_scenario(request: ScenarioSimulateRequest) -> ScenarioSimulateResponse:
+    """Monte-Carlo what-if analysis across base, best and worst cases."""
+    baseline = scenario_engine.Baseline(**request.baseline.model_dump())
+    levers = (
+        scenario_engine.Levers(**request.levers.model_dump())
+        if request.levers
+        else scenario_engine.Levers()
+    )
+
+    result = scenario_engine.simulate(
+        baseline=baseline,
+        levers=levers,
+        horizon_days=request.horizon_days,
+        iterations=request.iterations,
+        random_seed=request.random_seed,
+    )
+
+    base = next(c for c in result.cases if c.name == "BASE_CASE")
+    worst = next(c for c in result.cases if c.name == "WORST_CASE")
+
+    return ScenarioSimulateResponse(
+        product_id=request.product_id,
+        cases=[case.to_dict() for case in result.cases],
+        iterations=result.iterations,
+        explanation=Explanation(
+            summary=(
+                f"{request.sku}: base cost {base.total_cost:,.0f} with "
+                f"{base.stockout_risk:.0%} stockout risk; worst case "
+                f"{worst.total_cost:,.0f} with {worst.stockout_risk:.0%}."
+            ),
+            reasons=result.reasons,
+            assumptions=result.assumptions,
+        ),
+    )
+
+
+# ------------------------------------------------------------------------ risk
+
+
+@app.post(
+    "/risk/analyze",
+    response_model=RiskAnalyzeResponse,
+    tags=["risk"],
+    dependencies=[Depends(require_token)],
+)
+async def analyze_risk(request: RiskAnalyzeRequest) -> RiskAnalyzeResponse:
+    """Categorised risk findings and the Supply Chain Health Score."""
+    report = risk_engine.analyse(
+        company_id=request.company_id,
+        products=[p.model_dump(by_alias=True) for p in request.products],
+        suppliers=[s.model_dump(by_alias=True) for s in request.suppliers],
+        shipments=[s.model_dump(by_alias=True) for s in request.shipments],
+    )
+
+    return RiskAnalyzeResponse(
+        company_id=request.company_id,
+        findings=[finding.to_dict() for finding in report.findings],
+        supply_chain_health_score=report.health_score,
+        health_breakdown=report.health_breakdown,
+        explanation=Explanation(
+            summary=(
+                f"Supply chain health {report.health_score:.0f}/100 with "
+                f"{len(report.findings)} finding(s)."
+            ),
+            reasons=report.reasons,
+            assumptions=report.assumptions,
+        ),
+    )
+
+
+# ------------------------------------------------------------- recommendations
+
+
+@app.post(
+    "/recommendations/generate",
+    response_model=RecommendationsGenerateResponse,
+    tags=["recommendations"],
+    dependencies=[Depends(require_token)],
+)
+async def generate_recommendations(
+    request: RecommendationsGenerateRequest,
+) -> RecommendationsGenerateResponse:
+    """Turn the whole picture into ranked, executable recommendations."""
+    result = recommendation_engine.generate(
+        company_id=request.company_id,
+        products=[p.model_dump(by_alias=True) for p in request.products],
+        suppliers=[s.model_dump(by_alias=True) for s in request.suppliers],
+        shipments=[s.model_dump(by_alias=True) for s in request.shipments],
+    )
+
+    urgent = sum(
+        1 for r in result.recommendations if r.priority in {"CRITICAL", "HIGH"}
+    )
+
+    return RecommendationsGenerateResponse(
+        company_id=request.company_id,
+        generated_at=datetime.now().isoformat(),
+        recommendations=[r.to_dict() for r in result.recommendations],
+        explanation=Explanation(
+            summary=(
+                f"{len(result.recommendations)} recommendation(s), {urgent} needing attention now."
+            ),
+            reasons=result.reasons,
+            assumptions=result.assumptions,
         ),
     )
