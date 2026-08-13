@@ -1,74 +1,106 @@
 # Build log
 
-Running record of what is **done and verified**, what is **in progress**, and what is **not started**.
-Nothing is listed as done unless it was actually executed — migrations applied, tests run, endpoint called.
+What is done and **verified by execution**, what is deliberately stubbed, and every deviation from
+the brief with its reason. Nothing is listed as working unless it was actually run.
 
-## Verified working
+## Verified
 
-| Thing | Evidence |
+| | Evidence |
 |---|---|
-| Infra: Postgres 16 + PostGIS 3.4, Redis 7, MinIO, MailHog | `docker compose ps` — all healthy on 5433 / 6380 / 9000 / 8025 |
-| Database: 46 app tables + 9 geography columns + GiST indexes | `prisma migrate deploy` applied both migrations; `geography_columns` lists 9 rows |
-| Prisma client generated, API typechecks clean | `tsc --noEmit` exits 0 |
-| API boots and serves | `GET /api/v1/health/ready` → `{"status":"ready"}` with database/redis/postgis `up` |
-| Auth end-to-end | `POST /api/v1/auth/register` returned a real JWT pair and created company + COMPANY_ADMIN |
-| Unit tests (API) | 29 passing (supplier scoring 10, ETA engine 19) |
-| API surface | 90 routes mapped at boot |
-| AI service live | `GET :8000/health` → `{"status":"ok"}`; OR-Tools, scikit-learn, statsmodels, scipy all import and run on Python 3.12 |
-| Forecast model selection is real | On a synthetic trend+weekly series: Holt-Winters 6.06 % WAPE beat seasonal naive 6.78 % and gradient boosting 7.52 %; the winner was chosen automatically |
-| Allocation MILP is real | The brief's 20 000-unit example solved OPTIMAL in 4 ms. It **excluded the cheapest supplier** (B at 8.00/unit) because its 12-day lead time breaches the 7-day deadline and its 75 % reliability carries a heavy risk penalty — a non-obvious answer a scoring heuristic would have got wrong |
-| Allocation tests | 18 passing, covering MOQ all-or-nothing, capacity, budget, concentration, and each cost trade-off |
+| Infrastructure | Postgres 16 + PostGIS 3.4, Redis 7, MinIO, MailHog — all healthy via `docker compose ps` |
+| Schema | 46 app tables, 2 migrations applied, 9 generated geography columns with GiST indexes |
+| API | boots with **128 mapped routes**; `/health/ready` reports each dependency separately |
+| Web | **19 routes** build; dashboard, map, advice and detail screens verified in-browser against live data |
+| AI service | `/health` lists 10 engines; OR-Tools, scikit-learn, statsmodels, scipy all working on Python 3.12 |
+| **Tests** | **29 API unit · 36 API e2e · 47 AI service — 112 passing** |
+| Forecast selection is real | Holt-Winters 24.13 WAPE beat gradient boosting 24.72, seasonal naive 25.74, moving average 27.07, SES 28.11, naive 29.38 — chosen automatically |
+| Allocation is real | The brief's 20 000-unit question solved **OPTIMAL in 4 ms**, honouring a 7-day deadline and a 50 % concentration cap |
+| Supplier scoring validated against ground truth | measured on-time 96.9 / 94.8 / 89.3 / 79.2 / 74.2 % against generated 97 / 92 / 86 / 75 / 70 % |
+| **The loop closes** | accepted an `ORDER_NOW` → `PO-2026-0302`, Tema Port Distributors, GHS 45 215.08 exists under Orders |
+| Live map moves | 7 of 9 reporting vehicles in motion along real corridors, streaming over WebSocket |
+| Degradation | with the AI service stopped, tracking/procurement/inventory keep working; AI routes return 503 naming what still works |
 
-## Done
+## Delivered
 
-- **Monorepo**: npm workspaces, `packages/shared` (enums, RBAC matrix, spherical geometry, API↔AI contracts).
-- **Infra**: `docker-compose.yml`, `.env.example`, non-default host ports to avoid collisions.
-- **Schema**: 40 models covering both briefs; lat/lng doubles + generated PostGIS geography columns;
-  CHECK constraints for the invariants an ORM cannot express; partial and expression indexes for hot paths.
-- **Auth**: Argon2id, JWT access + opaque DB-backed refresh tokens with rotation and reuse detection,
-  account lockout, password reset, email verification, invitations, timing-safe login.
-- **RBAC**: 10 roles → permission matrix in `@scip/shared`; global guards; tenant scoping helpers;
-  party-scoped visibility for DRIVER / SUPPLIER / CUSTOMER.
-- **Audit**: decorator-driven audit log with credential redaction.
-- **Master data**: customers, carriers, warehouses (+ locations, stock summary), vehicles (+ last location),
-  drivers, products (+ categories, cross-warehouse stock), all tenant-scoped with soft delete.
-- **Suppliers**: CRUD, versioned price lists, reliability scoring with confidence shrinkage,
-  performance recompute from PO history, leaderboard.
-- **Purchase orders**: state machine, per-company numbering with collision retry, price resolution
-  from the supplier price list, MOQ enforcement, partial goods receipt, incoming-stock tracking.
-- **Inventory**: movement ledger with concurrency-safe conditional updates, reservations,
-  transfers, count adjustments, stateful alerts (LOW_STOCK / OUT_OF_STOCK / OVERSTOCK / EXPIRING_SOON).
-- **Domain events**: durable table, `FOR UPDATE SKIP LOCKED` claiming — the TRACK→OPTIMIZE seam.
-- **ETA engine**: distance from polyline or winding-adjusted great circle, speed blending by
-  observation weight, traffic/weather/night multipliers, propagated uncertainty and an 80 % arrival window.
+**TRACK** — auth (Argon2id, JWT + rotating opaque refresh tokens with reuse detection, lockout,
+reset, verification, invitations) · RBAC across 10 roles from a shared permission matrix ·
+multi-tenant isolation with party scoping for driver/supplier/customer · audit log with credential
+redaction · master data (customers, carriers, warehouses + locations, vehicles, drivers, products +
+categories) · suppliers with versioned price lists and confidence-shrunk reliability scoring ·
+purchase orders with a state machine, per-company numbering, MOQ enforcement and partial goods
+receipt · inventory ledger with concurrency-safe conditional updates, reservations, transfers,
+counts and stateful alerts · shipments with lifecycle, ETA-derived promises and unguessable
+tracking numbers · GPS batch ingest with clock-skew/implausible-speed/jitter rejection · PostGIS
+radius, corridor-deviation and travelled-distance queries · Socket.IO with company-room scoping ·
+deliveries with proof of delivery in MinIO · incidents · role-routed notifications · dashboard
+analytics aggregated in SQL.
 
-- **Shipments**: lifecycle state machine (DELAYED reversible), origin/destination resolution,
-  ETA-derived promised arrival, unguessable tracking numbers, vehicle-availability coupling,
-  carrier on-time rate recompute, downsampled tracking trail.
-- **GPS**: batch ingest with clock-skew / implausible-speed / jitter rejection reported back to the
-  caller, forward-only denormalised position, driver-scoped authorisation.
-- **PostGIS queries**: radius search, per-warehouse lateral join, corridor deviation, travelled
-  distance, fleet snapshot — all against the GiST-indexed geography columns.
-- **WebSocket**: Socket.IO gateway, handshake-authenticated, company-room scoped.
-- **AI service**: FastAPI app with `/health`, `/forecast`, `/inventory/optimize`,
-  `/supplier/score`, `/supplier/allocation`; constant-time bearer check; every response carries an
-  explanation block.
+**OPTIMIZE** — data-quality gate with three severities · demand forecasting over six models with
+walk-forward validation and WAPE selection · inventory policy carrying both demand and lead-time
+variability · supplier scoring · multi-supplier allocation as a MILP · CVRPTW routing · Monte-Carlo
+scenarios · risk engine and health score · recommendation engine whose output is executable.
 
-## In progress / next
+**The seam** — durable `domain_events` with `FOR UPDATE SKIP LOCKED` claiming, a worker that
+debounces per company, and a recommendation-accept path that raises real purchase orders and writes
+real inventory policy.
 
-1. Anomaly detection engine (the TS side has the geometry; the Python detector is next).
-2. Route/VRP optimisation, scenario simulator, risk engine (OR-Tools routing is installed and verified).
-3. Recommendation engine + the domain-event worker that closes the TRACK→OPTIMIZE loop.
-4. Deliveries + proof of delivery (MinIO), incidents, notifications.
-5. Analytics / dashboard aggregates.
-6. Telemetry simulator (labelled DEMO DATA).
-7. Seed generator, e2e tests, Next.js frontend with the MapLibre live map, docs.
+**Operations** — 6 scheduled jobs, telemetry simulator, Dockerfiles for all three services, seed
+generating two years of coherent history, and six documents.
+
+## Defects found by running it, and fixed
+
+Each was caught by executing the system, not by reading it.
+
+1. **Every supplier measured ~50 % on-time regardless of profile.** The promised delivery date was
+   set at the mean of the supplier's lead-time distribution — late half the time by construction.
+   Suppliers now quote the percentile matching their on-time rate.
+2. **Forecasting took 19 s and timed out the HTTP client.** Residual spread refit the model once
+   per residual point. Now bounded sampling, plus a single-fit holdout for the boosted model: 3.6–5.5 s.
+3. **Recommendations were duplicated per product.** The company snapshot was keyed by
+   (product, warehouse) while the engine keys on product. 21 noisy recommendations became 3 distinct ones.
+4. **Scenario worst case came out safer than the base case.** Each case re-optimised its own policy,
+   so the worst case quietly adopted a better-tuned one. The policy is now fixed at the baseline.
+5. **`/analytics/carrier-performance` returned 500** — `Do not know how to serialize a BigInt`.
+   Fixed once at bootstrap rather than per call site.
+6. **On-time delivery read 41 %.** Seeded arrivals were centred on the promise. Now centred ~2 h
+   early: 96.6 %.
+7. **Confirming a PO for a product not yet stocked in that warehouse silently dropped the incoming
+   quantity** — an UPDATE against a row that did not exist yet. The reorder engine would have
+   re-recommended the same order.
+8. **`GET /inventory/movements?productId=…` returned 400** — filters were read outside the DTO while
+   the pipe ran with `forbidNonWhitelisted`.
+9. **11 of 15 in-flight shipments started DELAYED.** The seed backdated departures by hours while
+   placing vehicles at the origin, so the promise had already passed. Now 2 of 15 — the two the seed
+   intends.
+10. **XSS vector on the live map** — a tenant-controlled warehouse code was interpolated into
+    `innerHTML`. Markers are now built with DOM calls.
+
+## Stubbed, deliberately
+
+Each needs a paid third-party account this build has no credentials for. Each sits behind an
+interface, returns clearly-labelled deterministic data, and swaps in via one environment variable:
+weather (`OPENWEATHER_API_KEY`), road distance (`OSRM_URL`), traffic, SMS, and GPS hardware — where
+the telemetry simulator stands in until a real device POSTs to `/telemetry/gps`.
+
+Every seeded row carries `isDemoData`; every simulated fix carries `isSimulated`; the UI badges
+both and analytics report how much of a figure is synthetic.
 
 ## Deviations from the brief, and why
 
-- **MapLibre + OpenStreetMap instead of Mapbox/Google Maps.** Both alternatives require a paid API
-  key; this build has none, so a Mapbox map would be a screenshot, not a feature. MapLibre with OSM
-  tiles works with zero credentials. `NEXT_PUBLIC_MAP_STYLE_URL` swaps in Mapbox when a key exists.
-- **One product, two bounded contexts** rather than two applications — see `PLAN.md`.
-- **Refresh tokens are opaque DB rows, not JWTs**, so they are actually revocable.
-- **PostGIS is used through generated columns**, not Prisma-managed types, so the client stays typed.
+- **One product, two bounded contexts** instead of two applications — they shared ~70 % of the
+  domain model, and the value is the loop between them.
+- **MapLibre + OpenStreetMap instead of Mapbox/Google Maps** — both need a paid API key. Without
+  one, a Mapbox map is a screenshot rather than a feature. `NEXT_PUBLIC_MAP_STYLE_URL` swaps it.
+- **Refresh tokens are opaque DB rows, not JWTs** — a JWT refresh token cannot be revoked before
+  it expires.
+- **PostGIS via generated columns** rather than Prisma-managed geometry types, so the client stays
+  typed end to end.
+- **Anomaly detection is rule-based, not learned** — a new deployment has no labelled anomalies, so
+  a learned detector would start useless and stay useless.
+
+## Not built
+
+Kafka/RabbitMQ (the durable event table covers the requirement at this scale; the interface is the
+seam if it is ever needed) · OAuth2 social login (email + password is complete) · push
+notifications beyond the dashboard and email channels · a model registry UI (the tables exist and
+are written to).

@@ -867,11 +867,17 @@ async function main(): Promise<void> {
       const customer = pick(customers);
 
       const isHistorical = bucket.status === 'DELIVERED';
+
+      // In-flight shipments depart a few minutes ago, not hours. The simulator places their
+      // vehicle at the origin with zero progress, so backdating the departure by half a day
+      // would put the promised arrival in the past before the truck has moved a metre — and the
+      // ETA engine, working correctly, would immediately flag almost every one as DELAYED. The
+      // demo should start coherent and go wrong for real reasons, not by construction.
       const plannedDeparture = isHistorical
         ? daysAgo(intBetween(2, 120))
         : bucket.status === 'PLANNED'
           ? daysAhead(intBetween(1, 5))
-          : daysAgo(between(0.05, 0.6));
+          : new Date(Date.now() - intBetween(2, 20) * 60_000);
 
       const plannedArrival = new Date(
         plannedDeparture.getTime() + corridor.durationMinutes * 60_000,
