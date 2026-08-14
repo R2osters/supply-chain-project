@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { api } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Loading, Meter, Panel, fmt, statusTone } from '@/components/ui';
+import { useI18n } from '@/lib/i18n';
 
 interface DeliveryRow {
   id: string;
@@ -32,6 +33,8 @@ interface TodayResponse {
 }
 
 export default function DeliveriesPage() {
+  const { t } = useI18n();
+
   const today = useQuery({
     queryKey: ['deliveries', 'today'],
     queryFn: () => api<TodayResponse>('/deliveries/today'),
@@ -44,14 +47,18 @@ export default function DeliveriesPage() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Tile label="Scheduled" value={fmt.int(data?.total ?? 0)} />
-        <Tile label="Completed" value={fmt.int(data?.completed ?? 0)} tone="ok" />
-        <Tile label="Outstanding" value={fmt.int(data?.pending ?? 0)} tone="signal" />
-        <Tile label="Failed" value={fmt.int(data?.failed ?? 0)} tone={data?.failed ? 'alert' : 'ok'} />
+        <Tile label={t('del.scheduled')} value={fmt.int(data?.total ?? 0)} />
+        <Tile label={t('del.completed')} value={fmt.int(data?.completed ?? 0)} tone="ok" />
+        <Tile label={t('del.outstanding')} value={fmt.int(data?.pending ?? 0)} tone="signal" />
+        <Tile
+          label={t('del.failed')}
+          value={fmt.int(data?.failed ?? 0)}
+          tone={data?.failed ? 'alert' : 'ok'}
+        />
       </div>
 
       <Panel
-        title={`Delivery run · ${data?.date ?? ''}`}
+        title={`${t('del.run')} · ${data?.date ?? ''}`}
         actions={
           data ? (
             <span className="flex w-40 items-center gap-2">
@@ -70,13 +77,13 @@ export default function DeliveriesPage() {
           <table className="grid-table">
             <thead>
               <tr>
-                <th>Shipment</th>
-                <th>Status</th>
-                <th>Customer</th>
-                <th>Destination</th>
+                <th>{t('del.shipment')}</th>
+                <th>{t('del.status')}</th>
+                <th>{t('del.customer')}</th>
+                <th>{t('del.destination')}</th>
                 <th className="text-right">ETA</th>
-                <th className="text-right">Attempts</th>
-                <th>Note</th>
+                <th className="text-right">{t('del.attempts')}</th>
+                <th>{t('del.note')}</th>
               </tr>
             </thead>
             <tbody>
@@ -115,18 +122,14 @@ export default function DeliveriesPage() {
             </tbody>
           </table>
         ) : (
-          <Empty
-            title="Nothing scheduled"
-            hint="Deliveries appear here once a shipment has one created against it."
-          />
+          <Empty title={t('del.none')} hint={t('del.noneHint')} />
         )}
       </Panel>
 
+      {/* The endpoint stays a literal inside the sentence: an API path is not translatable, and
+          splitting it out keeps it monospaced in both languages. */}
       <div className="border border-[var(--color-hairline)] bg-[var(--color-panel)] px-3.5 py-2.5 text-[0.75rem] leading-relaxed text-[var(--color-ink-faint)]">
-        Proof of delivery — signature, photos and capture location — is recorded from the driver
-        app against <span className="font-mono">POST /deliveries/:id/proof</span>. The capture point
-        is compared with the declared destination and the distance stored, because a signature taken
-        far from where the goods were meant to go is the clearest early signal of a misdelivery.
+        {t('del.podNote', { endpoint: 'POST /deliveries/:id/proof' })}
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { api, type Paginated } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Loading, Panel, fmt, statusTone } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { useI18n } from '@/lib/i18n';
 
 interface PurchaseOrderRow {
   id: string;
@@ -48,6 +49,7 @@ const NEXT: Record<string, string[]> = {
 export default function PurchaseOrdersPage() {
   const client = useQueryClient();
   const { can } = useAuth();
+  const { t } = useI18n();
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
 
@@ -67,7 +69,7 @@ export default function PurchaseOrdersPage() {
         method: 'POST',
         body: {
           status: input.status,
-          ...(input.status === 'CANCELLED' ? { reason: 'Cancelled from the orders screen' } : {}),
+          ...(input.status === 'CANCELLED' ? { reason: t('po.cancelReason') } : {}),
         },
       }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['purchase-orders'] }),
@@ -76,7 +78,7 @@ export default function PurchaseOrdersPage() {
   return (
     <div className="space-y-4">
       <Panel
-        title="Purchase orders"
+        title={t('po.title')}
         meta={orders.data ? <Chip tone="neutral">{fmt.int(orders.data.meta.total)}</Chip> : null}
         loading={orders.isFetching}
         actions={
@@ -89,7 +91,7 @@ export default function PurchaseOrdersPage() {
               setPage(1);
             }}
           >
-            <option value="">all statuses</option>
+            <option value="">{t('tbl.allStatuses')}</option>
             {STATUSES.map((option) => (
               <option key={option} value={option}>
                 {option.toLowerCase()}
@@ -107,14 +109,14 @@ export default function PurchaseOrdersPage() {
             <table className="grid-table">
               <thead>
                 <tr>
-                  <th>Order</th>
-                  <th>Status</th>
-                  <th>Supplier</th>
-                  <th>Receiving</th>
-                  <th className="text-right">Lines</th>
-                  <th className="text-right">Value</th>
-                  <th className="text-right">Expected</th>
-                  <th className="text-right">Actual</th>
+                  <th>{t('po.order')}</th>
+                  <th>{t('po.status')}</th>
+                  <th>{t('po.supplier')}</th>
+                  <th>{t('po.receiving')}</th>
+                  <th className="text-right">{t('po.lines')}</th>
+                  <th className="text-right">{t('po.value')}</th>
+                  <th className="text-right">{t('po.expected')}</th>
+                  <th className="text-right">{t('po.actual')}</th>
                   <th />
                 </tr>
               </thead>
@@ -132,7 +134,7 @@ export default function PurchaseOrdersPage() {
                         {order.sourceRecommendationId && (
                           <span
                             className="ml-1.5 font-mono text-[0.5625rem] uppercase tracking-[0.1em] text-[var(--color-signal)]"
-                            title="Raised by accepting a recommendation"
+                            title={t('po.raisedByAi')}
                           >
                             ai
                           </span>
@@ -144,7 +146,9 @@ export default function PurchaseOrdersPage() {
                       <td>
                         <span className="block text-[0.8125rem]">{order.supplier.name}</span>
                         <span className="tnum font-mono text-[0.625rem] text-[var(--color-ink-faint)]">
-                          reliability {fmt.num(order.supplier.reliabilityScore, 0)}
+                          {t('po.reliability', {
+                            score: fmt.num(order.supplier.reliabilityScore, 0),
+                          })}
                         </span>
                       </td>
                       <td className="font-mono text-[0.6875rem] text-[var(--color-ink-dim)]">
@@ -176,7 +180,7 @@ export default function PurchaseOrdersPage() {
                               transition.mutate({ id: order.id, status: event.target.value });
                             }}
                           >
-                            <option value="">move to…</option>
+                            <option value="">{t('po.moveTo')}</option>
                             {NEXT[order.status].map((next) => (
                               <option key={next} value={next}>
                                 {next.toLowerCase()}
@@ -193,26 +197,29 @@ export default function PurchaseOrdersPage() {
           </div>
         ) : (
           <Empty
-            title="No purchase orders"
-            hint="Accept an ORDER_NOW recommendation and a draft order appears here."
+            title={t('po.none')}
+            hint={t('po.noneHint')}
           />
         )}
 
         {orders.data && orders.data.meta.totalPages > 1 && (
           <div className="flex items-center justify-between border-t border-[var(--color-hairline)] px-3 py-2">
             <span className="font-mono text-[0.625rem] uppercase text-[var(--color-ink-faint)]">
-              page {orders.data.meta.page} / {orders.data.meta.totalPages}
+              {t('tbl.page', {
+                page: orders.data.meta.page,
+                total: orders.data.meta.totalPages,
+              })}
             </span>
             <div className="flex gap-2">
               <button className="btn" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                prev
+                {t('tbl.prev')}
               </button>
               <button
                 className="btn"
                 disabled={!orders.data.meta.hasNextPage}
                 onClick={() => setPage((p) => p + 1)}
               >
-                next
+                {t('tbl.next')}
               </button>
             </div>
           </div>

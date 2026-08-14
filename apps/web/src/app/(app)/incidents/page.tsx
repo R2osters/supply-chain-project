@@ -5,6 +5,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { api, type Paginated } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Loading, Panel, fmt, riskTone, statusTone } from '@/components/ui';
+import { useI18n } from '@/lib/i18n';
 
 interface IncidentRow {
   id: string;
@@ -31,6 +32,7 @@ interface Summary {
 }
 
 export default function IncidentsPage() {
+  const { t } = useI18n();
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
 
@@ -55,16 +57,23 @@ export default function IncidentsPage() {
     <div className="space-y-4">
       {summary.data && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Tile label={`Incidents · ${summary.data.windowDays} d`} value={fmt.int(summary.data.total)} />
           <Tile
-            label="Still open"
+            label={t('inc.window', { days: summary.data.windowDays })}
+            value={fmt.int(summary.data.total)}
+          />
+          <Tile
+            label={t('inc.stillOpen')}
             value={fmt.int(summary.data.open)}
             tone={summary.data.open > 0 ? 'warn' : 'ok'}
           />
-          <Tile label="Estimated cost" value={fmt.money(summary.data.estimatedCost)} tone="signal" />
+          <Tile
+            label={t('inc.estimatedCost')}
+            value={fmt.money(summary.data.estimatedCost)}
+            tone="signal"
+          />
           <div className="panel px-3.5 py-2.5">
             <div className="font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-              By severity
+              {t('inc.bySeverity')}
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {severityOrder
@@ -80,7 +89,7 @@ export default function IncidentsPage() {
       )}
 
       <Panel
-        title="Incidents"
+        title={t('inc.title')}
         loading={incidents.isFetching}
         actions={
           <select
@@ -92,7 +101,7 @@ export default function IncidentsPage() {
               setPage(1);
             }}
           >
-            <option value="">all</option>
+            <option value="">{t('inc.all')}</option>
             {['OPEN', 'INVESTIGATING', 'RESOLVED', 'CLOSED'].map((option) => (
               <option key={option} value={option}>
                 {option.toLowerCase()}
@@ -149,21 +158,27 @@ export default function IncidentsPage() {
                   )}
                   {incident.reportedBy && (
                     <span>
-                      reported by {incident.reportedBy.firstName} {incident.reportedBy.lastName}
+                      {t('inc.reportedByName', {
+                        name: `${incident.reportedBy.firstName} ${incident.reportedBy.lastName}`,
+                      })}
                     </span>
                   )}
                   {incident.assignedTo && (
                     <span>
-                      assigned to {incident.assignedTo.firstName} {incident.assignedTo.lastName}
+                      {t('inc.assignedToName', {
+                        name: `${incident.assignedTo.firstName} ${incident.assignedTo.lastName}`,
+                      })}
                     </span>
                   )}
-                  {incident.resolvedAt && <span>resolved {fmt.relative(incident.resolvedAt)}</span>}
+                  {incident.resolvedAt && (
+                    <span>{t('inc.resolvedWhen', { when: fmt.relative(incident.resolvedAt) })}</span>
+                  )}
                 </div>
               </li>
             ))}
           </ul>
         ) : (
-          <Empty title="No incidents" hint="Nothing has gone wrong in this window." />
+          <Empty title={t('inc.none')} hint={t('inc.noneHint')} />
         )}
       </Panel>
     </div>

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Loading, Meter, Panel, fmt } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { useI18n } from '@/lib/i18n';
 
 interface LeaderboardRow {
   rank: number;
@@ -25,6 +26,7 @@ interface LeaderboardRow {
 export default function SuppliersPage() {
   const client = useQueryClient();
   const { can } = useAuth();
+  const { t } = useI18n();
 
   const leaderboard = useQuery({
     queryKey: ['suppliers', 'leaderboard'],
@@ -39,16 +41,14 @@ export default function SuppliersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Supplier performance</h1>
+        <h1 className="text-lg font-semibold">{t('sup.title')}</h1>
         <p className="mt-0.5 max-w-3xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-          Reliability is computed from each supplier’s own purchase-order history, not entered by
-          hand. Rates are shrunk toward a neutral prior when there are few orders, so one late
-          delivery out of two does not brand a new supplier as 50 % reliable.
+          {t('sup.intro')}
         </p>
       </div>
 
       <Panel
-        title="League table"
+        title={t('sup.league')}
         loading={leaderboard.isFetching}
         actions={
           can('supplier:update') ? (
@@ -57,7 +57,7 @@ export default function SuppliersPage() {
               disabled={recompute.isPending}
               className="hover:text-[var(--color-signal)]"
             >
-              {recompute.isPending ? 'recomputing…' : 'recompute all'}
+              {recompute.isPending ? t('sup.recomputing') : t('sup.recompute')}
             </button>
           ) : null
         }
@@ -72,14 +72,14 @@ export default function SuppliersPage() {
               <thead>
                 <tr>
                   <th className="w-8">#</th>
-                  <th>Supplier</th>
-                  <th>Country</th>
-                  <th className="w-32">Reliability</th>
-                  <th className="text-right">On time</th>
-                  <th className="text-right">Quality</th>
-                  <th className="text-right">Fill rate</th>
-                  <th className="text-right">Lead time</th>
-                  <th className="text-right">Orders</th>
+                  <th>{t('sup.supplier')}</th>
+                  <th>{t('sup.country')}</th>
+                  <th className="w-32">{t('sup.reliability')}</th>
+                  <th className="text-right">{t('sup.onTime')}</th>
+                  <th className="text-right">{t('sup.quality')}</th>
+                  <th className="text-right">{t('sup.fillRate')}</th>
+                  <th className="text-right">{t('sup.leadTime')}</th>
+                  <th className="text-right">{t('sup.orders')}</th>
                   <th />
                 </tr>
               </thead>
@@ -138,9 +138,9 @@ export default function SuppliersPage() {
                     </td>
                     <td className="text-right">
                       {supplier.scoreIsMeasured ? (
-                        <Chip tone="ok">measured</Chip>
+                        <Chip tone="ok">{t('sup.measured')}</Chip>
                       ) : (
-                        <Chip tone="neutral">prior</Chip>
+                        <Chip tone="neutral">{t('sup.prior')}</Chip>
                       )}
                     </td>
                   </tr>
@@ -148,13 +148,11 @@ export default function SuppliersPage() {
               </tbody>
             </table>
             <div className="border-t border-[var(--color-hairline)] px-3 py-2 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
-              A “prior” badge means no performance has been computed for that supplier yet — the
-              score is the neutral starting value, not a measurement. Lead-time spread is what
-              drives safety stock: a supplier at 5 ± 4 days costs more buffer than one at 12 ± 0.5.
+              {t('sup.priorNote')}
             </div>
           </div>
         ) : (
-          <Empty title="No suppliers" />
+          <Empty title={t('sup.none')} />
         )}
       </Panel>
     </div>

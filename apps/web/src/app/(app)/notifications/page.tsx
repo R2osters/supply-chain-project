@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { api, type Paginated } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Loading, Panel, fmt } from '@/components/ui';
+import { useI18n } from '@/lib/i18n';
 
 interface NotificationRow {
   id: string;
@@ -29,6 +30,7 @@ const TARGET_PATH: Record<string, (id: string) => string> = {
 
 export default function NotificationsPage() {
   const client = useQueryClient();
+  const { t } = useI18n();
   const [unreadOnly, setUnreadOnly] = useState(false);
 
   const list = useQuery({
@@ -53,10 +55,10 @@ export default function NotificationsPage() {
   return (
     <div className="space-y-4">
       <Panel
-        title="Alerts"
+        title={t('notif.title')}
         meta={
           list.data && list.data.unreadCount > 0 ? (
-            <Chip tone="alert">{list.data.unreadCount} unread</Chip>
+            <Chip tone="alert">{t('notif.unread', { n: list.data.unreadCount })}</Chip>
           ) : null
         }
         loading={list.isFetching}
@@ -69,14 +71,14 @@ export default function NotificationsPage() {
                 onChange={(event) => setUnreadOnly(event.target.checked)}
                 className="accent-[var(--color-signal)]"
               />
-              unread only
+              {t('notif.unreadOnly')}
             </label>
             <button
               onClick={() => markAll.mutate()}
               disabled={markAll.isPending}
               className="hover:text-[var(--color-signal)]"
             >
-              mark all read
+              {t('notif.markAllRead')}
             </button>
           </div>
         }
@@ -127,7 +129,7 @@ export default function NotificationsPage() {
 
                       {notification.deliveryError && (
                         <p className="mt-1 font-mono text-[0.625rem] text-[var(--color-warn)]">
-                          email delivery failed: {notification.deliveryError}
+                          {t('notif.emailFailed', { reason: notification.deliveryError })}
                         </p>
                       )}
                     </div>
@@ -138,7 +140,7 @@ export default function NotificationsPage() {
                           href={href}
                           className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-[var(--color-signal)] hover:underline"
                         >
-                          open →
+                          {t('notif.open')}
                         </Link>
                       )}
                       {!notification.readAt && (
@@ -146,7 +148,7 @@ export default function NotificationsPage() {
                           onClick={() => markRead.mutate(notification.id)}
                           className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
                         >
-                          mark read
+                          {t('notif.markRead')}
                         </button>
                       )}
                     </div>
@@ -157,8 +159,8 @@ export default function NotificationsPage() {
           </ul>
         ) : (
           <Empty
-            title={unreadOnly ? 'Nothing unread' : 'No alerts'}
-            hint="Alerts are routed by role — you see what your role is responsible for."
+            title={unreadOnly ? t('notif.noneUnread') : t('notif.none')}
+            hint={t('notif.noneHint')}
           />
         )}
       </Panel>
