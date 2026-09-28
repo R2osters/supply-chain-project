@@ -103,7 +103,10 @@ export interface AppConfig {
     tomtomApiKey: string | null;
     /** Our own ceiling on TomTom tiles per UTC day, below the provider's so a runaway map stops first. */
     tomtomDailyTileBudget: number;
-    /** Camera catalogues to load, by id (tfl, fintraffic, ontario511, drivebc, nsw, calgary). */
+    /**
+     * Camera catalogues to load, by id: tfl, fintraffic, drivebc, nsw, calgary. `ontario511` also
+     * exists but its catalogue started requiring a developer key in 2026, so it is off by default.
+     */
     cameraPacks: string[];
     /** Radius around an asset inside which a hazard counts as exposure, km. */
     hazardExposureRadiusKm: number;
@@ -235,7 +238,6 @@ export default (): AppConfig => {
       cameraPacks: list(process.env.CAMERA_PACKS, [
         'tfl',
         'fintraffic',
-        'ontario511',
         'drivebc',
         'nsw',
         'calgary',
