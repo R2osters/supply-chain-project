@@ -5,6 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { companyFilter, requireCompanyId } from '../../common/tenancy/tenant-scope';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DOMAIN_EVENTS, DomainEventsService } from '../events/domain-events.service';
+import { HazardsService } from '../hazards/hazards.service';
 import { AiClientService } from './ai-client.service';
 
 const DAY_MS = 86_400_000;
@@ -25,6 +26,7 @@ export class AiService {
     private readonly prisma: PrismaService,
     private readonly ai: AiClientService,
     private readonly events: DomainEventsService,
+    private readonly hazards: HazardsService,
   ) {}
 
   /* --------------------------------------------------------------- forecast */
@@ -149,6 +151,7 @@ export class AiService {
       (shipment.plannedArrivalAt.getTime() - shipment.plannedDepartureAt.getTime()) / 3_600_000;
 
     const departure = shipment.actualDepartureAt ?? shipment.plannedDepartureAt;
+    const weatherSeverity = await this.weatherSeverityForShipment(shipmentId);
 
     const response = await this.ai.post<DelayResponse>(
       '/predict-delay',
@@ -162,9 +165,9 @@ export class AiService {
         carrierOnTimeRate: shipment.carrier?.onTimeRate ?? 0.85,
         carrierAverageDelayHours: shipment.carrier?.averageDelayHours ?? 0,
         supplierReliabilityScore: shipment.purchaseOrder?.supplier?.reliabilityScore ?? null,
-        // No weather or traffic provider is configured; these stay at their neutral values and
-        // the AI service's explanation says so rather than inventing conditions.
-        weatherSeverity: 0,
+        weatherSeverity,
+        // No traffic provider feeds the model yet; congestion stays neutral and the AI service's
+        // explanation says so rather than inventing conditions.
         trafficCongestion: 0,
         routeIncidentRate: shipment.route?.incidentRate ?? 0,
         observedAverageSpeedKmh,
@@ -179,6 +182,22 @@ export class AiService {
     });
 
     return response;
+  }
+
+  /**
+   * Open-Meteo severity (0..1) where the shipment last reported. Falls back to 0 — the model's
+   * "no adverse weather" — when there is no GPS fix yet or the weather service is down: a free
+   * upstream being unavailable must never block a delay prediction. The fallback is therefore
+   * optimistic, which is why it is only a fallback.
+   */
+  private async weatherSeverityForShipment(shipmentId: string): Promise<number> {
+    const lastFix = await this.prisma.gpsPosition.findFirst({
+      where: { shipmentId },
+      orderBy: { recordedAt: 'desc' },
+      select: { latitude: true, longitude: true },
+    });
+    if (!lastFix) return 0;
+    return (await this.hazards.weatherSeverityAt(lastFix.latitude, lastFix.longitude)) ?? 0;
   }
 
   /** Refreshes the delay probability for every shipment currently on the road. */
@@ -729,11 +748,14 @@ export class AiService {
 
   async analyseRisk(user: AuthenticatedUser) {
     const companyId = requireCompanyId(user);
-    const snapshot = await this.companySnapshot(companyId);
+    const [snapshot, hazards] = await Promise.all([
+      this.companySnapshot(companyId),
+      this.hazardExposuresForRisk(companyId),
+    ]);
 
     const response = await this.ai.post<RiskResponse>(
       '/risk/analyze',
-      { companyId, ...snapshot },
+      { companyId, ...snapshot, hazards },
       { record: { companyId, task: 'RISK', subjectType: 'COMPANY', subjectId: companyId } },
     );
 
@@ -758,6 +780,33 @@ export class AiService {
     ]);
 
     return response;
+  }
+
+  /**
+   * Live natural-hazard exposure of the company's sites and shipments, in the shape the risk
+   * engine reads. `undefined` (the field is then omitted) when no hazard feed answered: an empty
+   * list would tell the engine "feeds checked, nothing nearby", which is a different claim from
+   * "feeds unreachable", and its assumptions text distinguishes the two.
+   */
+  private async hazardExposuresForRisk(companyId: string) {
+    try {
+      const { exposures, sources } = await this.hazards.companyExposure(companyId);
+      const anyFeedAnswered = sources.some((s) => s.status === 'OK' || s.status === 'STALE');
+      if (!anyFeedAnswered) return undefined;
+      return exposures.slice(0, 200).map((exposure) => ({
+        hazardId: exposure.hazardId,
+        kind: exposure.hazardKind,
+        title: exposure.hazardTitle,
+        severity: exposure.severity,
+        subjectType: exposure.subjectType,
+        subjectId: exposure.subjectId,
+        subjectLabel: exposure.subjectLabel,
+        distanceKm: exposure.distanceKm,
+      }));
+    } catch (error) {
+      this.logger.warn(`Hazard exposure unavailable for risk analysis: ${error}`);
+      return undefined;
+    }
   }
 
   async generateRecommendations(user: AuthenticatedUser) {

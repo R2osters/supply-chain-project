@@ -301,8 +301,8 @@ switch from scorecard to fitted model is visible in the response's `model.name`.
 corridors: a 45-minute stop is normal at a border post and abnormal on a trunk road. Those
 thresholds are already request parameters.
 
-**Weather and traffic** — replace the stubs. `OPENWEATHER_API_KEY` and a traffic provider feed
-straight into the ETA engine and the delay scorecard, which today use neutral values and say so.
+**Traffic** — replace the stub. Weather is live (Open-Meteo feeds delay prediction, see
+`docs/INTEL.md`); a traffic provider behind the ETA engine's interface would do the same for congestion.
 
 **Road distances** — `OSRM_URL` replaces the great-circle × 1.25 approximation with real road
 distances. It is the one approximation in the system that can be tens of kilometres wrong on a

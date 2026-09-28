@@ -1581,6 +1581,8 @@ enum RiskCategory {
   DEMAND_RISK
   GEOPOLITICAL_RISK
   WEATHER_RISK
+  /// Earthquakes and wildfires near the company's sites or shipments (live feeds).
+  NATURAL_HAZARD
 }
 
 model Risk {

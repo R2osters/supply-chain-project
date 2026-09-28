@@ -25,6 +25,7 @@ const NAV: NavItem[] = [
   { href: '/dashboard', labelKey: 'nav.control', permission: 'analytics:read', context: 'TRACK' },
   { href: '/map', labelKey: 'nav.map', permission: 'gps:read', context: 'TRACK' },
   { href: '/maritime', labelKey: 'nav.maritime', permission: 'gps:read', context: 'TRACK' },
+  { href: '/situation', labelKey: 'nav.situation', permission: 'gps:read', context: 'TRACK' },
   { href: '/shipments', labelKey: 'nav.shipments', permission: 'shipment:read', context: 'TRACK' },
   { href: '/deliveries', labelKey: 'nav.deliveries', permission: 'delivery:read', context: 'TRACK' },
   { href: '/devices', labelKey: 'dev.nav', permission: 'vehicle:read', context: 'TRACK' },

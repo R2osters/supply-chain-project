@@ -22,20 +22,55 @@ where a warning matters most.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Sequence
 
 from .inventory import stockout_probability
 
 #: Weight of each category in the health score. They sum to 100, so the worst possible score is 0.
+#: NATURAL_HAZARD (earthquakes, wildfires) took its 5 points from DEMAND_RISK: erratic demand is
+#: buffered by inventory policy, while a fire at a warehouse is not something policy can absorb.
 HEALTH_WEIGHTS: dict[str, float] = {
     "STOCKOUT_RISK": 30.0,
     "SUPPLIER_RISK": 25.0,
     "TRANSPORT_RISK": 20.0,
-    "DEMAND_RISK": 15.0,
+    "DEMAND_RISK": 10.0,
     "GEOPOLITICAL_RISK": 5.0,
     "WEATHER_RISK": 5.0,
+    "NATURAL_HAZARD": 5.0,
 }
+
+#: Which risk category each live hazard kind feeds. Cyclones and storms are weather; earthquakes
+#: and fires are not, and lumping them in would make "weather risk" mean "anything outdoors".
+HAZARD_CATEGORY: dict[str, str] = {
+    "CYCLONE": "WEATHER_RISK",
+    "SEVERE_WEATHER": "WEATHER_RISK",
+    "EARTHQUAKE": "NATURAL_HAZARD",
+    "FIRE": "NATURAL_HAZARD",
+}
+
+#: Chance that a hazard of this level disrupts an asset sitting right next to it.
+HAZARD_LEVEL_PROBABILITY: dict[str, float] = {
+    "CRITICAL": 0.9,
+    "HIGH": 0.7,
+    "MEDIUM": 0.45,
+    "LOW": 0.2,
+}
+
+#: Impact of a hazard as a fraction of the largest other impact in the run (see _hazard_findings).
+HAZARD_LEVEL_IMPACT: dict[str, float] = {
+    "CRITICAL": 1.0,
+    "HIGH": 0.6,
+    "MEDIUM": 0.3,
+    "LOW": 0.1,
+}
+
+#: Distance over which a hazard's grip on an asset fades, km.
+HAZARD_DISTANCE_SCALE_KM = 150.0
+
+#: At most this many hazard findings per analysis, strongest first.
+MAX_HAZARD_FINDINGS = 20
 
 HIGH_SCORE = 50.0
 MEDIUM_SCORE = 20.0
@@ -104,6 +139,7 @@ def analyse(
     products: Sequence[dict],
     suppliers: Sequence[dict],
     shipments: Sequence[dict],
+    hazards: Sequence[dict] | None = None,
 ) -> RiskReport:
     findings: list[RiskFinding] = []
 
@@ -112,6 +148,11 @@ def analyse(
     findings += _transport_findings(shipments)
     findings += _demand_findings(products)
     findings += _geopolitical_findings(suppliers)
+
+    # Hazard impact has no currency value of its own, so it is anchored to the largest impact
+    # found above — which is why hazards are collected after everything else.
+    reference_impact = max((f.impact for f in findings), default=0.0)
+    findings += _hazard_findings(hazards or [], reference_impact)
 
     # Impact is normalised against the largest impact in this run so scores are comparable
     # within the analysis. Doing it after collection is what makes that possible.
@@ -140,9 +181,24 @@ def analyse(
             "one catastrophic category cannot be diluted by four healthy ones.",
             "Stockout probability comes from the same normal lead-time-demand model as the "
             "inventory engine and inherits its assumptions.",
-            "Weather and geopolitical risk are only assessed from data present in the request; "
-            "with no external feed configured they reflect concentration, not live events.",
+            _hazard_assumption(hazards),
+            "Geopolitical risk is only assessed from data present in the request; it reflects "
+            "sourcing concentration, not live events.",
         ],
+    )
+
+
+def _hazard_assumption(hazards: Sequence[dict] | None) -> str:
+    if hazards is None:
+        return (
+            "No live hazard feed was supplied with this request, so weather and natural-hazard "
+            "risk reflect nothing external."
+        )
+    return (
+        "Weather and natural-hazard risk come from live public feeds (NOAA NHC cyclones, USGS "
+        "earthquakes, NASA FIRMS fires, Open-Meteo weather) matched to asset locations by the "
+        f"API; {len(hazards)} hazard exposure(s) were supplied. NHC covers the Atlantic and "
+        "eastern/central Pacific only."
     )
 
 
@@ -407,6 +463,100 @@ def _geopolitical_findings(suppliers: Sequence[dict]) -> list[RiskFinding]:
             ],
         )
     ]
+
+
+def _hazard_findings(hazards: Sequence[dict], reference_impact: float) -> list[RiskFinding]:
+    """One finding per live hazard, attached to the asset it is closest to.
+
+        probability = P(level) × proximity,   proximity = 0.4 + 0.6 · exp(−distance / 150 km)
+
+    A hazard on top of a site keeps its full level probability; one at the edge of the exposure
+    radius keeps under half of it, never zero, because the API only sends exposures it already
+    judged close enough to matter.
+
+    Impact has no currency figure — nobody knows what a fire near a warehouse will cost — so it is
+    expressed relative to the largest impact elsewhere in the analysis: a CRITICAL hazard counts
+    as much as the worst other problem found, a LOW one a tenth of it, scaled up a little for each
+    additional asset in reach. Without any other finding the reference is 1 and hazards rank
+    among themselves.
+    """
+    by_hazard: dict[str, list[dict]] = {}
+    for exposure in hazards:
+        if str(exposure.get("kind", "")) not in HAZARD_CATEGORY:
+            continue
+        by_hazard.setdefault(str(exposure.get("hazardId", "")), []).append(exposure)
+
+    reference = reference_impact if reference_impact > 0 else 1.0
+    findings: list[RiskFinding] = []
+
+    for exposures in by_hazard.values():
+        exposures = sorted(exposures, key=lambda e: float(e.get("distanceKm", 0) or 0))
+        closest = exposures[0]
+        kind = str(closest["kind"])
+        level = str(closest.get("severity", "LOW"))
+        distance = float(closest.get("distanceKm", 0) or 0)
+        subjects = list(dict.fromkeys(str(e.get("subjectLabel", "")) for e in exposures))
+
+        proximity = 0.4 + 0.6 * math.exp(-distance / HAZARD_DISTANCE_SCALE_KM)
+        probability = min(HAZARD_LEVEL_PROBABILITY.get(level, 0.2) * proximity, 0.95)
+        spread = min(1.0 + 0.25 * (len(subjects) - 1), 2.0)
+        impact = HAZARD_LEVEL_IMPACT.get(level, 0.1) * spread * reference
+
+        reasons = [
+            f"{closest.get('title', kind.title())} ({level}) is {distance:,.0f} km from "
+            f"{closest.get('subjectLabel', 'an asset')}.",
+            f"Estimated chance it disrupts that asset: {probability:.0%}.",
+        ]
+        if len(subjects) > 1:
+            others = ", ".join(subjects[1:6])
+            more = f" and {len(subjects) - 6} more" if len(subjects) > 6 else ""
+            reasons.append(f"Also within reach: {others}{more}.")
+
+        findings.append(
+            RiskFinding(
+                category=HAZARD_CATEGORY[kind],
+                probability=probability,
+                impact=impact,
+                score=0.0,
+                level="LOW",
+                subject=str(closest.get("subjectLabel", "unknown asset")),
+                subject_type=str(closest.get("subjectType", "COMPANY")),
+                subject_id=str(closest.get("subjectId", "")),
+                recommended_action=_hazard_action(kind),
+                reasons=reasons,
+                assumptions=[
+                    "Hazard position and severity come from the live feed as supplied by the API.",
+                    "Distance is to the hazard's centre or, for a cyclone, its nearest forecast "
+                    "track point; real footprints are irregular.",
+                    "Impact is relative to the largest other impact in this analysis, not a cost "
+                    "estimate.",
+                ],
+            )
+        )
+
+    findings.sort(key=lambda f: f.probability * f.impact, reverse=True)
+    return findings[:MAX_HAZARD_FINDINGS]
+
+
+def _hazard_action(kind: str) -> str:
+    return {
+        "CYCLONE": (
+            "Follow the NHC advisory. Reroute or hold shipments crossing the forecast cone, move "
+            "stock that can be moved, and secure the site before landfall."
+        ),
+        "SEVERE_WEATHER": (
+            "Hold or reroute departures through the affected area until conditions ease, and "
+            "warn drivers already on the road."
+        ),
+        "EARTHQUAKE": (
+            "Confirm staff and the site are safe, inspect for damage, and check road and port "
+            "status before dispatching."
+        ),
+        "FIRE": (
+            "Watch the fire's spread, prepare to move stock, and reroute shipments around "
+            "closed roads."
+        ),
+    }.get(kind, "Monitor the hazard.")
 
 
 def _health_breakdown(findings: Sequence[RiskFinding]) -> dict[str, float]:

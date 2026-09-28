@@ -46,7 +46,8 @@ Each is a stub until configured, and every stub is labelled in the response it a
 
 | Variable | Effect |
 |---|---|
-| `OPENWEATHER_API_KEY` | real weather severity instead of the neutral value |
+| `FIRMS_MAP_KEY` | active fires in the hazards feed (free NASA key); weather, cyclones, earthquakes need no key |
+| `TOMTOM_API_KEY` | live traffic-flow tiles on the maps, capped by `TOMTOM_DAILY_TILE_BUDGET` |
 | `OSRM_URL` | true road distances instead of great-circle × `ROAD_WINDING_FACTOR` |
 | `NEXT_PUBLIC_MAP_STYLE_URL` | any MapLibre style, including Mapbox, instead of OSM raster |
 | `SIMULATOR_ENABLED=false` | **set this in production** — the simulator is demo scaffolding |

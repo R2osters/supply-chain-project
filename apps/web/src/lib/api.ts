@@ -87,6 +87,31 @@ interface RequestOptions {
 }
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const response = await send(path, options);
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+
+/**
+ * Binary GET with the same auth and refresh behaviour as `api` — for camera frames, which an
+ * `<img src>` cannot fetch because it has no way to send a bearer token.
+ */
+export async function apiBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const response = await send(path, { signal });
+  return response.blob();
+}
+
+/** Absolute URL of an API path, for consumers that fetch on their own (MapLibre tiles). */
+export function apiUrl(path: string): string {
+  return `${API_URL}${path}`;
+}
+
+/** Whether a URL points at this API, so a map never leaks the token to a third-party tile host. */
+export function isApiUrl(url: string): boolean {
+  return url.startsWith(API_URL);
+}
+
+async function send(path: string, options: RequestOptions): Promise<Response> {
   const { method = 'GET', body, retried = false, signal } = options;
 
   const response = await fetch(`${API_URL}${path}`, {
@@ -107,7 +132,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
     const refreshed = await refreshInFlight;
     if (refreshed) {
-      return api<T>(path, { ...options, retried: true });
+      return send(path, { ...options, retried: true });
     }
 
     accessToken = null;
@@ -130,8 +155,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
     throw new ApiError(message, response.status, detail);
   }
 
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  return response;
 }
 
 /* ------------------------------------------------------------------- types */

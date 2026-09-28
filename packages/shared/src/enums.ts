@@ -99,6 +99,7 @@ export const RISK_CATEGORIES = [
   'DEMAND_RISK',
   'GEOPOLITICAL_RISK',
   'WEATHER_RISK',
+  'NATURAL_HAZARD',
 ] as const;
 export type RiskCategory = (typeof RISK_CATEGORIES)[number];
 
