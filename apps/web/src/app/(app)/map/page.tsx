@@ -6,8 +6,12 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import { api, getAccessToken, type FleetVehicle } from '@/lib/api';
+import { api, apiUrl, getAccessToken, isApiUrl, type FleetVehicle } from '@/lib/api';
+import type { Camera, CamerasResponse, PointWeather, TrafficStatus } from '@/lib/intel';
+import { useI18n } from '@/lib/i18n';
+import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
 import { Chip, Empty, Panel, fmt, statusTone } from '@/components/ui';
+import { CameraViewer } from '@/components/intel/camera-viewer';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3001';
 
@@ -63,16 +67,54 @@ interface LivePosition {
   isSimulated?: boolean;
 }
 
+interface VehicleMotion {
+  track: MotionTrack;
+  lastFixAt: number;
+  /** Epoch ms of the fix itself; a repeated poll of the same fix must not restart the glide. */
+  fixTime: number;
+}
+
+const TRAFFIC_LAYER = 'live-traffic';
+
 export default function LiveMapPage() {
+  const { t } = useI18n();
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<MapLibreMap | null>(null);
   const markers = useRef<Map<string, Marker>>(new Map());
+  const motions = useRef<Map<string, VehicleMotion>>(new Map());
+  const frame = useRef<number | null>(null);
   const socket = useRef<Socket | null>(null);
 
   const [ready, setReady] = useState(false);
   const [live, setLive] = useState(false);
   const [selected, setSelected] = useState<FleetVehicle | null>(null);
   const [lastTick, setLastTick] = useState<Date | null>(null);
+  const [showTraffic, setShowTraffic] = useState(false);
+  const [camera, setCamera] = useState<Camera | null>(null);
+
+  const traffic = useQuery({
+    queryKey: ['traffic', 'status'],
+    queryFn: () => api<TrafficStatus>('/traffic/status'),
+    refetchInterval: 5 * 60_000,
+  });
+
+  const nearbyCameras = useQuery({
+    queryKey: ['cameras', 'near', selected?.vehicleId, selected?.latitude.toFixed(2), selected?.longitude.toFixed(2)],
+    queryFn: () =>
+      api<CamerasResponse>(
+        `/cameras/near?lat=${selected?.latitude}&lon=${selected?.longitude}&radiusKm=50&limit=3`,
+      ),
+    enabled: selected !== null,
+    staleTime: 5 * 60_000,
+  });
+
+  const vehicleWeather = useQuery({
+    queryKey: ['hazards', 'weather', selected?.latitude.toFixed(1), selected?.longitude.toFixed(1)],
+    queryFn: () =>
+      api<PointWeather>(`/hazards/weather?lat=${selected?.latitude}&lon=${selected?.longitude}`),
+    enabled: selected !== null,
+    staleTime: 10 * 60_000,
+  });
 
   const fleet = useQuery({
     queryKey: ['telemetry', 'fleet'],
@@ -98,19 +140,89 @@ export default function LiveMapPage() {
       center: [-1.0, 6.6], // central Ghana: the whole demo network fits in one view
       zoom: 6.4,
       attributionControl: { compact: true },
+      // Traffic tiles come from our API and need the bearer token; the basemap host must not.
+      transformRequest: (url) => {
+        const token = getAccessToken();
+        return isApiUrl(url) && token ? { url, headers: { Authorization: `Bearer ${token}` } } : { url };
+      },
     });
 
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
-    instance.on('load', () => setReady(true));
+    instance.on('load', () => {
+      instance.addSource(TRAFFIC_LAYER, {
+        type: 'raster',
+        tiles: [apiUrl('/traffic/tiles/{z}/{x}/{y}')],
+        tileSize: 256,
+        minzoom: 3,
+        maxzoom: 18,
+      });
+      instance.addLayer({
+        id: TRAFFIC_LAYER,
+        type: 'raster',
+        source: TRAFFIC_LAYER,
+        layout: { visibility: 'none' },
+        paint: { 'raster-opacity': 0.85 },
+      });
+      setReady(true);
+    });
 
     map.current = instance;
     return () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
       instance.remove();
       map.current = null;
       setReady(false);
     };
   }, []);
+
+  useEffect(() => {
+    if (!ready || !map.current?.getLayer(TRAFFIC_LAYER)) return;
+    const visible = showTraffic && Boolean(traffic.data?.enabled);
+    map.current.setLayoutProperty(TRAFFIC_LAYER, 'visibility', visible ? 'visible' : 'none');
+  }, [ready, showTraffic, traffic.data?.enabled]);
+
+  /* -------------------------------------------------------------- motion */
+
+  /**
+   * One animation loop for the whole fleet, running only while some marker is still gliding or
+   * coasting. It stops by itself once everything has settled, so an idle map costs nothing.
+   */
+  const animate = (): void => {
+    const now = performance.now();
+    let pending = false;
+    for (const [vehicleId, motion] of motions.current) {
+      const marker = markers.current.get(vehicleId);
+      if (!marker) continue;
+      const point = positionAt(motion.track, now);
+      marker.setLngLat([point.longitude, point.latitude]);
+      if (isTrackAnimating(motion.track, now)) pending = true;
+    }
+    frame.current = pending ? requestAnimationFrame(animate) : null;
+  };
+
+  const applyFix = (
+    vehicleId: string,
+    fix: { latitude: number; longitude: number; speedKmh: number | null; headingDegrees: number | null; recordedAt: string },
+  ): void => {
+    const marker = markers.current.get(vehicleId);
+    if (!marker) return;
+    const fixTime = Date.parse(fix.recordedAt);
+    const previous = motions.current.get(vehicleId);
+    if (previous && previous.fixTime === fixTime) return;
+
+    const now = performance.now();
+    const drawn = marker.getLngLat();
+    const interval = previous ? now - previous.lastFixAt : null;
+    motions.current.set(vehicleId, {
+      track: startTrack(previous ? { latitude: drawn.lat, longitude: drawn.lng } : null, fix, now, interval),
+      lastFixAt: now,
+      fixTime,
+    });
+    rotateMarker(marker, fix.headingDegrees);
+    if (frame.current === null) frame.current = requestAnimationFrame(animate);
+  };
 
   /* ------------------------------------------------------------ warehouses */
 
@@ -145,9 +257,8 @@ export default function LiveMapPage() {
     const instance = map.current;
 
     for (const vehicle of fleet.data) {
-      const existing = markers.current.get(vehicle.vehicleId);
-      if (existing) {
-        existing.setLngLat([vehicle.longitude, vehicle.latitude]);
+      if (markers.current.has(vehicle.vehicleId)) {
+        applyFix(vehicle.vehicleId, { ...vehicle, recordedAt: vehicle.lastPositionAt });
         continue;
       }
 
@@ -159,6 +270,7 @@ export default function LiveMapPage() {
         .addTo(instance);
 
       markers.current.set(vehicle.vehicleId, marker);
+      applyFix(vehicle.vehicleId, { ...vehicle, recordedAt: vehicle.lastPositionAt });
     }
 
     // Drop markers for vehicles that stopped reporting, or the map slowly fills with ghosts.
@@ -167,6 +279,7 @@ export default function LiveMapPage() {
       if (!alive.has(id)) {
         marker.remove();
         markers.current.delete(id);
+        motions.current.delete(id);
       }
     }
   }, [ready, fleet.data]);
@@ -188,10 +301,9 @@ export default function LiveMapPage() {
 
     connection.on('position', (position: LivePosition) => {
       setLastTick(new Date());
-      const marker = markers.current.get(position.vehicleId);
-      // Moving the existing marker rather than re-rendering the layer keeps the motion smooth
-      // and avoids a full React pass on every one of a dozen vehicles every few seconds.
-      if (marker) marker.setLngLat([position.longitude, position.latitude]);
+      // Moving the existing marker rather than re-rendering the layer avoids a full React pass
+      // on every one of a dozen vehicles every few seconds; the glide makes the move smooth.
+      applyFix(position.vehicleId, position);
     });
 
     socket.current = connection;
@@ -217,9 +329,24 @@ export default function LiveMapPage() {
           </span>
         }
         actions={
-          <span className="tnum">
-            {moving.length} moving · {(fleet.data ?? []).length} reporting
-            {lastTick && ` · ${fmt.time(lastTick)}`}
+          <span className="flex items-center gap-3">
+            <span className="tnum">
+              {moving.length} moving · {(fleet.data ?? []).length} reporting
+              {lastTick && ` · ${fmt.time(lastTick)}`}
+            </span>
+            <button
+              onClick={() => setShowTraffic((value) => !value)}
+              aria-pressed={showTraffic}
+              disabled={!traffic.data?.enabled}
+              title={traffic.data?.enabled ? undefined : (traffic.data?.note ?? t('sit.hint.trafficOff'))}
+              className={`border px-1.5 py-0.5 font-mono text-[0.5625rem] uppercase tracking-[0.14em] disabled:cursor-not-allowed disabled:opacity-40 ${
+                showTraffic
+                  ? 'border-[var(--color-signal)] text-[var(--color-signal)]'
+                  : 'border-[var(--color-hairline-bright)] text-[var(--color-ink-dim)] hover:text-[var(--color-ink)]'
+              }`}
+            >
+              {t('map.layer.traffic')}
+            </button>
           </span>
         }
         className="overflow-hidden"
@@ -228,7 +355,8 @@ export default function LiveMapPage() {
       </Panel>
 
       {/* ------------------------------------------------------------ side */}
-      <div className="flex min-h-0 flex-col gap-4">
+      <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+        {camera && <CameraViewer camera={camera} onClose={() => setCamera(null)} />}
         {selected ? (
           <Panel
             title="Vehicle"
@@ -290,6 +418,46 @@ export default function LiveMapPage() {
                   No active shipment on this vehicle.
                 </p>
               )}
+
+              <div className="border-t border-[var(--color-hairline)] pt-3">
+                <div className="mb-1 font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">
+                  {t('map.weatherHere')}
+                </div>
+                <div className="text-[0.75rem] text-[var(--color-ink-dim)]">
+                  {vehicleWeather.data
+                    ? `${vehicleWeather.data.condition} · ${fmt.num(vehicleWeather.data.temperatureC, 0)} °C · ${fmt.num(vehicleWeather.data.windKmh, 0)} km/h · ${fmt.pct(vehicleWeather.data.severity)}`
+                    : vehicleWeather.isError
+                      ? t('sit.unavailable')
+                      : t('sit.loading')}
+                </div>
+              </div>
+
+              <div className="border-t border-[var(--color-hairline)] pt-3">
+                <div className="mb-1 font-mono text-[0.5625rem] uppercase tracking-[0.18em] text-[var(--color-ink-faint)]">
+                  {t('map.nearestCameras')}
+                </div>
+                {nearbyCameras.data && nearbyCameras.data.cameras.length > 0 ? (
+                  <ul className="space-y-1">
+                    {nearbyCameras.data.cameras.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          onClick={() => setCamera(item)}
+                          className="flex w-full items-baseline justify-between gap-2 text-left text-[0.75rem] text-[var(--color-ink-dim)] hover:text-[var(--color-signal)]"
+                        >
+                          <span className="truncate">{item.name}</span>
+                          <span className="tnum shrink-0 font-mono text-[0.625rem]">
+                            {fmt.num(item.distanceKm ?? null, 1)} km
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[0.6875rem] text-[var(--color-ink-faint)]">
+                    {nearbyCameras.isLoading ? t('sit.loading') : t('map.noCameras')}
+                  </p>
+                )}
+              </div>
 
               {selected.isDemoData && (
                 <p className="text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
@@ -389,6 +557,7 @@ function buildVehicleMarker(vehicle: FleetVehicle): HTMLElement {
   rotor.style.cssText =
     'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:transform .4s ease';
   rotor.style.transform = `rotate(${heading}deg)`;
+  rotor.dataset.rotor = 'true';
 
   const svgNs = 'http://www.w3.org/2000/svg';
   const svg = document.createElementNS(svgNs, 'svg');
@@ -415,6 +584,13 @@ function buildVehicleMarker(vehicle: FleetVehicle): HTMLElement {
 
   element.append(frame);
   return element;
+}
+
+/** Turns the chevron to a new heading; a missing heading leaves the last known one in place. */
+function rotateMarker(marker: Marker, heading: number | null): void {
+  if (heading === null || !Number.isFinite(heading)) return;
+  const rotor = marker.getElement().querySelector<HTMLElement>('[data-rotor]');
+  if (rotor) rotor.style.transform = `rotate(${heading}deg)`;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
