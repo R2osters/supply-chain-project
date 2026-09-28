@@ -2,7 +2,6 @@ import { Controller, Get } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import axios from 'axios';
-import Redis from 'ioredis';
 import { Public } from '../../common/decorators';
 import type { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -37,16 +36,15 @@ export class HealthController {
   @Get('ready')
   @ApiOperation({ summary: 'Readiness probe — every dependency reachable' })
   async ready() {
-    const [database, redis, ai, postgis] = await Promise.all([
+    const [database, ai, postgis] = await Promise.all([
       this.checkDatabase(),
-      this.checkRedis(),
       this.checkAiService(),
       this.checkPostgis(),
     ]);
 
-    const dependencies = { database, redis, aiService: ai, postgis };
+    const dependencies = { database, aiService: ai, postgis };
     // The AI service is intentionally not fatal: TRACK stays fully usable without OPTIMIZE.
-    const ready = database.status === 'up' && redis.status === 'up';
+    const ready = database.status === 'up';
 
     return {
       status: ready ? 'ready' : 'degraded',
@@ -82,19 +80,6 @@ export class HealthController {
     return this.timed(async () => {
       const rows = await this.prisma.$queryRaw<Array<{ v: string }>>`SELECT postgis_version() AS v`;
       return rows[0]?.v ?? 'unknown';
-    });
-  }
-
-  private checkRedis(): Promise<DependencyStatus> {
-    return this.timed(async () => {
-      const { host, port } = this.config.get('redis', { infer: true });
-      const client = new Redis({ host, port, lazyConnect: true, maxRetriesPerRequest: 1 });
-      try {
-        await client.connect();
-        await client.ping();
-      } finally {
-        client.disconnect();
-      }
     });
   }
 

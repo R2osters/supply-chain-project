@@ -11,31 +11,43 @@ export interface MailMessage {
 }
 
 /**
- * SMTP transport. Locally this points at MailHog (http://localhost:8025) so password-reset and
- * verification links are genuinely delivered and inspectable — not swallowed by a no-op stub.
- * If SMTP is unreachable the failure is logged and the caller continues: an outage in the mail
- * server must not turn a successful password reset into a 500.
+ * SMTP transport, optional. A desktop install usually has no mail server, so with no SMTP_HOST
+ * mail is disabled and every send reports `sent: false` with a reason instead of trying to
+ * connect. If SMTP is configured but unreachable the failure is logged and the caller continues:
+ * an outage in the mail server must not turn a successful password reset into a 500.
  */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly transporter: nodemailer.Transporter;
+  private readonly transporter: nodemailer.Transporter | null;
   private readonly from: string;
 
   constructor(private readonly config: ConfigService<{ mail: AppConfig['mail'] }, true>) {
     const mail = this.config.get('mail', { infer: true });
     this.from = mail.from;
+    if (!mail.host) {
+      this.transporter = null;
+      this.logger.log('SMTP not configured — outgoing mail is disabled');
+      return;
+    }
     this.transporter = nodemailer.createTransport({
       host: mail.host,
       port: mail.port,
       secure: mail.secure,
       auth: mail.user ? { user: mail.user, pass: mail.password } : undefined,
-      // MailHog presents a self-signed certificate; never relax this in production.
+      // Only verify certificates on TLS connections; a plain local relay has none to check.
       tls: { rejectUnauthorized: mail.secure },
     });
   }
 
+  get isEnabled(): boolean {
+    return this.transporter !== null;
+  }
+
   async send(message: MailMessage): Promise<{ sent: boolean; error?: string }> {
+    if (!this.transporter) {
+      return { sent: false, error: 'Mail is disabled (no SMTP server configured)' };
+    }
     try {
       await this.transporter.sendMail({
         from: this.from,
@@ -54,6 +66,7 @@ export class MailService {
   }
 
   async verifyConnection(): Promise<boolean> {
+    if (!this.transporter) return false;
     try {
       await this.transporter.verify();
       return true;

@@ -24,9 +24,6 @@
     "seed": "ts-node -r tsconfig-paths/register prisma/seed.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.726.0",
-    "@aws-sdk/s3-request-presigner": "^3.726.0",
-    "@nestjs/bullmq": "^11.0.1",
     "@nestjs/common": "^11.0.6",
     "@nestjs/config": "^4.0.0",
     "@nestjs/core": "^11.0.6",
@@ -44,11 +41,9 @@
     "@scip/shared": "*",
     "@types/ws": "^8.18.1",
     "axios": "^1.7.9",
-    "bullmq": "^5.34.10",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "helmet": "^8.0.0",
-    "ioredis": "^5.4.2",
     "nodemailer": "^6.10.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

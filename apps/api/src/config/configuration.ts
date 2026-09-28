@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 /**
  * Single source of truth for runtime configuration.
  * Everything is read through `ConfigService.get('...')` with these typed shapes — no bare
@@ -35,7 +37,6 @@ export interface AppConfig {
   globalPrefix: string;
   corsOrigins: string[];
   database: { url: string };
-  redis: { host: string; port: number; url: string };
   auth: {
     accessSecret: string;
     refreshSecret: string;
@@ -48,16 +49,17 @@ export interface AppConfig {
   };
   throttle: { ttlSeconds: number; limit: number; authLimit: number };
   ai: { url: string; timeoutMs: number; token: string };
-  s3: {
-    endpoint: string;
-    region: string;
-    bucket: string;
-    accessKey: string;
-    secretKey: string;
-    forcePathStyle: boolean;
+  /** Local file storage for proof-of-delivery files. */
+  storage: {
+    dir: string;
+    /** Signs download links. Derived from the access secret unless set explicitly. */
+    signingSecret: string;
+    /** Absolute base of this API, used to build download links the webview can open. */
+    publicBaseUrl: string;
   };
   mail: {
-    host: string;
+    /** Null disables mail: a desktop install often has no SMTP server, and that is fine. */
+    host: string | null;
     port: number;
     secure: boolean;
     user?: string;
@@ -137,17 +139,18 @@ export default (): AppConfig => {
     isProduction,
     port: int(process.env.API_PORT, 3001),
     globalPrefix: process.env.API_GLOBAL_PREFIX ?? 'api/v1',
-    corsOrigins: list(process.env.CORS_ORIGINS, ['http://localhost:3000']),
+    // The desktop webview serves the UI from its own origin, which differs by WebView2 settings.
+    corsOrigins: list(process.env.CORS_ORIGINS, [
+      'http://tauri.localhost',
+      'https://tauri.localhost',
+      'tauri://localhost',
+      'http://localhost:3000',
+    ]),
 
     database: {
       url: process.env.DATABASE_URL ?? '',
     },
 
-    redis: {
-      host: process.env.REDIS_HOST ?? 'localhost',
-      port: int(process.env.REDIS_PORT, 6380),
-      url: process.env.REDIS_URL ?? `redis://${process.env.REDIS_HOST ?? 'localhost'}:${int(process.env.REDIS_PORT, 6380)}`,
-    },
 
     auth: {
       accessSecret: accessSecret || 'dev_only_access_secret_replace_me_0000000000000000',
@@ -172,17 +175,18 @@ export default (): AppConfig => {
       token: process.env.AI_SERVICE_TOKEN ?? 'dev_only_ai_shared_token_replace_me',
     },
 
-    s3: {
-      endpoint: process.env.S3_ENDPOINT ?? 'http://localhost:9000',
-      region: process.env.S3_REGION ?? 'us-east-1',
-      bucket: process.env.S3_BUCKET ?? 'scip-pod',
-      accessKey: process.env.S3_ACCESS_KEY ?? 'scipminio',
-      secretKey: process.env.S3_SECRET_KEY ?? 'scipminio_dev_password',
-      forcePathStyle: bool(process.env.S3_FORCE_PATH_STYLE, true),
+    storage: {
+      dir: process.env.STORAGE_DIR ?? './storage',
+      signingSecret:
+        process.env.STORAGE_SIGNING_SECRET ||
+        createHash('sha256').update(`storage:${accessSecret || 'dev_only'}`).digest('base64url'),
+      publicBaseUrl:
+        process.env.PUBLIC_API_URL ??
+        `http://127.0.0.1:${int(process.env.API_PORT, 3001)}/${process.env.API_GLOBAL_PREFIX ?? 'api/v1'}`,
     },
 
     mail: {
-      host: process.env.SMTP_HOST ?? 'localhost',
+      host: process.env.SMTP_HOST || null,
       port: int(process.env.SMTP_PORT, 1025),
       secure: bool(process.env.SMTP_SECURE, false),
       user: process.env.SMTP_USER || undefined,

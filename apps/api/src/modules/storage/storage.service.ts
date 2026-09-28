@@ -1,65 +1,60 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  CreateBucketCommand,
-  GetObjectCommand,
-  HeadBucketCommand,
-  PutObjectCommand,
-  S3Client,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve, sep } from 'node:path';
 import type { AppConfig } from '../../config/configuration';
+import { isValidStorageKey, signStorageKey } from './signed-url';
+
+export interface StoredFile {
+  body: Buffer;
+  contentType: string;
+}
+
+const CONTENT_TYPES: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+};
 
 /**
- * S3-compatible object storage for proof-of-delivery photos and signatures.
+ * Local file storage for proof-of-delivery photos and signatures.
  *
- * Files never go in the database. A signature PNG is 20–80 KB and a delivery photo can be
- * several megabytes; storing them as bytea would bloat every backup, break replication lag and
- * make a simple `SELECT *` a disaster. The database holds the object key, and the key is what
- * travels through the API.
- *
- * Downloads are served as **presigned URLs with a short expiry**, not proxied through the API.
- * Proxying would put every megabyte through the Node event loop; presigning hands the client a
- * time-limited capability and gets out of the way — while keeping the bucket itself private.
+ * SCIP runs as a single-machine desktop app, so files live in the data directory next to the
+ * database instead of in an object store. The contract is unchanged from the S3 version: files
+ * never go in the database (a photo can be several megabytes and would bloat every backup), the
+ * database holds a key, and readers receive a short-lived signed link rather than the raw path.
  */
 @Injectable()
 export class StorageService implements OnModuleInit {
   private readonly logger = new Logger(StorageService.name);
-  private readonly client: S3Client;
-  private readonly bucket: string;
+  private readonly root: string;
+  private readonly signingSecret: string;
+  private readonly publicBaseUrl: string;
   private available = false;
 
   constructor(config: ConfigService<AppConfig, true>) {
-    const s3 = config.get('s3', { infer: true });
-    this.bucket = s3.bucket;
-    this.client = new S3Client({
-      endpoint: s3.endpoint,
-      region: s3.region,
-      forcePathStyle: s3.forcePathStyle,
-      credentials: { accessKeyId: s3.accessKey, secretAccessKey: s3.secretKey },
-    });
+    const storage = config.get('storage', { infer: true });
+    this.root = resolve(storage.dir);
+    this.signingSecret = storage.signingSecret;
+    this.publicBaseUrl = storage.publicBaseUrl.replace(/\/$/, '');
   }
 
-  /** Creates the bucket on boot if it is missing, so a fresh environment just works. */
+  /** Creates the directory on boot so a fresh install just works. */
   async onModuleInit(): Promise<void> {
     try {
-      await this.client.send(new HeadBucketCommand({ Bucket: this.bucket }));
+      await mkdir(this.root, { recursive: true });
       this.available = true;
-    } catch {
-      try {
-        await this.client.send(new CreateBucketCommand({ Bucket: this.bucket }));
-        this.available = true;
-        this.logger.log(`Created object storage bucket "${this.bucket}"`);
-      } catch (error) {
-        // Object storage being down must not stop the API booting: everything except
-        // proof-of-delivery capture keeps working.
-        this.available = false;
-        this.logger.warn(
-          `Object storage unavailable (${error instanceof Error ? error.message : error}). ` +
-            'Proof-of-delivery uploads will be rejected until it returns.',
-        );
-      }
+    } catch (error) {
+      // A read-only or missing data directory must not stop the API booting: everything except
+      // proof-of-delivery capture keeps working.
+      this.available = false;
+      this.logger.warn(
+        `File storage unavailable at ${this.root} (${error instanceof Error ? error.message : error}). ` +
+          'Proof-of-delivery uploads will be rejected.',
+      );
     }
   }
 
@@ -80,7 +75,7 @@ export class StorageService implements OnModuleInit {
     contentType = 'image/png',
   ): Promise<string> {
     if (!this.available) {
-      throw new Error('Object storage is unavailable; the file was not stored');
+      throw new Error('File storage is unavailable; the file was not stored');
     }
 
     const payload = base64.includes(',') ? base64.split(',')[1] : base64;
@@ -91,35 +86,45 @@ export class StorageService implements OnModuleInit {
       throw new Error('File exceeds the 10 MB limit for proof of delivery');
     }
 
-    const extension = contentType.split('/')[1]?.replace(/[^a-z0-9]/gi, '') || 'bin';
+    const extension = contentType.split('/')[1]?.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'bin';
     const key = `${companyId}/${deliveryId}/${kind}-${randomUUID()}.${extension}`;
+    const path = this.pathFor(key);
 
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: body,
-        ContentType: contentType,
-        // Private by default; access is granted per request through a presigned URL.
-        ACL: undefined,
-      }),
-    );
-
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, body, { flag: 'wx' });
     return key;
+  }
+
+  /** Reads a stored file. Callers must have verified a signed link first. */
+  async read(key: string): Promise<StoredFile> {
+    const body = await readFile(this.pathFor(key));
+    const extension = key.slice(key.lastIndexOf('.') + 1);
+    return { body, contentType: CONTENT_TYPES[extension] ?? 'application/octet-stream' };
   }
 
   /** Time-limited download link. 15 minutes is long enough to click, short enough to not leak. */
   async presignedUrl(key: string, expiresInSeconds = 900): Promise<string> {
-    return getSignedUrl(
-      this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn: expiresInSeconds },
-    );
+    const expires = Math.floor(Date.now() / 1000) + expiresInSeconds;
+    const signature = signStorageKey(this.signingSecret, key, expires);
+    const query = new URLSearchParams({ key, expires: String(expires), signature });
+    return `${this.publicBaseUrl}/files?${query.toString()}`;
   }
 
   async presignMany(keys: string[]): Promise<Array<{ key: string; url: string }>> {
     return Promise.all(
       keys.map(async (key) => ({ key, url: await this.presignedUrl(key) })),
     );
+  }
+
+  /**
+   * Maps a key to a path inside the storage root. The key pattern already excludes `..`, but the
+   * containment check stays: it is the one line that stops a path-traversal bug elsewhere from
+   * turning into reading arbitrary files off the user's disk.
+   */
+  private pathFor(key: string): string {
+    if (!isValidStorageKey(key)) throw new Error('Invalid storage key');
+    const path = resolve(this.root, key);
+    if (!path.startsWith(this.root + sep)) throw new Error('Invalid storage key');
+    return path;
   }
 }
