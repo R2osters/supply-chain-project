@@ -29,6 +29,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { MaritimeModule } from './modules/maritime/maritime.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { CamerasModule } from './modules/cameras/cameras.module';
+import { SatellitesModule } from './modules/satellites/satellites.module';
 import { RadioModule } from './modules/radio/radio.module';
 
 @Module({
@@ -76,6 +77,7 @@ import { RadioModule } from './modules/radio/radio.module';
     DevicesModule,
     CamerasModule,
     RadioModule,
+    SatellitesModule,
     // Last: it depends on almost everything above.
     JobsModule,
   ],
