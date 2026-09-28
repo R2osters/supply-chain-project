@@ -18,6 +18,8 @@ CREATE TYPE "VoyageStatus" AS ENUM ('SCHEDULED', 'LOADING', 'AT_SEA', 'APPROACHI
 -- AlterTable: link a shipment to its ocean leg.
 ALTER TABLE "shipments" ADD COLUMN "voyageId" TEXT;
 
+-- CreateTable
+CREATE TABLE "vessels" (
     "id" TEXT NOT NULL,
     "companyId" TEXT,
     "imoNumber" TEXT,
