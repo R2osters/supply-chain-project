@@ -29,6 +29,7 @@ import { JobsModule } from './modules/jobs/jobs.module';
 import { MaritimeModule } from './modules/maritime/maritime.module';
 import { DevicesModule } from './modules/devices/devices.module';
 import { CamerasModule } from './modules/cameras/cameras.module';
+import { TrafficModule } from './modules/traffic/traffic.module';
 import { GeocodingModule } from './modules/geocoding/geocoding.module';
 import { SatellitesModule } from './modules/satellites/satellites.module';
 import { RadioModule } from './modules/radio/radio.module';
@@ -80,6 +81,7 @@ import { RadioModule } from './modules/radio/radio.module';
     RadioModule,
     SatellitesModule,
     GeocodingModule,
+    TrafficModule,
     // Last: it depends on almost everything above.
     JobsModule,
   ],
