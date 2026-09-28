@@ -16,6 +16,7 @@ import {
   statusTone,
 } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
 
 interface Stats {
   byStatus: Record<string, number>;
@@ -31,19 +32,26 @@ interface AcceptResult {
   recommendation: Recommendation;
 }
 
-const TYPE_BLURB: Record<string, string> = {
-  ORDER_NOW: 'Raises a draft purchase order you can review and confirm.',
-  SPLIT_ORDER: 'Raises one draft purchase order per supplier in the split.',
-  INCREASE_SAFETY_STOCK: 'Writes the new safety stock and reorder point.',
-  REDUCE_INVENTORY: 'Caps the maximum stock level so overstock raises an alert.',
-  CHANGE_SUPPLIER: 'Commercial decision — recorded, not automated.',
-  ADD_SUPPLIER: 'Sourcing decision — recorded, not automated.',
-  EXPEDITE_SHIPMENT: 'Operational decision — recorded, not automated.',
-};
+/**
+ * Which recommendation types actually *do* something when accepted, and which only record a
+ * decision. The distinction matters enough to state on the button: accepting an ORDER_NOW writes a
+ * real purchase order, while accepting a CHANGE_SUPPLIER writes nothing but the decision itself.
+ * Types not listed here fall back to the neutral wording.
+ */
+const BLURB_TYPES = new Set([
+  'ORDER_NOW',
+  'SPLIT_ORDER',
+  'INCREASE_SAFETY_STOCK',
+  'REDUCE_INVENTORY',
+  'CHANGE_SUPPLIER',
+  'ADD_SUPPLIER',
+  'EXPEDITE_SHIPMENT',
+]);
 
 export default function RecommendationsPage() {
   const client = useQueryClient();
   const { can } = useAuth();
+  const { t } = useI18n();
   const [status, setStatus] = useState('OPEN');
   const [note, setNote] = useState<Record<string, string>>({});
   const [result, setResult] = useState<AcceptResult | null>(null);
@@ -94,10 +102,9 @@ export default function RecommendationsPage() {
       {/* ------------------------------------------------------------ head */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold">What to do next</h1>
+          <h1 className="text-lg font-semibold">{t('rec.title')}</h1>
           <p className="mt-0.5 max-w-2xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-            Every recommendation carries the reasoning that produced it and the assumptions behind
-            it. Accepting one performs the action — it does not just tick a box.
+            {t('rec.intro')}
           </p>
         </div>
 
@@ -107,7 +114,7 @@ export default function RecommendationsPage() {
             onClick={() => generate.mutate()}
             disabled={generate.isPending}
           >
-            {generate.isPending ? 'analysing…' : 'regenerate advice'}
+            {generate.isPending ? t('rec.analysing') : t('rec.regenerate')}
           </button>
         )}
       </div>
@@ -116,9 +123,10 @@ export default function RecommendationsPage() {
 
       {generate.data && (
         <div className="border border-[var(--color-hairline)] bg-[var(--color-panel)] px-3 py-2 text-[0.8125rem] text-[var(--color-ink-dim)]">
-          Analysis complete — {generate.data.recommendations.length} recommendation(s),{' '}
-          {generate.data.newRecommendations} new. Existing open advice for the same subject was
-          superseded rather than duplicated.
+          {t('rec.generated', {
+            total: generate.data.recommendations.length,
+            added: generate.data.newRecommendations,
+          })}
         </div>
       )}
 
@@ -127,7 +135,7 @@ export default function RecommendationsPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="font-mono text-[0.625rem] uppercase tracking-[0.14em] text-[var(--color-ok)]">
-                Executed
+                {t('rec.executed')}
               </div>
               <p className="mt-1 text-[0.8125rem]">{result.message}</p>
               {result.executed?.type === 'PURCHASE_ORDER' && (
@@ -135,7 +143,7 @@ export default function RecommendationsPage() {
                   href="/purchase-orders"
                   className="mt-1.5 inline-block font-mono text-[0.6875rem] uppercase tracking-[0.12em] text-[var(--color-signal)] hover:underline"
                 >
-                  open purchase orders →
+                  {t('rec.openPurchaseOrders')}
                 </Link>
               )}
             </div>
@@ -143,7 +151,7 @@ export default function RecommendationsPage() {
               onClick={() => setResult(null)}
               className="font-mono text-[0.625rem] uppercase text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
             >
-              dismiss
+              {t('rec.dismiss')}
             </button>
           </div>
         </div>
@@ -152,15 +160,15 @@ export default function RecommendationsPage() {
       {/* ----------------------------------------------------------- stats */}
       {stats.data && (
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <StatTile label="Open" value={fmt.int(stats.data.open)} tone="signal" />
-          <StatTile label="Decided" value={fmt.int(stats.data.decided)} />
+          <StatTile label={t('rec.open')} value={fmt.int(stats.data.open)} tone="signal" />
+          <StatTile label={t('rec.decided')} value={fmt.int(stats.data.decided)} />
           <StatTile
-            label="Acted on"
+            label={t('rec.actedOn')}
             value={stats.data.acceptanceRate === null ? '—' : fmt.pct(stats.data.acceptanceRate)}
             tone={stats.data.acceptanceRate && stats.data.acceptanceRate > 0.5 ? 'ok' : 'neutral'}
           />
           <StatTile
-            label="Executed"
+            label={t('rec.executed')}
             value={fmt.int(stats.data.byStatus.EXECUTED ?? 0)}
             tone="ok"
           />
@@ -169,7 +177,7 @@ export default function RecommendationsPage() {
 
       {/* ------------------------------------------------------------ list */}
       <Panel
-        title="Recommendations"
+        title={t('rec.list')}
         actions={
           <select
             className="field !py-1 !text-[0.6875rem]"
@@ -236,7 +244,7 @@ export default function RecommendationsPage() {
                       )}
                       {recommendation.expiresAt && recommendation.status === 'OPEN' && (
                         <div className="font-mono text-[0.5625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)]">
-                          expires {fmt.relative(recommendation.expiresAt)}
+                          {t('rec.expires', { when: fmt.relative(recommendation.expiresAt) })}
                         </div>
                       )}
                     </div>
@@ -252,7 +260,7 @@ export default function RecommendationsPage() {
                     <div className="space-y-3">
                       {lines && (
                         <div className="border border-[var(--color-hairline)]">
-                          <div className="panel-header !border-b">Proposed split</div>
+                          <div className="panel-header !border-b">{t('rec.proposedSplit')}</div>
                           <table className="grid-table">
                             <tbody>
                               {lines.map((line: any) => (
@@ -275,7 +283,7 @@ export default function RecommendationsPage() {
                         <div className="space-y-2">
                           <input
                             className="field"
-                            placeholder="note (optional)"
+                            placeholder={t('rec.notePlaceholder')}
                             value={note[recommendation.id] ?? ''}
                             onChange={(event) =>
                               setNote((current) => ({
@@ -290,18 +298,20 @@ export default function RecommendationsPage() {
                               onClick={() => accept.mutate(recommendation.id)}
                               disabled={accept.isPending}
                             >
-                              {accept.isPending ? 'executing…' : 'accept & execute'}
+                              {accept.isPending ? t('rec.executing') : t('rec.accept')}
                             </button>
                             <button
                               className="btn btn-danger"
                               onClick={() => reject.mutate(recommendation.id)}
                               disabled={reject.isPending}
                             >
-                              dismiss
+                              {t('rec.dismiss')}
                             </button>
                           </div>
                           <p className="text-[0.625rem] leading-relaxed text-[var(--color-ink-faint)]">
-                            {TYPE_BLURB[recommendation.type] ?? 'Records the decision.'}
+                            {BLURB_TYPES.has(recommendation.type)
+                              ? t(`rec.blurb.${recommendation.type}` as TranslationKey)
+                              : t('rec.recordsDecision')}
                           </p>
                         </div>
                       )}
@@ -324,12 +334,12 @@ export default function RecommendationsPage() {
           </ul>
         ) : (
           <Empty
-            title={status === 'OPEN' ? 'Nothing needs attention' : `No ${status.toLowerCase()} advice`}
-            hint={
+            title={
               status === 'OPEN'
-                ? 'Either the supply chain is healthy, or there is not enough history yet. Regenerate to check.'
-                : undefined
+                ? t('rec.nothingNeeded')
+                : t('rec.noneOfStatus', { status: status.toLowerCase() })
             }
+            hint={status === 'OPEN' ? t('rec.nothingNeededHint') : undefined}
           />
         )}
       </Panel>

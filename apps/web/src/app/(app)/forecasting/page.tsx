@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { api, type Explanation, type Paginated } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Explain, Loading, Panel, fmt } from '@/components/ui';
+import { useI18n } from '@/lib/i18n';
 
 interface ProductRow {
   id: string;
@@ -51,6 +52,7 @@ interface ForecastResponse {
 const HORIZONS = [7, 30, 90, 180] as const;
 
 export default function ForecastingPage() {
+  const { t } = useI18n();
   const [productId, setProductId] = useState('');
   const [horizon, setHorizon] = useState<number>(30);
 
@@ -85,26 +87,24 @@ export default function ForecastingPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Demand forecasting</h1>
+        <h1 className="text-lg font-semibold">{t('fc.title')}</h1>
         <p className="mt-0.5 max-w-3xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-          Six models compete on walk-forward validation and the winner is refit on the full
-          history. Selection is by WAPE, not MAPE — MAPE divides by the actual, so a single
-          zero-demand day makes it infinite, and zero-demand days are the norm for slow movers.
+          {t('fc.intro')}
         </p>
       </div>
 
-      <Panel title="Run">
+      <Panel title={t('fc.run')}>
         <div className="flex flex-wrap items-end gap-3 p-3.5">
           <label className="min-w-[240px] flex-1">
             <span className="mb-1 block font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-              Product
+              {t('fc.product')}
             </span>
             <select
               className="field"
               value={productId}
               onChange={(event) => setProductId(event.target.value)}
             >
-              <option value="">select a product…</option>
+              <option value="">{t('fc.selectProduct')}</option>
               {products.data?.data.map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.sku} — {product.name}
@@ -115,7 +115,7 @@ export default function ForecastingPage() {
 
           <div>
             <span className="mb-1 block font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-              Horizon
+              {t('fc.horizon')}
             </span>
             <div className="flex gap-1">
               {HORIZONS.map((option) => (
@@ -135,7 +135,7 @@ export default function ForecastingPage() {
             disabled={!productId || forecast.isPending}
             onClick={() => forecast.mutate({ productId, horizon })}
           >
-            {forecast.isPending ? 'comparing models…' : 'forecast'}
+            {forecast.isPending ? t('fc.comparing') : t('fc.forecast')}
           </button>
         </div>
       </Panel>
@@ -143,7 +143,7 @@ export default function ForecastingPage() {
       {forecast.isError && <ErrorNote error={forecast.error} />}
       {forecast.isPending && (
         <Panel loading>
-          <Loading label="Walk-forward validation across six models" />
+          <Loading label={t('fc.validating')} />
         </Panel>
       )}
 
@@ -151,7 +151,7 @@ export default function ForecastingPage() {
         <>
           <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
             <Panel
-              title={`${data.sku} · ${data.horizonDays}-day forecast`}
+              title={t('fc.chartTitle', { sku: data.sku, days: data.horizonDays })}
               meta={<Chip tone="signal">{data.selectedModel.replace(/_/g, ' ')}</Chip>}
             >
               <div className="h-[300px] p-2.5">
@@ -188,7 +188,7 @@ export default function ForecastingPage() {
                       stroke="none"
                       fill="var(--color-signal)"
                       fillOpacity={0.13}
-                      name="80% interval"
+                      name={t('fc.interval')}
                     />
                     <Line
                       type="monotone"
@@ -196,7 +196,7 @@ export default function ForecastingPage() {
                       stroke="var(--color-signal)"
                       strokeWidth={1.8}
                       dot={false}
-                      name="Forecast"
+                      name={t('fc.series')}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -211,11 +211,11 @@ export default function ForecastingPage() {
             </Panel>
 
             <div className="space-y-4">
-              <Panel title="Model comparison">
+              <Panel title={t('fc.comparison')}>
                 <table className="grid-table">
                   <thead>
                     <tr>
-                      <th>Model</th>
+                      <th>{t('fc.model')}</th>
                       <th className="text-right">WAPE</th>
                       <th className="text-right">MAE</th>
                       <th className="text-right">RMSE</th>
@@ -250,30 +250,34 @@ export default function ForecastingPage() {
                 </table>
                 {skipped.length > 0 && (
                   <div className="border-t border-[var(--color-hairline)] p-3 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
-                    Not evaluated:{' '}
-                    {skipped
-                      .map(
-                        (evaluation) =>
-                          `${evaluation.model.toLowerCase()} (${evaluation.skippedReason})`,
-                      )
-                      .join('; ')}
-                    .
+                    {t('fc.notEvaluated', {
+                      list: skipped
+                        .map(
+                          (evaluation) =>
+                            `${evaluation.model.toLowerCase()} (${evaluation.skippedReason})`,
+                        )
+                        .join('; '),
+                    })}
                   </div>
                 )}
               </Panel>
 
               <Panel
-                title="Data quality"
+                title={t('fc.dataQuality')}
                 meta={
                   <Chip tone={data.dataQuality.passed ? 'ok' : 'alert'}>
-                    {data.dataQuality.passed ? 'passed' : 'blocked'}
+                    {data.dataQuality.passed ? t('fc.passed') : t('fc.blocked')}
                   </Chip>
                 }
               >
                 <div className="p-3.5">
                   <div className="tnum font-mono text-[0.75rem] text-[var(--color-ink-dim)]">
-                    {fmt.int(data.dataQuality.rowsUsed)} of {fmt.int(data.dataQuality.rowsIn)} rows used
-                    {data.residualStd !== null && ` · residual σ ${fmt.num(data.residualStd, 1)}`}
+                    {t('fc.rowsUsed', {
+                      used: fmt.int(data.dataQuality.rowsUsed),
+                      total: fmt.int(data.dataQuality.rowsIn),
+                    })}
+                    {data.residualStd !== null &&
+                      ` · ${t('fc.residual', { value: fmt.num(data.residualStd, 1) })}`}
                   </div>
                   {data.dataQuality.issues.length > 0 ? (
                     <ul className="mt-2.5 space-y-1.5">
@@ -298,7 +302,7 @@ export default function ForecastingPage() {
                     </ul>
                   ) : (
                     <p className="mt-2 text-[0.75rem] text-[var(--color-ink-faint)]">
-                      No issue found in the demand history.
+                      {t('fc.noIssue')}
                     </p>
                   )}
                 </div>
@@ -311,8 +315,8 @@ export default function ForecastingPage() {
       {!data && !forecast.isPending && (
         <Panel>
           <Empty
-            title="No forecast yet"
-            hint="Pick a product and a horizon. Products need demand history — the seeded demo has two years of it."
+            title={t('fc.none')}
+            hint={t('fc.noneHint')}
           />
         </Panel>
       )}

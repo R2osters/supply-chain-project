@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type Explanation, type Paginated } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Explain, Loading, Panel, fmt } from '@/components/ui';
+import { useI18n } from '@/lib/i18n';
 
 interface WarehouseRow {
   id: string;
@@ -54,6 +55,7 @@ interface RoutingResponse {
 }
 
 export default function RoutingPage() {
+  const { t } = useI18n();
   const [warehouseId, setWarehouseId] = useState('');
   const [customerIds, setCustomerIds] = useState<string[]>([]);
   const [vehicleIds, setVehicleIds] = useState<string[]>([]);
@@ -93,20 +95,18 @@ export default function RoutingPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Route optimisation</h1>
+        <h1 className="text-lg font-semibold">{t('rt.title')}</h1>
         <p className="mt-0.5 max-w-3xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-          Capacitated vehicle routing with delivery windows. The problem is NP-hard, so the solver
-          returns the best plan it found inside its time budget — good, not provably optimal, which
-          is why the status reads FEASIBLE rather than OPTIMAL.
+          {t('rt.intro')}
         </p>
       </div>
 
-      <Panel title="Inputs">
+      <Panel title={t('rt.inputs')}>
         <div className="grid gap-4 p-3.5 lg:grid-cols-3">
           <div>
-            <Legend>Depot</Legend>
+            <Legend>{t('rt.depot')}</Legend>
             <select className="field" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)}>
-              <option value="">select a warehouse…</option>
+              <option value="">{t('rt.selectWarehouse')}</option>
               {warehouses.data?.data.map((warehouse) => (
                 <option key={warehouse.id} value={warehouse.id}>
                   {warehouse.code} — {warehouse.name}
@@ -120,20 +120,22 @@ export default function RoutingPage() {
                 disabled={!warehouseId || customerIds.length === 0 || optimise.isPending}
                 onClick={() => optimise.mutate()}
               >
-                {optimise.isPending ? 'searching…' : 'plan routes'}
+                {optimise.isPending ? t('rt.searching') : t('rt.plan')}
               </button>
               <button className="btn" onClick={() => setCustomerIds(routable.map((c) => c.id))}>
-                all stops
+                {t('rt.allStops')}
               </button>
             </div>
           </div>
 
           <div>
             <Legend>
-              Stops · {customerIds.length} selected
+              {t('rt.stopsSelected', { n: customerIds.length })}
               {customers.data && routable.length < customers.data.data.length && (
                 <span className="ml-1 normal-case tracking-normal text-[var(--color-warn)]">
-                  ({customers.data.data.length - routable.length} without coordinates hidden)
+                  {t('rt.hiddenNoCoords', {
+                    n: customers.data.data.length - routable.length,
+                  })}
                 </span>
               )}
             </Legend>
@@ -159,7 +161,13 @@ export default function RoutingPage() {
           </div>
 
           <div>
-            <Legend>Vehicles · {vehicleIds.length ? `${vehicleIds.length} selected` : 'all available'}</Legend>
+            <Legend>
+              {t('rt.vehicles', {
+                what: vehicleIds.length
+                  ? t('rt.vehiclesSelected', { n: vehicleIds.length })
+                  : t('rt.allAvailable'),
+              })}
+            </Legend>
             <div className="max-h-56 overflow-y-auto border border-[var(--color-hairline)]">
               {vehicles.data?.data.map((vehicle) => (
                 <label
@@ -186,28 +194,31 @@ export default function RoutingPage() {
       {optimise.isError && <ErrorNote error={optimise.error} />}
       {optimise.isPending && (
         <Panel loading>
-          <Loading label="Guided local search" />
+          <Loading label={t('rt.guidedSearch')} />
         </Panel>
       )}
 
       {data && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <Tile label="Status" value={data.status} />
-            <Tile label="Routes" value={String(data.routes.length)} />
-            <Tile label="Distance" value={`${fmt.int(data.totalDistanceKm)} km`} />
-            <Tile label="Duration" value={`${fmt.num(data.totalDurationMinutes / 60, 1)} h`} />
-            <Tile label="Cost" value={fmt.money(data.totalCost)} tone="signal" />
+            <Tile label={t('rt.status')} value={data.status} />
+            <Tile label={t('rt.routes')} value={String(data.routes.length)} />
+            <Tile label={t('rt.distance')} value={`${fmt.int(data.totalDistanceKm)} km`} />
+            <Tile
+              label={t('rt.duration')}
+              value={`${fmt.num(data.totalDurationMinutes / 60, 1)} h`}
+            />
+            <Tile label={t('rt.cost')} value={fmt.money(data.totalCost)} tone="signal" />
           </div>
 
           {data.unassignedStops.length > 0 && (
             <div className="border border-[var(--color-warn-dim)] bg-[color-mix(in_srgb,var(--color-warn)_7%,transparent)] px-3.5 py-2.5 text-[0.8125rem] text-[var(--color-warn)]">
-              {data.unassignedStops.length} stop(s) could not be served with the selected fleet.
+              {t('rt.unassigned', { n: data.unassignedStops.length })}
             </div>
           )}
 
           <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-            <Panel title="Plans">
+            <Panel title={t('rt.plans')}>
               <ul className="divide-y divide-[var(--color-hairline)]">
                 {data.routes.map((route) => (
                   <li key={route.vehicleId} className="p-3.5">
@@ -250,7 +261,7 @@ export default function RoutingPage() {
             </Panel>
 
             <div className="space-y-4">
-              <Panel title="Reasoning">
+              <Panel title={t('rt.reasoning')}>
                 <div className="p-3.5">
                   <Explain
                     summary={data.explanation.summary}
@@ -259,7 +270,7 @@ export default function RoutingPage() {
                   />
                 </div>
               </Panel>
-              <Panel title="Constraints">
+              <Panel title={t('rt.constraints')}>
                 <ul className="space-y-1.5 p-3.5">
                   {data.constraints.map((constraint, index) => (
                     <li

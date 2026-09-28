@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type Explanation, type Paginated } from '@/lib/api';
 import { Chip, Empty, ErrorNote, Explain, Loading, Meter, Panel, fmt } from '@/components/ui';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
 
 interface ProductRow {
   id: string;
@@ -37,16 +38,18 @@ interface AllocationResponse {
   explanation: Explanation;
 }
 
-const COST_LABELS: Record<string, string> = {
-  purchase: 'Purchase',
-  transport: 'Transport',
-  holding: 'Holding',
-  stockoutPenalty: 'Stockout penalty',
-  delayPenalty: 'Delay penalty',
-  riskPenalty: 'Risk penalty',
-};
+/** Cost components the solver reports. Anything outside this set falls back to its raw key. */
+const COST_KEYS = new Set([
+  'purchase',
+  'transport',
+  'holding',
+  'stockoutPenalty',
+  'delayPenalty',
+  'riskPenalty',
+]);
 
 export default function AllocationPage() {
+  const { t } = useI18n();
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState(20000);
   const [budget, setBudget] = useState<string>('');
@@ -77,21 +80,18 @@ export default function AllocationPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-lg font-semibold">Multi-supplier allocation</h1>
+        <h1 className="text-lg font-semibold">{t('alloc.title')}</h1>
         <p className="mt-0.5 max-w-3xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-          A mixed-integer program over the live supplier price lists. Minimum order quantity is a
-          real disjunction — order at least the MOQ or nothing at all — which is why this is a
-          solver and not a weighted score. Unmet demand is priced rather than forbidden, so an
-          under-supplied market yields a plan with a visible shortfall instead of “infeasible”.
+          {t('alloc.intro')}
         </p>
       </div>
 
-      <Panel title="Question">
+      <Panel title={t('alloc.question')}>
         <div className="grid gap-3 p-3.5 md:grid-cols-5">
           <label className="md:col-span-2">
-            <Legend>Product</Legend>
+            <Legend>{t('alloc.product')}</Legend>
             <select className="field" value={productId} onChange={(e) => setProductId(e.target.value)}>
-              <option value="">select…</option>
+              <option value="">{t('alloc.select')}</option>
               {products.data?.data.map((product) => (
                 <option key={product.id} value={product.id}>
                   {product.sku} — {product.name}
@@ -101,7 +101,7 @@ export default function AllocationPage() {
           </label>
 
           <label>
-            <Legend>Quantity</Legend>
+            <Legend>{t('alloc.quantity')}</Legend>
             <input
               className="field"
               type="number"
@@ -112,19 +112,19 @@ export default function AllocationPage() {
           </label>
 
           <label>
-            <Legend>Needed within (days)</Legend>
+            <Legend>{t('alloc.withinDays')}</Legend>
             <input
               className="field"
               type="number"
               min={0}
               value={deadline}
               onChange={(e) => setDeadline(e.target.value)}
-              placeholder="no deadline"
+              placeholder={t('alloc.noDeadline')}
             />
           </label>
 
           <label>
-            <Legend>Max share per supplier</Legend>
+            <Legend>{t('alloc.maxShare')}</Legend>
             <input
               className="field"
               type="number"
@@ -133,19 +133,19 @@ export default function AllocationPage() {
               max="1"
               value={maxShare}
               onChange={(e) => setMaxShare(e.target.value)}
-              placeholder="unconstrained"
+              placeholder={t('alloc.unconstrained')}
             />
           </label>
 
           <label className="md:col-span-2">
-            <Legend>Budget cap (optional)</Legend>
+            <Legend>{t('alloc.budget')}</Legend>
             <input
               className="field"
               type="number"
               min={0}
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              placeholder="no cap"
+              placeholder={t('alloc.noCap')}
             />
           </label>
 
@@ -155,7 +155,7 @@ export default function AllocationPage() {
               disabled={!productId || quantity <= 0 || allocate.isPending}
               onClick={() => allocate.mutate()}
             >
-              {allocate.isPending ? 'solving…' : 'solve'}
+              {allocate.isPending ? t('alloc.solving') : t('alloc.solve')}
             </button>
           </div>
         </div>
@@ -164,35 +164,37 @@ export default function AllocationPage() {
       {allocate.isError && <ErrorNote error={allocate.error} />}
       {allocate.isPending && (
         <Panel loading>
-          <Loading label="Branch and bound" />
+          <Loading label={t('alloc.branchAndBound')} />
         </Panel>
       )}
 
       {data && (
         <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
           <Panel
-            title="Plan"
+            title={t('alloc.plan')}
             meta={
               <Chip tone={data.status === 'OPTIMAL' ? 'ok' : data.status === 'FEASIBLE' ? 'warn' : 'alert'}>
                 {data.status}
               </Chip>
             }
-            actions={<span className="tnum">solved in {data.solverWallTimeMs} ms</span>}
+            actions={
+              <span className="tnum">{t('alloc.solvedIn', { ms: data.solverWallTimeMs })}</span>
+            }
           >
             {data.lines.length === 0 ? (
-              <Empty title="No feasible allocation" hint={data.explanation.summary} />
+              <Empty title={t('alloc.infeasible')} hint={data.explanation.summary} />
             ) : (
               <>
                 <table className="grid-table">
                   <thead>
                     <tr>
-                      <th>Supplier</th>
-                      <th className="text-right">Quantity</th>
-                      <th className="w-28">Share</th>
-                      <th className="text-right">Unit price</th>
-                      <th className="text-right">Lead time</th>
-                      <th className="text-right">Reliability</th>
-                      <th className="text-right">Cost</th>
+                      <th>{t('alloc.supplier')}</th>
+                      <th className="text-right">{t('alloc.quantity')}</th>
+                      <th className="w-28">{t('alloc.share')}</th>
+                      <th className="text-right">{t('alloc.unitPrice')}</th>
+                      <th className="text-right">{t('alloc.leadTime')}</th>
+                      <th className="text-right">{t('alloc.reliability')}</th>
+                      <th className="text-right">{t('alloc.cost')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -229,7 +231,7 @@ export default function AllocationPage() {
 
                 {data.unmetDemand > 0 && (
                   <div className="border-t border-[var(--color-alert-dim)] bg-[color-mix(in_srgb,var(--color-alert)_7%,transparent)] px-3.5 py-2.5 text-[0.8125rem] text-[var(--color-alert)]">
-                    {fmt.int(data.unmetDemand)} units could not be covered by any supplier’s capacity.
+                    {t('alloc.unmet', { n: fmt.int(data.unmetDemand) })}
                   </div>
                 )}
 
@@ -245,35 +247,35 @@ export default function AllocationPage() {
           </Panel>
 
           <div className="space-y-4">
-            <Panel title="Outcome">
+            <Panel title={t('alloc.outcome')}>
               <div className="grid grid-cols-2 gap-px bg-[var(--color-hairline)]">
                 <Metric
-                  label="Objective"
+                  label={t('alloc.objective')}
                   value={fmt.int(data.objectiveValue)}
-                  hint="total modelled cost"
+                  hint={t('alloc.objectiveHint')}
                 />
                 <Metric
-                  label="Expected lead time"
+                  label={t('alloc.expectedLeadTime')}
                   value={`${fmt.num(data.expectedDeliveryDays, 1)} d`}
-                  hint="quantity-weighted"
+                  hint={t('alloc.expectedLeadTimeHint')}
                 />
                 <Metric
-                  label="Shortfall risk"
+                  label={t('alloc.shortfallRisk')}
                   value={fmt.pct(data.stockoutRisk, 1)}
-                  hint="given supplier reliability"
+                  hint={t('alloc.shortfallRiskHint')}
                   tone={data.stockoutRisk > 0.15 ? 'alert' : data.stockoutRisk > 0.05 ? 'warn' : 'ok'}
                 />
                 <Metric
-                  label="Concentration"
+                  label={t('alloc.concentration')}
                   value={fmt.num(data.concentrationIndex, 2)}
-                  hint="1.0 = single source"
+                  hint={t('alloc.concentrationHint')}
                   tone={data.concentrationIndex > 0.6 ? 'warn' : 'ok'}
                 />
               </div>
             </Panel>
 
             {data.costBreakdown && (
-              <Panel title="Cost breakdown">
+              <Panel title={t('alloc.costBreakdown')}>
                 <ul className="p-3.5">
                   {Object.entries(data.costBreakdown)
                     .filter(([, value]) => value > 0)
@@ -284,7 +286,9 @@ export default function AllocationPage() {
                         <li key={key} className="mb-2.5 last:mb-0">
                           <div className="flex items-baseline justify-between gap-3">
                             <span className="text-[0.75rem] text-[var(--color-ink-dim)]">
-                              {COST_LABELS[key] ?? key}
+                              {COST_KEYS.has(key)
+                                ? t(`alloc.cost.${key}` as TranslationKey)
+                                : key}
                             </span>
                             <span className="tnum font-mono text-[0.75rem]">{fmt.int(value)}</span>
                           </div>
@@ -301,7 +305,7 @@ export default function AllocationPage() {
               </Panel>
             )}
 
-            <Panel title="Constraints applied">
+            <Panel title={t('alloc.constraints')}>
               <ul className="space-y-1.5 p-3.5">
                 {data.constraints.map((constraint, index) => (
                   <li
@@ -321,8 +325,8 @@ export default function AllocationPage() {
       {!data && !allocate.isPending && (
         <Panel>
           <Empty
-            title="No plan yet"
-            hint="Pick a product and a quantity. Only suppliers with a current price list for that product are considered."
+            title={t('alloc.noPlan')}
+            hint={t('alloc.noPlanHint')}
           />
         </Panel>
       )}
