@@ -91,6 +91,23 @@ export interface AppConfig {
      */
     marineTrafficEmbedEnabled: boolean;
   };
+  /**
+   * Public situational feeds: hazards, cameras, radio, satellites, traffic, geocoding.
+   * Everything here works without a key except FIRMS fires and TomTom traffic, which switch on
+   * when their key is set and are reported as unavailable otherwise.
+   */
+  intel: {
+    /** NASA FIRMS MAP_KEY. Free, but without it the fires layer is empty. */
+    firmsMapKey: string | null;
+    /** TomTom key for live traffic-flow tiles. Free tier: 50 000 tiles/day. */
+    tomtomApiKey: string | null;
+    /** Our own ceiling on TomTom tiles per UTC day, below the provider's so a runaway map stops first. */
+    tomtomDailyTileBudget: number;
+    /** Camera catalogues to load, by id (tfl, fintraffic, ontario511, drivebc, nsw, calgary). */
+    cameraPacks: string[];
+    /** Radius around an asset inside which a hazard counts as exposure, km. */
+    hazardExposureRadiusKm: number;
+  };
 }
 
 export default (): AppConfig => {
@@ -208,6 +225,22 @@ export default (): AppConfig => {
       // 18 knots covers 1.5 nautical miles in five minutes — nothing a planner needs sooner.
       marineTrafficPollSeconds: int(process.env.MARINETRAFFIC_POLL_SECONDS, 300),
       marineTrafficEmbedEnabled: bool(process.env.MARINETRAFFIC_EMBED_ENABLED, false),
+    },
+
+    intel: {
+      firmsMapKey: process.env.FIRMS_MAP_KEY || null,
+      tomtomApiKey: process.env.TOMTOM_API_KEY || null,
+      // 6 000 a day keeps a 31-day month under TomTom's free allowance with room to spare.
+      tomtomDailyTileBudget: int(process.env.TOMTOM_DAILY_TILE_BUDGET, 6000),
+      cameraPacks: list(process.env.CAMERA_PACKS, [
+        'tfl',
+        'fintraffic',
+        'ontario511',
+        'drivebc',
+        'nsw',
+        'calgary',
+      ]),
+      hazardExposureRadiusKm: float(process.env.HAZARD_EXPOSURE_RADIUS_KM, 150),
     },
   };
 };
