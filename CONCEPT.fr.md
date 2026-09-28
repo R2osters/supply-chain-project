@@ -324,9 +324,9 @@ de la réponse.
 corridors : 45 minutes d'arrêt est normal à un poste-frontière et anormal sur une nationale. Ces
 seuils sont déjà des paramètres de requête.
 
-**Météo et trafic** — remplacez les stubs. `OPENWEATHER_API_KEY` et un fournisseur de trafic
-alimentent directement le moteur ETA et le scorecard de retard, qui utilisent aujourd'hui des
-valeurs neutres et le disent.
+**Trafic** — remplacez le stub. La météo est en direct (Open-Meteo alimente la prédiction de retard,
+voir `docs/INTEL.md`) ; un fournisseur de trafic derrière l'interface du moteur ETA ferait de même
+pour la congestion.
 
 **Distances routières** — `OSRM_URL` remplace l'approximation orthodromie × 1,25 par de vraies
 distances routières. C'est la seule approximation du système qui puisse se tromper de plusieurs

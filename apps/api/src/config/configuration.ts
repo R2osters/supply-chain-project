@@ -65,7 +65,6 @@ export interface AppConfig {
     from: string;
   };
   providers: {
-    openWeatherApiKey: string | null;
     osrmUrl: string | null;
     roadWindingFactor: number;
   };
@@ -192,7 +191,6 @@ export default (): AppConfig => {
     },
 
     providers: {
-      openWeatherApiKey: process.env.OPENWEATHER_API_KEY || null,
       osrmUrl: process.env.OSRM_URL || null,
       roadWindingFactor: float(process.env.ROAD_WINDING_FACTOR, 1.25),
     },

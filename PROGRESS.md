@@ -79,11 +79,25 @@ Each was caught by executing the system, not by reading it.
 10. **XSS vector on the live map** — a tenant-controlled warehouse code was interpolated into
     `innerHTML`. Markers are now built with DOM calls.
 
+## Situational feeds (2026-09-28)
+
+Modules extracted and adapted from God's Eye View (MIT): hazards, cameras, radio, satellites,
+geocoding, traffic, plus the `/situation` screen and smooth motion on the live map. Details and
+licences in `docs/INTEL.md`.
+
+| | Evidence |
+|---|---|
+| Tests | **271 API unit** (26 suites, up from 55) · **56 AI service** · **17 web** (vitest, new) — all passing; `tsc` clean for API and web; `next build` succeeds with `/situation` |
+| Live sources answer | NOAA NHC: 4 systems with forecast track and cone · USGS: 63 quakes · Open-Meteo at Accra: severity 0.25 (gusts 49 km/h) · GDELT: 10 articles · CelesTrak gps-ops: 32 sets, 12 visible from Accra, 6 above 30° · Radio Browser: nearest station 2.6 km from Accra |
+| Cameras | catalogue plus one real frame per pack: TfL 812 · Fintraffic 2 260 · DriveBC 1 046 · NSW 240 · Calgary 217. Ontario 511 now needs a key, so it is off by default |
+| Wiring | the six modules compile in a Nest testing container with Prisma stubbed |
+| **Not verified** | the running stack and the screens in a browser: Docker could not start on this machine (WSL service disabled, `Wsl/0x80070422`). The new `NATURAL_HAZARD` migration has not been applied to a database. TomTom was not called live (no key) |
+
 ## Stubbed, deliberately
 
 Each needs a paid third-party account this build has no credentials for. Each sits behind an
 interface, returns clearly-labelled deterministic data, and swaps in via one environment variable:
-weather (`OPENWEATHER_API_KEY`), road distance (`OSRM_URL`), traffic, SMS, and GPS hardware — where
+road distance (`OSRM_URL`), traffic congestion in the ETA engine, SMS, and GPS hardware — where
 the telemetry simulator stands in until a real device POSTs to `/telemetry/gps`.
 
 Every seeded row carries `isDemoData`; every simulated fix carries `isSimulated`; the UI badges

@@ -180,11 +180,15 @@ by setting one environment variable:
 
 | Stub | Swap in with |
 |---|---|
-| Weather | `OPENWEATHER_API_KEY` |
 | Road distance (great-circle × winding factor) | `OSRM_URL` |
-| Traffic (time-of-day model) | any provider behind the same interface |
+| Traffic congestion (time-of-day model in the ETA engine) | live tiles on the map with `TOMTOM_API_KEY`; the ETA engine still uses the model |
 | SMS (logged, never silently dropped) | any gateway |
 | GPS hardware → the telemetry simulator | POST real fixes to `/telemetry/gps` |
+
+Live without any key: weather (Open-Meteo, now feeding delay prediction), cyclones (NOAA NHC),
+earthquakes (USGS), local news (GDELT), public traffic cameras, radio stations and satellites.
+Active fires need a free `FIRMS_MAP_KEY`. See [docs/INTEL.md](docs/INTEL.md) for sources,
+licences and the Situation screen.
 
 **Nothing synthetic is presented as real.** Every seeded row carries `isDemoData`, every simulated
 fix carries `isSimulated`, the UI badges them, and analytics report how much of a figure is
