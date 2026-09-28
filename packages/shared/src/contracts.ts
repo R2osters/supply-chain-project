@@ -483,6 +483,17 @@ export interface RiskAnalyzeRequest {
     valueAtRisk: number;
     status: string;
   }>;
+  /** Live natural-hazard exposures of the company's assets. Absent when no feed was reachable. */
+  hazards?: Array<{
+    hazardId: string;
+    kind: 'CYCLONE' | 'EARTHQUAKE' | 'FIRE' | 'SEVERE_WEATHER';
+    title: string;
+    severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+    subjectType: 'WAREHOUSE' | 'SHIPMENT' | 'SUPPLIER';
+    subjectId: string;
+    subjectLabel: string;
+    distanceKm: number;
+  }>;
 }
 
 export interface RiskAnalyzeResponse {

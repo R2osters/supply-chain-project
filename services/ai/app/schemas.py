@@ -492,11 +492,26 @@ class RiskShipmentIn(Wire):
     product_ids: list[str] = Field(default_factory=list)
 
 
+class RiskHazardIn(Wire):
+    """One live natural hazard near one of the company's assets, from the API's hazards module."""
+
+    hazard_id: str
+    kind: Literal["CYCLONE", "EARTHQUAKE", "FIRE", "SEVERE_WEATHER"]
+    title: str
+    severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    subject_type: str
+    subject_id: str
+    subject_label: str
+    distance_km: float = Field(ge=0)
+
+
 class RiskAnalyzeRequest(Wire):
     company_id: str
     products: list[RiskProductIn] = Field(default_factory=list)
     suppliers: list[RiskSupplierIn] = Field(default_factory=list)
     shipments: list[RiskShipmentIn] = Field(default_factory=list)
+    # Optional so older callers keep working; absent means "no live feed", not "no hazards".
+    hazards: list[RiskHazardIn] | None = None
 
 
 class RiskFindingOut(Wire):

@@ -576,6 +576,11 @@ async def analyze_risk(request: RiskAnalyzeRequest) -> RiskAnalyzeResponse:
         products=[p.model_dump(by_alias=True) for p in request.products],
         suppliers=[s.model_dump(by_alias=True) for s in request.suppliers],
         shipments=[s.model_dump(by_alias=True) for s in request.shipments],
+        hazards=(
+            None
+            if request.hazards is None
+            else [h.model_dump(by_alias=True) for h in request.hazards]
+        ),
     )
 
     return RiskAnalyzeResponse(
