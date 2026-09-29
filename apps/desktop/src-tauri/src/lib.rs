@@ -5,6 +5,7 @@ mod bridge;
 pub mod events;
 pub mod paths;
 pub mod ports;
+pub mod provision;
 pub mod secrets;
 pub mod services;
 pub mod startup;

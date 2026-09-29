@@ -23,12 +23,39 @@ pub struct Secrets {
     pub postgres_password: String,
 }
 
+/// Where the SCIP database lives. Written by the installer (`--provision`); absent means embedded.
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "lowercase")]
+pub enum DatabaseConfig {
+    /// The bundled PostgreSQL cluster in `pgdata`, started and stopped by SCIP.
+    #[default]
+    Embedded,
+    /// A server the customer already runs. The URL carries the password, which is why it
+    /// lives here (user-only ACL) and is never logged.
+    External { url: String },
+}
+
+impl std::fmt::Debug for DatabaseConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Embedded => f.write_str("Embedded"),
+            Self::External { .. } => f.write_str("External { url: <redacted> }"),
+        }
+    }
+}
+
 /// The whole `config.json`. Unknown keys are preserved on purpose: later lots (SMTP settings,
 /// first-run wizard) will add sections and an older build must not erase them.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LocalConfig {
     pub secrets: Secrets,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<DatabaseConfig>,
+    /// Simulated vehicle movements (demo) instead of real trackers. `None` keeps the API default
+    /// (on), which is what installs made before the installer existed have always had.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub simulator: Option<bool>,
     #[serde(flatten)]
     pub extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -90,6 +117,11 @@ fn read_config(path: &Path) -> Result<Option<LocalConfig>, SecretsError> {
     serde_json::from_str(&raw)
         .map(Some)
         .map_err(|source| SecretsError::Parse { path: path.to_path_buf(), source })
+}
+
+/// Rewrites `config.json` (the installer records the database mode and the simulator choice).
+pub fn save(path: &Path, config: &LocalConfig) -> Result<(), SecretsError> {
+    write_config(path, config)
 }
 
 /// Writes through a temp file and a rename so a crash mid-write cannot leave a truncated
@@ -155,6 +187,29 @@ mod tests {
         assert!(config.extra.contains_key("smtp"), "unknown sections must survive a rewrite");
         let reread: LocalConfig = load_or_create(&path).unwrap();
         assert_eq!(reread, config);
+    }
+
+    #[test]
+    fn database_mode_and_simulator_round_trip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path: PathBuf = tmp.path().join("config.json");
+        let mut config: LocalConfig = load_or_create(&path).unwrap();
+        assert_eq!(config.database, None, "absent means embedded");
+        config.database = Some(DatabaseConfig::External { url: "postgresql://u:p@h:5432/d".into() });
+        config.simulator = Some(false);
+        save(&path, &config).unwrap();
+        let raw: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(raw["database"]["mode"], "external");
+        assert_eq!(raw["simulator"], false);
+        assert_eq!(load_or_create(&path).unwrap(), config);
+        assert!(!format!("{:?}", config.database).contains("u:p"), "Debug must not print the URL");
+    }
+
+    #[test]
+    fn embedded_mode_parses() {
+        let config: LocalConfig = serde_json::from_str(r#"{"database":{"mode":"embedded"}}"#).unwrap();
+        assert_eq!(config.database, Some(DatabaseConfig::Embedded));
+        assert!(config.extra.is_empty());
     }
 
     #[test]

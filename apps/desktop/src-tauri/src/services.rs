@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use crate::paths::DataDirs;
 use crate::ports::ServicePorts;
-use crate::secrets::Secrets;
+use crate::secrets::{DatabaseConfig, Secrets};
 use crate::supervisor::spec::{
     HealthCheck, ProcessCommand, ServiceSpec, SkipCondition, StopMethod, TaskSpec, TempFile,
 };
@@ -137,6 +137,10 @@ pub struct RuntimeContext {
     pub ports: ServicePorts,
     pub secrets: Secrets,
     pub resources: ResourceLayout,
+    /// Embedded cluster or the customer's own server (`config.json` → `database`).
+    pub database: DatabaseConfig,
+    /// Simulated vehicle movements; `config.json` → `simulator`, on when absent.
+    pub simulator: bool,
 }
 
 /// Specs are a few hundred bytes and the plan has seven entries built once per launch:
@@ -160,12 +164,20 @@ impl StartupStep {
 }
 
 impl RuntimeContext {
-    /// The base64url alphabet needs no percent-encoding, which is why secrets use it.
+    /// Embedded: the base64url alphabet needs no percent-encoding, which is why secrets use it.
+    /// External: the URL the installer stored, already encoded.
     pub fn database_url(&self) -> String {
-        format!(
-            "postgresql://{DB_USER}:{}@127.0.0.1:{}/{DB_NAME}?schema=public",
-            self.secrets.postgres_password, self.ports.postgres
-        )
+        match &self.database {
+            DatabaseConfig::External { url } => url.clone(),
+            DatabaseConfig::Embedded => format!(
+                "postgresql://{DB_USER}:{}@127.0.0.1:{}/{DB_NAME}?schema=public",
+                self.secrets.postgres_password, self.ports.postgres
+            ),
+        }
+    }
+
+    pub fn is_external_database(&self) -> bool {
+        matches!(self.database, DatabaseConfig::External { .. })
     }
 
     pub fn api_base_url(&self) -> String {
@@ -178,15 +190,28 @@ impl RuntimeContext {
 
     /// Order matters: database first, then the AI (the API calls it), then the API.
     pub fn startup_plan(&self) -> Vec<StartupStep> {
+        let mut plan: Vec<StartupStep> = self.database_plan();
+        plan.push(StartupStep::Task(self.migrate_task()));
+        plan.extend(self.services_plan());
+        plan
+    }
+
+    /// Bringing the embedded cluster up. An external server is the customer's to run: nothing
+    /// to create or start, and PostGIS comes from the first migration.
+    pub fn database_plan(&self) -> Vec<StartupStep> {
+        if self.is_external_database() {
+            return Vec::new();
+        }
         vec![
             StartupStep::Task(self.initdb_task()),
             StartupStep::Service(self.postgres_service()),
             StartupStep::Task(self.create_database_task()),
             StartupStep::Task(self.postgis_task()),
-            StartupStep::Task(self.migrate_task()),
-            StartupStep::OptionalService(self.ai_service()),
-            StartupStep::Service(self.api_service()),
         ]
+    }
+
+    pub fn services_plan(&self) -> Vec<StartupStep> {
+        vec![StartupStep::OptionalService(self.ai_service()), StartupStep::Service(self.api_service())]
     }
 
     // ------------------------------------------------------------ postgres
@@ -296,7 +321,7 @@ impl RuntimeContext {
     }
 
     pub fn api_env(&self) -> BTreeMap<String, String> {
-        let pairs: [(&str, String); 16] = [
+        let pairs: [(&str, String); 17] = [
             ("NODE_ENV", "production".to_owned()),
             ("SCIP_RUNTIME", "desktop".to_owned()),
             ("API_PORT", self.ports.api.to_string()),
@@ -314,6 +339,9 @@ impl RuntimeContext {
             ("WEB_DIST_DIR", path_arg(&self.resources.web_dir())),
             // Keys typed into the app's settings screen (AIS, OpenSky, TomTom...), kept with the data.
             ("SETTINGS_FILE", path_arg(&self.dirs.root.join("settings.json"))),
+            // Chosen at install time: demo installs animate fake vehicles, production ones wait
+            // for real trackers and phones.
+            ("SIMULATOR_ENABLED", self.simulator.to_string()),
         ];
         pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()
     }
@@ -379,7 +407,42 @@ mod tests {
                 postgres_password: "pg-pass_-".into(),
             },
             resources: ResourceLayout::new("/res"),
+            database: DatabaseConfig::Embedded,
+            simulator: true,
         }
+    }
+
+    fn external() -> RuntimeContext {
+        RuntimeContext {
+            database: DatabaseConfig::External {
+                url: "postgresql://ops:p%40ss@db.lan:5433/scip?schema=public&sslmode=require".into(),
+            },
+            simulator: false,
+            ..ctx()
+        }
+    }
+
+    #[test]
+    fn external_database_skips_the_embedded_cluster() {
+        let names: Vec<String> = external().startup_plan().iter().map(|s| s.name().to_owned()).collect();
+        assert_eq!(names, vec!["migrate", "ai", "api"]);
+        assert!(external().database_plan().is_empty());
+    }
+
+    #[test]
+    fn external_url_reaches_migrate_api_and_ai() {
+        let c = external();
+        let url: String = c.database_url();
+        assert!(url.starts_with("postgresql://ops:p%40ss@db.lan:5433/"));
+        assert_eq!(c.migrate_task().command.env.get("DATABASE_URL"), Some(&url));
+        assert_eq!(c.api_env().get("DATABASE_URL"), Some(&url));
+        assert_eq!(c.ai_service().command.env.get("DATABASE_URL"), Some(&url));
+    }
+
+    #[test]
+    fn simulator_choice_reaches_the_api() {
+        assert_eq!(ctx().api_env().get("SIMULATOR_ENABLED").map(String::as_str), Some("true"));
+        assert_eq!(external().api_env().get("SIMULATOR_ENABLED").map(String::as_str), Some("false"));
     }
 
     #[test]

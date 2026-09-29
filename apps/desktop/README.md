@@ -50,6 +50,24 @@ Data lives in `%LOCALAPPDATA%\com.scip.desktop` (`pgdata`, `files`, `models`, `l
 first run into `config.json`. Each sidecar logs to `logs/<name>.log`, the shell to
 `logs/desktop.log`.
 
+## Headless provisioning (`--provision`)
+
+The installer runs `scip-desktop.exe --provision` and writes an install plan (or
+`{"upgrade":true}`) on stdin; see [docs/installer.md](../../docs/installer.md). No window is
+created and the single-instance lock is not taken. Each step prints one JSON line on stdout
+(`{"step","status","label"}`, `{"log"}`, and on failure a last `{"error":{"step","code","message","retryable"}}`,
+exit code 1). Passwords and keys are masked in every line. Re-running is safe: existing
+organisation, sites and demo data are skipped.
+
+To try it on a throwaway folder (never the real data folder):
+
+```sh
+cat plan.json | SCIP_DATA_DIR=/tmp/scip-test SCIP_RESOURCES_DIR=src-tauri/resources   src-tauri/target/debug/scip-desktop.exe --provision
+```
+
+`config.json` may hold `database: { mode: "external", url }` (the app then skips its own
+PostgreSQL) and `simulator: true|false` (passed to the API as `SIMULATOR_ENABLED`).
+
 ## Code map (`src-tauri/src`)
 
 | File | Role |
@@ -63,3 +81,4 @@ first run into `config.json`. Each sidecar logs to `logs/<name>.log`, the shell 
 | `startup.rs` | Runs the plan and reports progress |
 | `bridge.rs` | Tauri glue: state, commands, events, shutdown |
 | `win_job.rs` | Job Object so sidecars die with SCIP.exe even on a crash |
+| `provision/` | `--provision` (installer, headless): `plan.rs` plan types and validation, `mod.rs` orchestration, `runtime.rs` supervisor side, `api_client.rs` HTTP calls, `output.rs` stdout protocol and redaction |

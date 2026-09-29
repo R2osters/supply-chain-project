@@ -24,7 +24,14 @@ pub fn prepare(dirs: DataDirs, resources_root: Option<PathBuf>) -> Result<Runtim
     })?;
     let resources = ResourceLayout::new(root);
     check_resources(&resources)?;
-    Ok(RuntimeContext { dirs, ports, secrets: config.secrets, resources })
+    Ok(RuntimeContext {
+        dirs,
+        ports,
+        secrets: config.secrets,
+        resources,
+        database: config.database.unwrap_or_default(),
+        simulator: config.simulator.unwrap_or(true),
+    })
 }
 
 fn check_resources(resources: &ResourceLayout) -> Result<(), ErrorEvent> {
@@ -137,6 +144,30 @@ mod tests {
     }
 
     #[test]
+    fn prepare_reads_database_mode_and_simulator_from_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let res = ResourceLayout::new(tmp.path().join("res"));
+        for file in res.required_files() {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, "").unwrap();
+        }
+        let dirs = DataDirs::from_root(tmp.path().join("data"));
+        std::fs::create_dir_all(&dirs.root).unwrap();
+        std::fs::write(
+            &dirs.config_file,
+            r#"{"database":{"mode":"external","url":"postgresql://u:p@h/d"},"simulator":false}"#,
+        )
+        .unwrap();
+        let ctx: RuntimeContext = prepare(dirs.clone(), Some(res.root.clone())).unwrap();
+        assert_eq!(ctx.database_url(), "postgresql://u:p@h/d");
+        assert!(!ctx.simulator);
+
+        std::fs::write(&dirs.config_file, "{}").unwrap();
+        let ctx: RuntimeContext = prepare(dirs, Some(res.root)).unwrap();
+        assert!(!ctx.is_external_database() && ctx.simulator, "defaults: embedded, simulator on");
+    }
+
+    #[test]
     fn prepare_without_resource_dir_is_an_error_event() {
         let tmp = tempfile::tempdir().unwrap();
         let err = prepare(DataDirs::from_root(tmp.path()), None).unwrap_err();
@@ -150,6 +181,8 @@ mod tests {
             ports: ServicePorts { postgres: 1, api: 2, ai: 3 },
             secrets: Default::default(),
             resources: ResourceLayout::new("/r"),
+            database: Default::default(),
+            simulator: true,
         };
         for step in ctx.startup_plan() {
             assert_ne!(step_label(step.name()), step.name(), "no label for {}", step.name());
