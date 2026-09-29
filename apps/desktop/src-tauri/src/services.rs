@@ -110,7 +110,23 @@ pub fn resolve_resources_root(
 ) -> Option<PathBuf> {
     match override_dir.filter(|v: &String| !v.trim().is_empty()) {
         Some(dir) => Some(PathBuf::from(dir)),
-        None => bundled_resource_dir.map(|dir: &Path| dir.join("resources")),
+        None => bundled_resource_dir.map(|dir: &Path| without_verbatim_prefix(dir).join("resources")),
+    }
+}
+
+/// Turns `\\?\C:\x` into `C:\x` and `\\?\UNC\host\share` into `\\host\share`.
+///
+/// Tauri reports the installed resource folder in Windows' verbatim form. Most APIs accept it,
+/// but initdb locates `postgres.exe` by rewriting its own path, turns the prefix into `//?/`, and
+/// fails with "program postgres is needed by initdb but was not found".
+pub fn without_verbatim_prefix(path: &Path) -> PathBuf {
+    let text: String = path.to_string_lossy().into_owned();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        path.to_path_buf()
     }
 }
 
@@ -472,5 +488,19 @@ mod tests {
         assert_eq!(resolve_resources_root(Some("/x".into()), Some(bundled)), Some(PathBuf::from("/x")));
         assert_eq!(resolve_resources_root(Some(" ".into()), Some(bundled)), Some(bundled.join("resources")));
         assert_eq!(resolve_resources_root(None, None), None);
+    }
+
+    #[test]
+    fn bundled_resource_dir_loses_the_verbatim_prefix() {
+        let bundled = Path::new(r"\\?\C:\Users\a\AppData\Local\SCIP");
+        assert_eq!(
+            resolve_resources_root(None, Some(bundled)),
+            Some(PathBuf::from(r"C:\Users\a\AppData\Local\SCIP").join("resources"))
+        );
+        assert_eq!(
+            without_verbatim_prefix(Path::new(r"\\?\UNC\srv\share\SCIP")),
+            PathBuf::from(r"\\srv\share\SCIP")
+        );
+        assert_eq!(without_verbatim_prefix(Path::new(r"D:\SCIP")), PathBuf::from(r"D:\SCIP"));
     }
 }
