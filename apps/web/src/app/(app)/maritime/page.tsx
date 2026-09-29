@@ -26,7 +26,7 @@ import {
   Provenance,
   SeverityIcon,
 } from '@/components/ui';
-import { humanise } from '../shipments/[id]/_components/labels';
+import { humanise } from '../shipments/detail/_components/labels';
 import type {
   FleetVessel,
   MaritimeStatus,
@@ -45,8 +45,8 @@ import {
   rotateVessel,
   vesselState,
 } from './_components/vessel-marker';
+import { wsUrl } from '@/lib/runtime-config';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3001';
 const PLANNED = 'sea-planned';
 const ACTUAL = 'sea-actual';
 const KNOTS_TO_KMH = 1.852;
@@ -330,7 +330,7 @@ function Maritime() {
     const token = getAccessToken();
     if (!token) return;
 
-    const connection = io(`${WS_URL}/tracking`, { auth: { token }, transports: ['websocket'] });
+    const connection = io(`${wsUrl()}/tracking`, { auth: { token }, transports: ['websocket'] });
     connection.on('connect', () => setLive(true));
     connection.on('disconnect', () => setLive(false));
     connection.on('connect_error', () => setLive(false));

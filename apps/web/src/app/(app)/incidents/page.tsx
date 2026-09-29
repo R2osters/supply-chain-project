@@ -32,6 +32,7 @@ import {
   ListDetailLayout,
   useListKeys,
 } from '../shipments/_components/track-kit';
+import { shipmentHref } from '@/lib/routes';
 
 interface IncidentRow {
   id: string;
@@ -330,7 +331,7 @@ export default function IncidentsPage() {
                         <td className="whitespace-nowrap">
                           {incident.shipment ? (
                             <Link
-                              href={`/shipments/${incident.shipment.id}`}
+                              href={shipmentHref(incident.shipment.id)}
                               onClick={(event) => event.stopPropagation()}
                               className="t-data text-[12px] text-[var(--color-ink)] hover:underline"
                             >
@@ -507,7 +508,7 @@ function IncidentDetail({
         <div className="flex flex-col gap-1.5">
           {incident.shipment && (
             <Link
-              href={`/shipments/${incident.shipment.id}`}
+              href={shipmentHref(incident.shipment.id)}
               className="flex items-center gap-2 text-[13px] text-[var(--color-ink)] hover:underline"
             >
               <Package className="h-4 w-4 text-[var(--color-muted)]" />

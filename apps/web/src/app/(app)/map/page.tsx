@@ -27,8 +27,8 @@ import {
   vehicleState,
   type FleetFilter,
 } from './_components/vehicle-marker';
+import { wsUrl } from '@/lib/runtime-config';
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3001';
 
 interface WarehouseRow {
   id: string;
@@ -440,7 +440,7 @@ function LiveMap() {
     const token = getAccessToken();
     if (!token) return;
 
-    const connection = io(`${WS_URL}/tracking`, {
+    const connection = io(`${wsUrl()}/tracking`, {
       auth: { token },
       transports: ['websocket'],
     });

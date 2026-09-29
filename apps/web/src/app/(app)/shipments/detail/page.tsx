@@ -14,8 +14,8 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useMemo, type ReactNode } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useMemo, type ReactNode } from 'react';
 import { api, type Explanation } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useFormat, useI18n } from '@/lib/i18n';
@@ -111,9 +111,20 @@ interface ShipmentRecord {
 /** A last fix older than this is shown with its age, never as live. */
 const STALE_AFTER_MIN = 10;
 
+/**
+ * The id travels as `?id=` rather than a `[id]` segment: the desktop build is a static export,
+ * which cannot pre-render one page per shipment. useSearchParams needs a Suspense boundary there.
+ */
 export default function ShipmentDetailPage() {
-  const params = useParams<{ id: string }>();
-  const id = params.id;
+  return (
+    <Suspense fallback={null}>
+      <ShipmentDetail />
+    </Suspense>
+  );
+}
+
+function ShipmentDetail() {
+  const id = useSearchParams().get('id') ?? '';
   const client = useQueryClient();
   const { can } = useAuth();
   const { t } = useI18n();

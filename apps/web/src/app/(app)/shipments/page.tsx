@@ -35,6 +35,7 @@ import {
   formatGap,
   useListKeys,
 } from './_components/track-kit';
+import { shipmentHref } from '@/lib/routes';
 
 const STATUSES = [
   'PLANNED',
@@ -302,7 +303,7 @@ function ShipmentsView() {
                         >
                           <td>
                             <Link
-                              href={`/shipments/${shipment.id}`}
+                              href={shipmentHref(shipment.id)}
                               onClick={(event) => event.stopPropagation()}
                               className="t-data whitespace-nowrap text-[13px] text-[var(--color-ink)] hover:underline"
                             >
@@ -463,7 +464,7 @@ function ShipmentDetail({ shipment, onClose }: { shipment: Row; onClose: () => v
           ) : (
             <span className="text-[12px] text-[var(--color-muted)]">{t('ship.v3.noVehicle')}</span>
           )}
-          <Link href={`/shipments/${shipment.id}`} className="btn">
+          <Link href={shipmentHref(shipment.id)} className="btn">
             <ExternalLink />
             {t('ship.v3.open')}
           </Link>

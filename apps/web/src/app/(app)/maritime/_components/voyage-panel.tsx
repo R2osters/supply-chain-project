@@ -14,9 +14,10 @@ import {
   Meter,
   statusTone,
 } from '@/components/ui';
-import { humanise, useLabel, useStatusLabel } from '../../shipments/[id]/_components/labels';
+import { humanise, useLabel, useStatusLabel } from '../../shipments/detail/_components/labels';
 import type { FleetVessel, TrackResponse, VoyageDetail } from './types';
 import { AIS_STALE_AFTER_MIN, LATE_HOURS, isSimulatedVessel } from './vessel-marker';
+import { shipmentHref } from '@/lib/routes';
 
 /** Charte provenance for an AIS fix: simulated, stale with its age, live, or polled. */
 export function AisProvenance({
@@ -180,7 +181,7 @@ export function VoyagePanel({
                 {voyage.shipments.map((shipment) => (
                   <li key={shipment.id}>
                     <Link
-                      href={`/shipments/${shipment.id}`}
+                      href={shipmentHref(shipment.id)}
                       className="flex min-h-8 items-center justify-between gap-2 rounded-[var(--radius-sm)] px-2 py-1 transition-colors duration-100 hover:bg-[var(--color-surface)]"
                     >
                       <span className="t-data text-[12.5px]">{shipment.trackingNumber}</span>

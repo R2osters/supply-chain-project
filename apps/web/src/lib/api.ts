@@ -1,5 +1,7 @@
 'use client';
 
+import { apiUrl as apiBaseUrl } from './runtime-config';
+
 /**
  * Typed API client.
  *
@@ -14,7 +16,6 @@
  * five rotations, four of which would then look like token reuse and revoke the session.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 const REFRESH_KEY = 'scip.refresh';
 
 let accessToken: string | null = null;
@@ -60,7 +61,7 @@ async function refreshSession(): Promise<boolean> {
   if (!refreshToken) return false;
 
   try {
-    const response = await fetch(`${API_URL}/auth/refresh`, {
+    const response = await fetch(`${apiBaseUrl()}/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken }),
@@ -103,18 +104,18 @@ export async function apiBlob(path: string, signal?: AbortSignal): Promise<Blob>
 
 /** Absolute URL of an API path, for consumers that fetch on their own (MapLibre tiles). */
 export function apiUrl(path: string): string {
-  return `${API_URL}${path}`;
+  return `${apiBaseUrl()}${path}`;
 }
 
 /** Whether a URL points at this API, so a map never leaks the token to a third-party tile host. */
 export function isApiUrl(url: string): boolean {
-  return url.startsWith(API_URL);
+  return url.startsWith(apiBaseUrl());
 }
 
 async function send(path: string, options: RequestOptions): Promise<Response> {
   const { method = 'GET', body, retried = false, signal } = options;
 
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',

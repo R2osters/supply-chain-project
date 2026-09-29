@@ -9,8 +9,9 @@ import type { Camera, CamerasResponse, PointWeather } from '@/lib/intel';
 import { useFormat, useI18n } from '@/lib/i18n';
 import { Button, Chip, DemoTag, Facts, Provenance, SeverityIcon, statusTone } from '@/components/ui';
 import { CameraViewer } from '@/components/intel/camera-viewer';
-import { useStatusLabel } from '../../shipments/[id]/_components/labels';
+import { useStatusLabel } from '../../shipments/detail/_components/labels';
 import { vehicleState } from './vehicle-marker';
+import { shipmentHref } from '@/lib/routes';
 
 /** A fix older than this is shown as stale with its age — never as a false "live". */
 const STALE_AFTER_MIN = 10;
@@ -121,7 +122,7 @@ export function VehicleDetail({
             <Chip tone={statusTone(vehicle.shipmentStatus ?? '')}>{statusLabel(vehicle.shipmentStatus)}</Chip>
           </div>
           <Link
-            href={`/shipments/${vehicle.shipmentId}`}
+            href={shipmentHref(vehicle.shipmentId)}
             className="t-data flex items-center gap-1 text-[14px] text-[var(--color-ink)] hover:underline"
           >
             {vehicle.trackingNumber}

@@ -21,6 +21,7 @@ import {
 import { useToast } from '@/components/toast';
 import { useFormat, useI18n } from '@/lib/i18n';
 import { FilterPill, useListKeys } from '../shipments/_components/track-kit';
+import { shipmentHref } from '@/lib/routes';
 
 interface NotificationRow {
   id: string;
@@ -38,7 +39,7 @@ interface NotificationRow {
 }
 
 const TARGET_PATH: Record<string, (id: string) => string> = {
-  shipment: (id) => `/shipments/${id}`,
+  shipment: (id) => shipmentHref(id),
   product: () => '/inventory',
   purchase_order: () => '/purchase-orders',
   incident: () => '/incidents',

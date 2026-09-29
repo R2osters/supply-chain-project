@@ -33,6 +33,7 @@ import {
   ListDetailLayout,
   useListKeys,
 } from '../shipments/_components/track-kit';
+import { shipmentHref } from '@/lib/routes';
 
 interface DeliveryRow {
   id: string;
@@ -259,7 +260,7 @@ export default function DeliveriesPage() {
                           <td className="whitespace-nowrap">
                             {shipmentId ? (
                               <Link
-                                href={`/shipments/${shipmentId}`}
+                                href={shipmentHref(shipmentId)}
                                 onClick={(event) => event.stopPropagation()}
                                 className="t-data text-[13px] text-[var(--color-ink)] hover:underline"
                               >
@@ -403,7 +404,7 @@ function DeliveryPanel({
       }
       actions={
         shipmentId ? (
-          <Link href={`/shipments/${shipmentId}`} className="btn">
+          <Link href={shipmentHref(shipmentId)} className="btn">
             <ExternalLink />
             {t('del.v3.openShipment')}
           </Link>

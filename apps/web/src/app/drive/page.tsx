@@ -27,8 +27,8 @@ import { BatteryCharging, Moon, Play, Square, Sun, TriangleAlert, WifiOff } from
 import { Banner, Logo, Provenance, type ProvenanceKind } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { clear, count, drop, enqueue, peek, trim, type BufferedFix } from '@/lib/drive-buffer';
+import { apiUrl } from '@/lib/runtime-config';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api/v1';
 const CREDENTIAL_KEY = 'scip.drive.credential';
 
 /** How often to flush. Short enough that the map is current, long enough to batch a few fixes. */
@@ -219,7 +219,7 @@ export default function DrivePage() {
       const batch = await peek(BATCH_SIZE);
       if (batch.length === 0) return;
 
-      const response = await fetch(`${API_URL}/devices/phone/positions`, {
+      const response = await fetch(`${apiUrl()}/devices/phone/positions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

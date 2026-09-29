@@ -23,7 +23,7 @@ export function useLabel() {
   );
 }
 
-/** Shipment status in the user's language (shared by /shipments/[id], /map and /maritime). */
+/** Shipment status in the user's language (shared by /shipments/detail, /map and /maritime). */
 export function useStatusLabel() {
   const label = useLabel();
   return useCallback((status: string | null | undefined) => (status ? label(`ship.detail.status.${status}`, humanise(status)) : '—'), [label]);

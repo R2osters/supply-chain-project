@@ -6,6 +6,7 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { Paginated } from '@/lib/api';
 import { AlertRow, DemoTag, Empty, ErrorNote, Loading, Panel, toSeverity } from '@/components/ui';
 import { useFormat, useI18n } from '@/lib/i18n';
+import { shipmentHref } from '@/lib/routes';
 
 export interface NotificationRow {
   id: string;
@@ -23,7 +24,7 @@ export type NotificationPage = Paginated<NotificationRow> & { unreadCount: numbe
 
 /** Same deep links as the notifications screen, so an alert opens where it is handled. */
 const TARGET_PATH: Record<string, (id: string) => string> = {
-  shipment: (id) => `/shipments/${id}`,
+  shipment: (id) => shipmentHref(id),
   product: () => '/inventory',
   purchase_order: () => '/purchase-orders',
   incident: () => '/incidents',
