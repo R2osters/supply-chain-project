@@ -1,7 +1,7 @@
 //! Where SCIP keeps its data on disk.
 //!
-//! Everything lives under one per-user root (`%LOCALAPPDATA%\SCIP` by default) so a backup,
-//! an uninstall or a support request only ever has to point at a single folder.
+//! Everything lives under one per-user root (`%LOCALAPPDATA%\com.scip.desktop` by default) so a
+//! backup, an uninstall or a support request only ever has to point at a single folder.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -10,7 +10,11 @@ use std::path::{Path, PathBuf};
 /// users who want their database on another drive.
 pub const DATA_DIR_ENV: &str = "SCIP_DATA_DIR";
 
-const APP_FOLDER: &str = "SCIP";
+/// The bundle identifier, not the product name: the per-user installer puts the program itself in
+/// `%LOCALAPPDATA%\SCIP`, and data mixed into it would be at the mercy of every upgrade. The
+/// uninstaller's "delete application data" option removes exactly this folder, as users expect.
+/// Must match `identifier` in tauri.conf.json.
+const APP_FOLDER: &str = "com.scip.desktop";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataDirs {
@@ -94,9 +98,9 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_localappdata_scip() {
+    fn defaults_to_localappdata_identifier_folder() {
         let dirs = DataDirs::resolve(env(&[("LOCALAPPDATA", r"C:\Users\a\AppData\Local")])).unwrap();
-        assert_eq!(dirs.root, Path::new(r"C:\Users\a\AppData\Local").join("SCIP"));
+        assert_eq!(dirs.root, Path::new(r"C:\Users\a\AppData\Local").join("com.scip.desktop"));
         assert_eq!(dirs.pgdata, dirs.root.join("pgdata"));
         assert_eq!(dirs.config_file, dirs.root.join("config.json"));
     }
@@ -110,7 +114,7 @@ mod tests {
     #[test]
     fn blank_override_is_ignored() {
         let dirs = DataDirs::resolve(env(&[("LOCALAPPDATA", "C:/x"), (DATA_DIR_ENV, "  ")])).unwrap();
-        assert_eq!(dirs.root, Path::new("C:/x").join("SCIP"));
+        assert_eq!(dirs.root, Path::new("C:/x").join("com.scip.desktop"));
     }
 
     #[test]
