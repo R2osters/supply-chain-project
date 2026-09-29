@@ -40,8 +40,9 @@ La chaîne logistique est une partition, le film est un séquenceur.
   de section sur un multiple de 60. **Une seule exception, volontaire** : le temps en retard de
   7 images au début (S01).
 - **Un arc harmonique.** Le film est en ré mineur. Le motif du retard est une seconde mineure
-  (ré contre mi♭). Il revient à chaque retard. Il se résout en **ré majeur** (tierce picarde)
-  quand l'humain accepte, puis définitivement sous le logo.
+  (ré contre mi♭). Il revient à chaque retard. La grappe se résout en accord propre (ré-fa-la)
+  quand la recommandation tombe. Le clic de l'humain ouvre une mesure de **ré majeur** (tierce
+  picarde), et la résolution définitive en ré majeur arrive sous le logo.
 - **Couplets et refrains.** Les scènes claires sont des couplets, les scènes sombres sont les
   refrains, le pont et la coda.
 - **La tête de lecture.** Un trait d'encre vertical de 2 px, avec un timecode en Plex Mono.
@@ -338,7 +339,8 @@ Chaque clip de voix est ancré au début de sa scène, avec un décalage exprim�
   0 → 700 px), coup de zoom 1 → 1,03 → 1.
 - **Son.** Grappe ré-mi♭-mi tenue sous la voix, qui glisse en ré-fa-la (portamento de 120 ms),
   puis cloche ok. Trois pincements pour les lignes. **Le clic de 64,0 s est le kick d'encre**, le
-  coup le plus fort du film, avec descente de sub, clap et gonflement du pad sur un temps. Le
+  coup le plus fort du film, avec descente de sub, clap, et le pad qui s'ouvre en ré majeur
+  pendant une mesure. Le
   document fait un whoosh de papier ; le point live, des ticks de charleston.
 - **VO.** « Recommandation : trois mille unités chez le fournisseur C, raisons à l'appui. Un humain
   accepte, et un vrai bon de commande naît, en brouillon. » La fin de « accepte » est calée sur
@@ -573,8 +575,13 @@ Chaque clip de voix est ancré au début de sa scène, avec un décalage exprim�
 ### 5.2 Motif harmonique
 
 - La seconde mineure ré/mi♭ marque le retard (S01, S05, S06).
-- Elle se résout en ré-fa-la au clic de 64,0 s.
+- La grappe ré-mi♭-mi se résout en ré-fa-la sur le mot « C » (la recommandation tombe).
+- Le clic de 64,0 s ouvre le pad en ré majeur (ré-fa♯-la) pendant une mesure, puis le refrain
+  reprend en ré mineur. Le clic de 162,0 s fait de même.
 - Résolution finale en ré majeur add9 en S18.
+- Progressions : intro sur ré mineur seul ; couplets et refrains en Dm | B♭ | F | C ;
+  pré-refrain en Gm | B♭ | C | A ; pont en B♭ | Gm | Dm | A ; hors ligne en Dm | B♭ ; coda en
+  D add9.
 
 ### 5.3 Kit couleur (1 couleur = 1 son, jamais réutilisé ailleurs)
 
