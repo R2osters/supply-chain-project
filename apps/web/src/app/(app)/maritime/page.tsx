@@ -9,7 +9,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type React
 import { io, type Socket } from 'socket.io-client';
 import { api, getAccessToken } from '@/lib/api';
 import { useFormat, useI18n } from '@/lib/i18n';
-import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
+import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-style';
 import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
 import { usePalette, type Palette } from '@/lib/theme';
 import {
@@ -181,6 +181,7 @@ function Maritime() {
       zoom: 2.4,
       attributionControl: { compact: true },
     });
+    watchBasemapTiles(instance);
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     instance.on('load', () => setReady(true));
 

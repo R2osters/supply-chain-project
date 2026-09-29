@@ -252,7 +252,10 @@ no benefit — and the value is precisely in the loop between them.
 
 **MapLibre + OpenStreetMap, not Mapbox or Google.** Both alternatives need a paid API key. Without
 one, a Mapbox map is a screenshot, not a feature. `NEXT_PUBLIC_MAP_STYLE_URL` swaps in any
-MapLibre-compatible style the moment a key exists.
+MapLibre-compatible style the moment a key exists. Under the tiles, every map carries an offline
+basemap built from Natural Earth (public domain; *Made with Natural Earth*), so a room with no
+internet still gets land, borders, roads and place names: see
+[docs/desktop-architecture.md](docs/desktop-architecture.md#cartes-hors-connexion).
 
 **Refresh tokens are opaque database rows, not JWTs.** A stolen JWT refresh token stays valid until
 it expires no matter what the server decides. These are revocable, rotated on every use, and a

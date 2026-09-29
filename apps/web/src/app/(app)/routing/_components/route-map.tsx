@@ -3,7 +3,7 @@
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useRef, useState } from 'react';
-import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
+import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-style';
 import { usePalette } from '@/lib/theme';
 
 export interface MapRoute {
@@ -55,6 +55,7 @@ export function RouteMap({
       zoom: 6,
       attributionControl: { compact: true },
     });
+    watchBasemapTiles(instance);
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     instance.on('load', () => {
       instance.addSource(SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });

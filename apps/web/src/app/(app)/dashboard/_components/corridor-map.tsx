@@ -5,7 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useRef, useState } from 'react';
 import type { FleetVehicle } from '@/lib/api';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
-import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
+import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-style';
 import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
 import { usePalette } from '@/lib/theme';
 
@@ -81,6 +81,7 @@ export function CorridorMap({
       attributionControl: { compact: true },
       cooperativeGestures: true,
     });
+    watchBasemapTiles(instance);
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     instance.on('load', () => setReady(true));
     setMap(instance);

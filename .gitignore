@@ -35,3 +35,7 @@ Thumbs.db
 
 # Keys entered in the app settings screen during development
 apps/api/settings.local.json
+
+# Offline basemap: the downloads and the data built from them (apps/web/scripts/fetch-basemap.mjs)
+apps/web/.basemap-cache/
+apps/web/public/basemap/

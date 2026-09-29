@@ -2,7 +2,7 @@
 //   web-dist/            -> embedded in SCIP.exe as the webview's frontend
 //   web-dist/splash/     -> startup screen, the window's first page
 //   resources/web/       -> same export on disk, served by the API to phones on the LAN
-import { cpSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { DESKTOP_DIR, REPO_DIR, RESOURCES_DIR, isMain, run } from './lib/fetch.mjs';
 
@@ -17,6 +17,11 @@ export async function stageWeb() {
   delete env.NEXT_PUBLIC_WS_URL;
 
   run('npm', ['run', 'build', '--workspace', '@scip/shared'], { cwd: REPO_DIR });
+  // The offline basemap (public/basemap/) is generated, not committed. Its manifest is written
+  // last, so a missing one means a fresh checkout or an interrupted run; downloads are cached.
+  if (!existsSync(join(webDir, 'public', 'basemap', 'basemap.json'))) {
+    run('node', [join(webDir, 'scripts', 'fetch-basemap.mjs')], { cwd: webDir });
+  }
   rmSync(exportDir, { recursive: true, force: true });
   run('npm', ['run', 'build', '--workspace', '@scip/web'], { cwd: REPO_DIR, env });
 

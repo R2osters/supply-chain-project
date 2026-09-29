@@ -70,7 +70,8 @@ et restauration depuis l'interface.
 - Unitaires Rust (`npm run desktop:test`) : ports, secrets, chemins, spécifications des services,
   séquence de démarrage avec processus simulés, politique de relance, service facultatif dégradé.
 - Unitaires API : liens signés du stockage, service de premier lancement.
-- Unitaires web : résolution de l'URL d'API à l'exécution.
+- Unitaires web : résolution de l'URL d'API à l'exécution ; fond de carte hors connexion (style,
+  découpe et filtrage des données).
 - Vérifié à la main sur l'exécutable : premier lancement (initdb, PostGIS, migrations), chargement
   de la démo, connexion, détail d'expédition, prédiction IA, second lancement, arrêt propre.
 - Pas encore automatisé : E2E sur l'exécutable (WebDriver Tauri).
@@ -83,3 +84,37 @@ Au premier lancement, Windows demande d'autoriser « Node.js JavaScript Runtime 
 Limite connue : un navigateur de téléphone n'accorde le GPS qu'en HTTPS ; en HTTP sur le réseau local,
 la PWA enregistre les livraisons mais pas la position. Pour les camions hors du réseau local,
 il faut une redirection de port sur la box vers le PC, documentée dans `TRACKING.fr.md`.
+
+## Cartes hors connexion
+
+Sans Internet, les tuiles OpenStreetMap ne chargent pas. Pour qu'une carte ne soit jamais un
+rectangle gris (une présentation dans une salle sans réseau, par exemple), chaque carte dessine
+sous les tuiles un fond vectoriel livré avec le logiciel : terres et mers, lacs et fleuves,
+frontières, routes, villes et noms de pays, en clair comme en sombre.
+
+- **Aucune bascule.** Le fond est dans le style commun (`apps/web/src/lib/map-style.ts`), entre
+  l'arrière-plan et la couche raster. En ligne, les tuiles le recouvrent ; hors connexion, les
+  requêtes échouent, MapLibre ne dessine pas ces tuiles et le fond apparaît. Une tuile qui manque
+  laisse voir le fond à sa place. Les pages n'ont rien à détecter.
+- **Même aspect en ligne.** La couche raster de la charte était translucide : elle est rendue
+  opaque, sa transparence reportée dans la plage de luminosité. Mesuré sur les mêmes tuiles :
+  au plus 1 niveau sur 255 d'écart en clair et en sombre (2 sur la carte maritime).
+- **Couleurs.** Les couleurs d'OpenStreetMap Carto (terre, eau, frontières, routes, noms) passent
+  par la même peinture raster que les tuiles : hors connexion, la carte ressemble à la carte en
+  ligne dépouillée de ses détails. `useBasemapTheme` repeint tout au changement de thème.
+- **Données.** Natural Earth (domaine public) : 1:50m pour le monde, 1:10m pour l'Afrique de
+  l'Ouest (boîte `[-20, 2, 16, 25]`, le réseau de démonstration est au Ghana). Routes : toutes dans
+  la boîte, les principales ailleurs en Afrique, aucune au-delà. Environ 4,3 Mo au total.
+- **Libellés.** Glyphes Noto Sans (SIL Open Font License 1.1, empaquetés par OpenMapTiles), servis
+  depuis l'origine de la page : `http://tauri.localhost` dans le logiciel, l'API pour un téléphone.
+- **Construction.** `npm run basemap --workspace @scip/web` (`apps/web/scripts/fetch-basemap.mjs`,
+  Node sans dépendance) télécharge des versions épinglées dans `apps/web/.basemap-cache/`, puis
+  écrit `apps/web/public/basemap/`. Aucun des deux dossiers n'est versionné. `stage-web.mjs` le
+  lance quand `public/basemap/basemap.json` manque ; après une modification du script, relancer
+  `npm run basemap` (hors ligne, depuis le cache).
+- **Limite connue.** Quand le réseau ne refuse pas mais laisse attendre (Wi-Fi sans accès
+  Internet), les tuiles échouent après un délai, carte au repos, et MapLibre ne déclenche son
+  événement `load` qu'au rendu suivant. Le fond s'affiche quand même, mais les couches que
+  certaines pages ajoutent sur `load` attendent que l'on déplace ou zoome la carte.
+- **Crédit.** « Made with Natural Earth » figure dans l'attribution de chaque carte ;
+  `NOTICE.txt` et la licence de la police sont livrés avec les données.

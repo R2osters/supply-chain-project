@@ -72,6 +72,11 @@ jobs:
         with:
           path: apps/desktop/.cache
           key: desktop-downloads-${{ hashFiles('apps/desktop/scripts/stage-node.mjs', 'apps/desktop/scripts/stage-postgres.mjs') }}
+      # Natural Earth data and glyphs for the offline basemap (~80 MB of sources, pinned versions).
+      - uses: actions/cache@v4
+        with:
+          path: apps/web/.basemap-cache
+          key: basemap-sources-${{ hashFiles('apps/web/scripts/fetch-basemap.mjs') }}
       - run: npm ci
       - name: Stage runtimes, API, AI and web export
         run: npm run desktop:stage

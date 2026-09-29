@@ -23,7 +23,7 @@ import {
   type TrafficStatus,
 } from '@/lib/intel';
 import { useFormat, useI18n, type TranslationKey } from '@/lib/i18n';
-import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
+import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-style';
 import { buildSatrecs, groundTrack, subPointAt, type SubPoint } from '@/lib/orbits';
 import { usePalette } from '@/lib/theme';
 import { DisabledReason, PageHeader, Provenance } from '@/components/ui';
@@ -135,6 +135,7 @@ export default function SituationPage() {
         return isApiUrl(url) && token ? { url, headers: { Authorization: `Bearer ${token}` } } : { url };
       },
     });
+    watchBasemapTiles(instance);
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 

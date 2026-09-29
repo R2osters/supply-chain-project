@@ -3,7 +3,7 @@
 import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useEffect, useRef, useState } from 'react';
-import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
+import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-style';
 import { usePalette, type Palette } from '@/lib/theme';
 
 type Coordinate = [number, number];
@@ -46,6 +46,7 @@ export function TrackMap({
       zoom: 6,
       attributionControl: { compact: true },
     });
+    watchBasemapTiles(instance);
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     instance.on('load', () => setReady(true));
     map.current = instance;

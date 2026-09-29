@@ -19,7 +19,7 @@ import {
 } from './_components/estimates';
 import type { TrafficStatus } from '@/lib/intel';
 import { useFormat, useI18n, type TranslationKey } from '@/lib/i18n';
-import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
+import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-style';
 import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
 import { usePalette, type Palette } from '@/lib/theme';
 import { Banner, DemoTag, Empty, ErrorNote, Legend, Loading, Provenance, SeverityIcon } from '@/components/ui';
@@ -216,6 +216,7 @@ function LiveMap() {
         return isApiUrl(url) && token ? { url, headers: { Authorization: `Bearer ${token}` } } : { url };
       },
     });
+    watchBasemapTiles(instance);
 
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
