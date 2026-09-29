@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { ClipboardList, ClipboardPlus, Factory, RefreshCw, X } from 'lucide-react';
+import { ClipboardList, ClipboardPlus, Factory, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { api, type Paginated } from '@/lib/api';
 import {
   Button,
@@ -25,6 +25,7 @@ import { useAuth } from '@/lib/auth';
 import { useFormat, useI18n } from '@/lib/i18n';
 import { NewOrderPanel } from '../purchase-orders/_components/new-order-panel';
 import { OPEN_STATUSES, isLate, poStatusKey } from '../purchase-orders/_components/po-status';
+import { DeleteSupplierDialog, SupplierCatalogue, SupplierFormDrawer } from './_components/supplier-editing';
 
 interface LeaderboardRow {
   rank: number;
@@ -80,6 +81,9 @@ export default function SuppliersPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [composing, setComposing] = useState<{ supplierId?: string } | null>(null);
+  /** Supplier form: `{}` creates, `{ id }` edits. */
+  const [editing, setEditing] = useState<{ id?: string } | null>(null);
+  const [deleting, setDeleting] = useState<LeaderboardRow | null>(null);
 
   const leaderboard = useQuery({
     queryKey: ['suppliers', 'leaderboard'],
@@ -140,7 +144,6 @@ export default function SuppliersPage() {
             )}
             {canCreate && rows.length > 0 && (
               <Button
-                variant="primary"
                 icon={ClipboardPlus}
                 onClick={() => {
                   setSelectedId(null);
@@ -148,6 +151,11 @@ export default function SuppliersPage() {
                 }}
               >
                 {t('sup.v3.newOrder')}
+              </Button>
+            )}
+            {can('supplier:create') && (
+              <Button variant="primary" icon={Plus} onClick={() => setEditing({})}>
+                {t('md.suppliers.add')}
               </Button>
             )}
           </>
@@ -273,7 +281,18 @@ export default function SuppliersPage() {
               <p className="m-0 px-5 py-3 text-[12px] leading-relaxed text-[var(--color-dim)]">{t('sup.priorNote')}</p>
             </div>
           ) : (
-            <Empty title={t('sup.none')} hint={t('sup.v3.noneHint')} icon={Factory} />
+            <Empty
+              title={t('sup.none')}
+              hint={t('sup.v3.noneHint')}
+              icon={Factory}
+              action={
+                can('supplier:create') ? (
+                  <Button variant="primary" icon={Plus} onClick={() => setEditing({})}>
+                    {t('md.suppliers.add')}
+                  </Button>
+                ) : undefined
+              }
+            />
           )}
         </Panel>
 
@@ -290,11 +309,27 @@ export default function SuppliersPage() {
             supplier={selected}
             canCreate={canCreate}
             canRecompute={can('supplier:update')}
+            canEdit={can('supplier:update')}
+            canDelete={can('supplier:delete')}
             onClose={() => setSelectedId(null)}
             onNewOrder={() => setComposing({ supplierId: selected.id })}
+            onEdit={() => setEditing({ id: selected.id })}
+            onDelete={() => setDeleting(selected)}
           />
         ) : null}
       </div>
+
+      {editing && <SupplierFormDrawer supplierId={editing.id} onClose={() => setEditing(null)} />}
+      {deleting && (
+        <DeleteSupplierDialog
+          supplier={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setDeleting(null);
+            setSelectedId(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -303,14 +338,22 @@ function SupplierDetail({
   supplier,
   canCreate,
   canRecompute,
+  canEdit,
+  canDelete,
   onClose,
   onNewOrder,
+  onEdit,
+  onDelete,
 }: {
   supplier: LeaderboardRow;
   canCreate: boolean;
   canRecompute: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   onClose: () => void;
   onNewOrder: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const { t } = useI18n();
   const f = useFormat();
@@ -400,7 +443,19 @@ function SupplierDetail({
             {t('sup.v3.recomputeOne')}
           </Button>
         )}
+        {canEdit && (
+          <Button size="sm" icon={Pencil} onClick={onEdit}>
+            {t('md.edit')}
+          </Button>
+        )}
+        {canDelete && (
+          <Button size="sm" variant="ghost" icon={Trash2} onClick={onDelete}>
+            {t('md.delete')}
+          </Button>
+        )}
       </div>
+
+      <SupplierCatalogue supplier={supplier} canEdit={canEdit} />
 
       <section className="flex flex-col gap-2">
         <header className="flex items-center justify-between gap-2">

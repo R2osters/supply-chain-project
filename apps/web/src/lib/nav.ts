@@ -1,5 +1,6 @@
 import {
   ClipboardList,
+  Database,
   Factory,
   FlaskConical,
   LayoutDashboard,
@@ -53,6 +54,7 @@ export const NAV: NavItem[] = [
   { href: '/suppliers', labelKey: 'nav.suppliers', permission: 'supplier:read', pillar: 'NETWORK', icon: Factory },
   { href: '/purchase-orders', labelKey: 'nav.orders', permission: 'purchase_order:read', pillar: 'NETWORK', icon: ClipboardList },
   { href: '/inventory', labelKey: 'nav.inventory', permission: 'inventory:read', pillar: 'NETWORK', icon: Warehouse },
+  { href: '/master-data', labelKey: 'md.nav', permission: 'product:read', pillar: 'NETWORK', icon: Database },
 ];
 
 export const PILLARS: Array<{ id: Pillar; labelKey: TranslationKey; icon: LucideIcon }> = [
