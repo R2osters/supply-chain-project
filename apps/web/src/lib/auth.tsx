@@ -25,7 +25,8 @@ interface AuthState {
   user: SessionUser | null;
   /** True until the initial silent refresh has resolved, so pages do not flash the login screen. */
   loading: boolean;
-  signIn(email: string, password: string): Promise<void>;
+  /** Resolves with the signed-in account, so the caller can route it to its own home page. */
+  signIn(email: string, password: string): Promise<SessionUser>;
   signOut(): Promise<void>;
   /**
    * Changes the signed-in user's password and keeps them signed in. The API ends every session
@@ -98,6 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(result.accessToken);
     setRefreshToken(result.refreshToken);
     setUser(result.user);
+    return result.user;
   }, []);
 
   const signOut = useCallback(async () => {

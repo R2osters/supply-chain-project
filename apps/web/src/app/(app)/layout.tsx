@@ -11,7 +11,7 @@ import { Banner, Logo, Provenance } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { LOCALES, useI18n } from '@/lib/i18n';
-import { ACCOUNT_NAV, NAV, PILLARS, isActive, type Pillar } from '@/lib/nav';
+import { ACCOUNT_NAV, NAV, PILLARS, homeFor, isActive, pageFor, type Pillar } from '@/lib/nav';
 import { useTheme } from '@/lib/theme';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +29,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
+
+  // A page this role may not open (a bookmark, the root redirect, an old link) sends the account
+  // to its own home instead of a screen of refusals: a driver never sees the dashboard.
+  const page = pageFor(pathname);
+  const forbidden = Boolean(user && page?.permission && !can(page.permission));
+  useEffect(() => {
+    if (forbidden && user) router.replace(homeFor(user.role));
+  }, [forbidden, user, router]);
 
   // Nothing is fetched behind the "choose your password" screen: the API would refuse it all.
   const ready = Boolean(user) && !user?.mustChangePassword;
@@ -110,7 +118,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activePillar: Pillar = current?.pillar ?? pillars[0]?.id ?? 'TRACK';
   const modules = visible.filter((item) => item.pillar === activePillar);
 
-  if (loading || !user) {
+  if (loading || !user || forbidden) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4">
         <span className="pop text-[var(--color-ink)]">
@@ -129,7 +137,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 border-b border-[var(--color-line)] bg-[color-mix(in_srgb,var(--color-bg)_92%,transparent)] backdrop-blur-md">
         {/* ----------------------------------------------------- row 1: brand */}
         <div className="mx-auto flex max-w-[1680px] items-center gap-3 px-4 py-2.5 md:gap-4 md:px-8">
-          <Link href="/dashboard" className="flex items-center gap-2 text-[var(--color-ink)]" aria-label="SCIP">
+          <Link href={homeFor(user.role)} className="flex items-center gap-2 text-[var(--color-ink)]" aria-label="SCIP">
             <Logo size={24} />
             <b className="text-[15px] font-semibold tracking-[0.06em]">SCIP</b>
           </Link>

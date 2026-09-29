@@ -21,7 +21,7 @@ import {
   Warehouse,
   type LucideIcon,
 } from 'lucide-react';
-import type { Permission } from '@scip/shared';
+import { roleHasPermission, type Permission, type UserRole } from '@scip/shared';
 import type { TranslationKey } from './i18n';
 
 export type Pillar = 'TRACK' | 'OPTIMISE' | 'NETWORK';
@@ -85,4 +85,31 @@ export const PILLARS: Array<{ id: Pillar; labelKey: TranslationKey; icon: Lucide
 
 export function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/**
+ * Party-scoped roles open on their own work rather than on the first module they may see: a
+ * driver on the deliveries to make, a supplier on its orders, a customer on its shipments.
+ */
+const PREFERRED_HOME: Partial<Record<UserRole, string>> = {
+  DRIVER: '/deliveries',
+  SUPPLIER: '/purchase-orders',
+  CUSTOMER: '/shipments',
+};
+
+/**
+ * Where a signed-in account lands: never a page its role would be refused. Office roles get the
+ * first module they may open (the control dashboard for all of them today); `/account` is the
+ * last resort because every signed-in account may open it.
+ */
+export function homeFor(role: string): string {
+  const allowed = (item: NavItem) => roleHasPermission(role as UserRole, item.permission);
+  const preferred = NAV.find((item) => item.href === PREFERRED_HOME[role as UserRole]);
+  if (preferred && allowed(preferred)) return preferred.href;
+  return NAV.find(allowed)?.href ?? '/account';
+}
+
+/** The module or account page a path belongs to, when the navigation knows it. */
+export function pageFor(pathname: string): { href: string; permission: Permission | null } | undefined {
+  return [...NAV, ...ACCOUNT_NAV].find((item) => isActive(pathname, item.href));
 }

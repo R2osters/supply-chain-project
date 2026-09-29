@@ -6,6 +6,7 @@ import { Anchor, ChevronRight, Moon, Radar, Split, Sun, TrendingUp, type LucideI
 import { Banner, Button, Logo } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { LOCALES, useI18n, type TranslationKey } from '@/lib/i18n';
+import { homeFor } from '@/lib/nav';
 import { useTheme } from '@/lib/theme';
 import { FirstRun, useSetupStatus } from './_components/first-run';
 import { ForgotPassword } from './_components/forgot-password';
@@ -50,7 +51,7 @@ export default function LoginPage() {
   const fallbackTimer = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!loading && user) router.replace('/dashboard');
+    if (!loading && user) router.replace(homeFor(user.role));
   }, [loading, user, router]);
 
   // Pre-fill the demo administrator only when those accounts exist on this install.
@@ -70,8 +71,8 @@ export default function LoginPage() {
   );
 
   async function enter(accountEmail: string, accountPassword: string) {
-    await signIn(accountEmail, accountPassword);
-    router.replace('/dashboard');
+    const account = await signIn(accountEmail, accountPassword);
+    router.replace(homeFor(account.role));
   }
 
   async function submit(event: React.FormEvent) {
@@ -79,13 +80,15 @@ export default function LoginPage() {
     setError(null);
     setBusy(true);
     try {
-      await signIn(email.trim(), password);
-      router.replace('/dashboard');
-      // On a cold dev server the first compile of /dashboard can abort the client navigation and
-      // leave a signed-in user staring at the login form. If we are still here after 1.5 s, do
-      // a plain page load instead; in production the timer simply never fires.
+      const account = await signIn(email.trim(), password);
+      // Each role opens on a page it may see: a driver on its deliveries, not the dashboard.
+      const home = homeFor(account.role);
+      router.replace(home);
+      // On a cold dev server the first compile of the home page can abort the client navigation
+      // and leave a signed-in user staring at the login form. If we are still here after 1.5 s,
+      // do a plain page load instead; in production the timer simply never fires.
       fallbackTimer.current = window.setTimeout(() => {
-        if (window.location.pathname.startsWith('/login')) window.location.assign('/dashboard');
+        if (window.location.pathname.startsWith('/login')) window.location.assign(home);
       }, NAVIGATION_FALLBACK_MS);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : t('login.v3.failed'));
