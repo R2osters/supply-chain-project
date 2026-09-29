@@ -1,4 +1,4 @@
-// src/theme/tokens.ts — charter tokens (spec § 2). Signal colours are only used at their own cue.
+// src/theme/tokens.ts — charter tokens (spec §§ 3.2 and 3.4). Signal colours are only used at their own cue.
 export type Theme = 'light' | 'dark';
 export type SignalColor = 'crit' | 'warn' | 'ok' | 'live' | 'info' | 'demo' | 'ink';
 export interface Palette { bg: string; surface: string; surface2: string; line: string; ink: string; action: string; actionText: string; muted: string; dim: string; map: string }
