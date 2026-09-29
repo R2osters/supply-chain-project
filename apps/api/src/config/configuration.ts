@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
 
 /**
  * Single source of truth for runtime configuration.
@@ -41,6 +42,15 @@ export interface AppConfig {
    * network can open the app at http://<this PC>:<port>/drive — the desktop has no web server.
    */
   webDistDir: string | null;
+  /**
+   * `desktop` is the single-company install: registration closes once the first company exists.
+   * `server` keeps open self-service registration.
+   */
+  runtime: 'desktop' | 'server';
+  setup: {
+    /** Compiled demo seed shipped with the desktop build; absent elsewhere. */
+    demoSeedScript: string | null;
+  };
   database: { url: string };
   auth: {
     accessSecret: string;
@@ -153,6 +163,10 @@ export default (): AppConfig => {
     ]),
 
     webDistDir: process.env.WEB_DIST_DIR || null,
+    runtime: process.env.SCIP_RUNTIME === 'desktop' ? 'desktop' : 'server',
+    setup: {
+      demoSeedScript: process.env.DEMO_SEED_SCRIPT || resolve(process.cwd(), 'seed.js'),
+    },
 
     database: {
       url: process.env.DATABASE_URL ?? '',

@@ -34,6 +34,7 @@ import { TrafficModule } from './modules/traffic/traffic.module';
 import { GeocodingModule } from './modules/geocoding/geocoding.module';
 import { SatellitesModule } from './modules/satellites/satellites.module';
 import { RadioModule } from './modules/radio/radio.module';
+import { SetupModule } from './modules/setup/setup.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { RadioModule } from './modules/radio/radio.module';
     EventsModule,
     MailModule,
     AuthModule,
+    SetupModule,
     HealthModule,
     MasterDataModule,
     SuppliersModule,

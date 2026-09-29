@@ -3,7 +3,9 @@ import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import type { NextFunction, Request, Response } from 'express';
 import { existsSync } from 'node:fs';
+import { extname, relative, resolve, sep } from 'node:path';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -73,8 +75,7 @@ async function bootstrap(): Promise<void> {
 
   const webDistDir = config.get('webDistDir', { infer: true });
   if (webDistDir && existsSync(webDistDir)) {
-    // `extensions` maps /drive to drive.html, which is how the static export names its pages.
-    app.useStaticAssets(webDistDir, { extensions: ['html'], index: 'index.html' });
+    serveStaticExport(app, webDistDir);
     logger.log(`Serving the web UI from ${webDistDir}`);
   }
 
@@ -120,6 +121,25 @@ async function bootstrap(): Promise<void> {
 
   await app.listen(port, '0.0.0.0');
   logger.log(`SCIP API listening on http://localhost:${port}/${prefix}`);
+}
+
+/**
+ * Serves a Next.js static export. It names pages `shipments.html` next to a `shipments/` folder
+ * (for `shipments/detail.html`), and plain express.static would see the folder first and
+ * redirect `/shipments` to a `/shipments/` that has no index. Page routes are therefore mapped
+ * to their `.html` file before the static handler runs.
+ */
+function serveStaticExport(app: NestExpressApplication, rootDir: string): void {
+  const root = resolve(rootDir);
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.method !== 'GET' || extname(req.path) !== '' || req.path === '/') return next();
+    const page = resolve(root, `.${req.path.replace(/\/+$/, '')}.html`);
+    // resolve() collapses any `..`; the prefix check keeps the result inside the export.
+    if (!page.startsWith(root + sep) || !existsSync(page)) return next();
+    // Relative to `root`: send() refuses dot-segments, and the install path itself may have one.
+    res.sendFile(relative(root, page), { root });
+  });
+  app.useStaticAssets(root, { index: 'index.html', redirect: false });
 }
 
 void bootstrap();

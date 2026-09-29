@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -27,15 +28,17 @@ import type {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private readonly auth: AppConfig['auth'];
+  private readonly singleCompany: boolean;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly tokens: TokenService,
     private readonly mail: MailService,
-    config: ConfigService<{ auth: AppConfig['auth'] }, true>,
+    config: ConfigService<{ auth: AppConfig['auth']; runtime: AppConfig['runtime'] }, true>,
   ) {
     this.auth = config.get('auth', { infer: true });
+    this.singleCompany = config.get('runtime', { infer: true }) === 'desktop';
   }
 
   // -------------------------------------------------------------------- register
@@ -46,6 +49,12 @@ export class AuthService {
    * administrator would be unrecoverable through the UI.
    */
   async register(dto: RegisterDto, context: TokenContext = {}) {
+    // A desktop install holds one company. Its API is reachable from the LAN (drivers' phones),
+    // so once set up, registration must not let a neighbour open a second tenant on this PC.
+    if (this.singleCompany && (await this.prisma.company.count()) > 0) {
+      throw new ForbiddenException('SCIP is already set up on this computer; ask an administrator for an invitation');
+    }
+
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
       throw new ConflictException('An account with this email already exists');
