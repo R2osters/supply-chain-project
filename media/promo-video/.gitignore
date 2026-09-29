@@ -1,0 +1,8 @@
+node_modules/
+out/
+.venv/
+.geo-cache/
+.vo-cache/
+public/audio/stems/
+public/audio/master.wav
+__pycache__/

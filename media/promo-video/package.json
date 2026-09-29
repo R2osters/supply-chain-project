@@ -1,0 +1,37 @@
+{
+  "name": "scip-promo-video",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "still": "remotion still src/index.ts SignalVideo",
+    "render": "remotion render src/index.ts SignalVideo out/scip-le-signal.mp4 --codec=h264 --crf=18 --audio-codec=aac --audio-bitrate=320k",
+    "render:draft": "remotion render src/index.ts SignalVideo out/scip-le-signal-draft.mp4 --codec=h264 --crf=28 --scale=0.6667",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "geo": "node scripts/geo.mjs",
+    "stills": "node scripts/stills.mjs",
+    "check:determinism": "node scripts/check-determinism.mjs"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@fontsource/ibm-plex-sans-condensed": "5.3.0",
+    "@remotion/bundler": "4.0.530",
+    "@remotion/cli": "4.0.530",
+    "@remotion/fonts": "4.0.530",
+    "@remotion/renderer": "4.0.530",
+    "d3-geo": "3.1.1",
+    "ogl": "1.0.11",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "remotion": "4.0.530"
+  },
+  "devDependencies": {
+    "@types/d3-geo": "^3.1.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.7.3",
+    "vitest": "5.0.2"
+  }
+}
