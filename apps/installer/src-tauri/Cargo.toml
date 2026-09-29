@@ -1,0 +1,67 @@
+[package]
+name = "scip-installer"
+version = "0.2.0"
+description = "SCIP Setup: custom installer and uninstaller for the SCIP desktop app"
+authors = ["SCIP"]
+edition = "2021"
+rust-version = "1.83"
+publish = false
+# `tauri build` must know which binary is the installer; `payload-pack` is a build tool.
+default-run = "scip-installer"
+
+[lib]
+# The `_lib` suffix avoids a name clash between the lib and bin targets on Windows (cargo issue #8519).
+name = "scip_installer_lib"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "scip-installer"
+path = "src/main.rs"
+
+[[bin]]
+name = "payload-pack"
+path = "src/bin/payload_pack.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+# Links on the screens (license, source sign-up pages) open in the system browser.
+tauri-plugin-opener = "2"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tar = "0.4"
+# `zstdmt`: the packer compresses ~1.2 GB at level 19, single-threaded that takes ages.
+zstd = { version = "0.13", features = ["zstdmt"] }
+tokio = { version = "1", features = ["rt", "time", "net", "macros"] }
+tokio-postgres = "0.7"
+# Windows' own TLS stack (SChannel): no OpenSSL to ship.
+native-tls = "0.2"
+postgres-native-tls = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55"
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Globalization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_Com",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
+# No `panic = "abort"` (unlike apps/desktop): a bug in one command must not kill the installer
+# halfway through a copy.

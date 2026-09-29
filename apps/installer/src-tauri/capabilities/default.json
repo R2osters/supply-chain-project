@@ -1,0 +1,32 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Installer window: the installer commands, their events, and closing the window (Cancel), http(s) links in the system browser.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-close",
+    "allow-get-context",
+    "allow-run-system-checks",
+    "allow-test-database",
+    "allow-start-install",
+    "allow-retry-install",
+    "allow-launch-scip",
+    "allow-start-uninstall",
+    "allow-read-log",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "http://*"
+        }
+      ]
+    }
+  ]
+}

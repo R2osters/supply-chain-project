@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-launch-scip"
+description = "Enables the launch_scip command without any pre-configured scope."
+commands.allow = ["launch_scip"]
+
+[[permission]]
+identifier = "deny-launch-scip"
+description = "Denies the launch_scip command without any pre-configured scope."
+commands.deny = ["launch_scip"]

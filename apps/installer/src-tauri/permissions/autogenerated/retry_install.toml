@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-retry-install"
+description = "Enables the retry_install command without any pre-configured scope."
+commands.allow = ["retry_install"]
+
+[[permission]]
+identifier = "deny-retry-install"
+description = "Denies the retry_install command without any pre-configured scope."
+commands.deny = ["retry_install"]
