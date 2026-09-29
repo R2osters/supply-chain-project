@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Audit, CurrentUser, RequirePermissions } from '../../common/decorators';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
@@ -11,6 +11,7 @@ import {
   VesselQueryDto,
   VesselSearchDto,
 } from './maritime.dto';
+import { parseBoundingBox } from '../aircraft/aircraft.model';
 import { MaritimeService } from './maritime.service';
 import { VesselTrackingService } from './vessel-tracking.service';
 
@@ -22,6 +23,18 @@ export class MaritimeController {
     private readonly service: MaritimeService,
     private readonly tracking: VesselTrackingService,
   ) {}
+
+  @Get('live')
+  @RequirePermissions('gps:read')
+  @ApiOperation({
+    summary: 'Every ship heard on the live AIS feed inside a map view',
+    description: 'Query: minLat, minLon, maxLat, maxLon. Empty while no AIS key is configured.',
+  })
+  live(@Query() query: Record<string, string>) {
+    const box = parseBoundingBox(query);
+    if (!box) throw new BadRequestException('minLat, minLon, maxLat and maxLon must describe a valid box');
+    return this.tracking.liveInView(box);
+  }
 
   /* ---------------------------------------------------------------- search */
 

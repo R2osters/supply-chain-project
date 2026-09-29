@@ -17,6 +17,8 @@ import {
   type VesselProvider,
 } from './vessel-provider';
 import { MarineTrafficProvider } from './marinetraffic.provider';
+import { FeedSettingsService } from '../settings/feed-settings.service';
+import { type LiveBox, LiveVesselIndex } from './live-vessels';
 
 /**
  * Simulator tick. Fixed because `@Interval` needs a compile-time constant; how far a vessel moves
@@ -50,11 +52,14 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
 
   private readonly simulatorEnabled: boolean;
   private readonly maritimeMultiplier: number;
+  /** Every ship heard on the feed, tracked or not, for the live map layer. */
+  private readonly live = new LiveVesselIndex();
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly maritime: MaritimeService,
     private readonly config: ConfigService<AppConfig, true>,
+    private readonly feeds: FeedSettingsService,
   ) {
     this.simulatorEnabled = this.config.get('simulator', { infer: true }).enabled;
     this.maritimeMultiplier = this.config.get('maritime', { infer: true }).speedMultiplier;
@@ -62,7 +67,19 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleInit(): void {
+    this.startProvider();
+    // A key typed into the settings screen switches the feed over without a restart.
+    this.feeds.onChange((changed) => {
+      if (!changed.includes('aisStreamApiKey') && !changed.includes('marineTrafficApiKey')) return;
+      this.stopProvider();
+      this.startProvider();
+    });
+  }
+
+  private startProvider(): void {
     const maritimeConfig = this.config.get('maritime', { infer: true });
+    const marineTrafficApiKey = this.feeds.get('marineTrafficApiKey');
+    const aisStreamApiKey = this.feeds.get('aisStreamApiKey');
 
     /*
      * Source precedence: MarineTraffic, then AISStream, then the simulator.
@@ -76,9 +93,9 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
      * Only one source ever runs. Mixing feeds for the same vessel produces a track whose points
      * disagree about where it was, and nobody can untangle that afterwards.
      */
-    if (maritimeConfig.marineTrafficApiKey) {
+    if (marineTrafficApiKey) {
       const marineTraffic = new MarineTrafficProvider(
-        maritimeConfig.marineTrafficApiKey,
+        marineTrafficApiKey,
         (fix) => this.handleFix(fix),
         maritimeConfig.marineTrafficPollSeconds,
         () => this.trackedMmsi(),
@@ -93,9 +110,9 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    if (!maritimeConfig.aisStreamApiKey) {
+    if (!aisStreamApiKey) {
       this.logger.warn(
-        'No AISSTREAM_API_KEY or MARINETRAFFIC_API_KEY configured — vessel positions are ' +
+        'No AISStream or MarineTraffic key configured — vessel positions are ' +
           'simulated along great-circle tracks and stamped SIMULATOR. aisstream.io issues a free ' +
           'key for live global AIS; MarineTraffic offers wider satellite coverage, for a fee.',
       );
@@ -103,7 +120,7 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.ais = new AisStreamProvider(
-      maritimeConfig.aisStreamApiKey,
+      aisStreamApiKey,
       (fix) => this.handleFix(fix),
       maritimeConfig.aisBoundingBoxes,
     );
@@ -114,17 +131,40 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy(): void {
+    this.stopProvider();
+  }
+
+  private stopProvider(): void {
     this.ais?.disconnect();
     this.marineTraffic?.stop();
+    this.ais = null;
+    this.marineTraffic = null;
+    this.provider = new SimulatedVesselProvider();
+    this.live.clear();
+  }
+
+  /** Ships heard on the live feed inside a map view. Empty while positions are simulated. */
+  liveInView(box: LiveBox) {
+    const isLive = this.provider.isLive;
+    return {
+      source: this.provider.name,
+      isLive,
+      howToGoLive: isLive ? null : 'Add a free AISStream key in Settings → Data sources for live ships.',
+      fetchedAt: new Date().toISOString(),
+      vessels: isLive ? this.live.inBox(box) : [],
+    };
   }
 
   /** One landing point for every provider, so all sources behave identically downstream. */
   private handleFix(fix: VesselFix): void {
+    if (this.provider.isLive) this.live.record(fix);
     void this.maritime
       .recordFix(fix)
       .then((result) => {
-        if (result.matched) this.fixesRecorded += 1;
-        else this.fixesUnmatched += 1;
+        if (result.matched) {
+          this.fixesRecorded += 1;
+          this.live.markTracked(fix.mmsi);
+        } else this.fixesUnmatched += 1;
       })
       .catch((error) => this.logger.debug(`Could not record vessel fix: ${error}`));
   }
@@ -160,9 +200,8 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
       uptimeMinutes,
       howToGoLive: this.provider.isLive
         ? null
-        : 'Set AISSTREAM_API_KEY (free at aisstream.io) for live terrestrial AIS, or ' +
-          'MARINETRAFFIC_API_KEY (paid) for satellite coverage that also reaches mid-ocean. ' +
-          'Then restart the API.',
+        : 'Add a free AISStream key (aisstream.io) in Settings → Data sources for live terrestrial ' +
+          'AIS, or a MarineTraffic key (paid) for satellite coverage that also reaches mid-ocean.',
       /**
        * Always available, key or not: public vessel pages are ordinary hyperlinks. Useful even
        * with a paid feed running, for a second opinion or the port-call history this system does
