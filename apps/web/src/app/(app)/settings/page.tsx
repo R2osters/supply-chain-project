@@ -201,7 +201,11 @@ function KeyField({
         <span className="t-data text-[11px] text-[var(--color-dim)]">
           {state.configured
             ? `${t('settings.configured', { hint: state.hint ?? '' }).trim()} · ${
-                state.from === 'environment' ? t('settings.fromEnv') : t('settings.fromSettings')
+                state.from === 'environment'
+                  ? t('settings.fromEnv')
+                  : state.from === 'bundled'
+                    ? t('settings.fromBundled')
+                    : t('settings.fromSettings')
               }`
             : t('settings.notConfigured')}
         </span>

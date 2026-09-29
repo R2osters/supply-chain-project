@@ -20,8 +20,11 @@ export type FeedUpdate = Partial<Record<FeedKey, string | null>>;
 
 export interface FeedKeyState {
   configured: boolean;
-  /** Where the effective value comes from: the settings screen wins over the environment. */
-  from: 'settings' | 'environment' | null;
+  /**
+   * Where the effective value comes from: the settings screen wins over the environment, which
+   * wins over the keys bundled in the build.
+   */
+  from: 'settings' | 'environment' | 'bundled' | null;
   /** Last four characters only; the full value never leaves the server. */
   hint: string | null;
 }
@@ -41,6 +44,7 @@ export class FeedSettingsService {
   private readonly logger = new Logger(FeedSettingsService.name);
   private readonly file: string;
   private readonly fromEnvironment: FeedValues;
+  private readonly bundled: FeedValues;
   private stored: FeedValues;
   private readonly listeners: Listener[] = [];
 
@@ -57,18 +61,25 @@ export class FeedSettingsService {
       tomtomApiKey: intel.tomtomApiKey,
       firmsMapKey: intel.firmsMapKey,
     });
-    this.stored = this.load();
+    this.bundled = readValues(config.get('settings', { infer: true }).bundledFile, this.logger);
+    this.stored = readValues(this.file, this.logger);
   }
 
   /** The effective value of a key, or null when neither the screen nor the environment set it. */
   get(key: FeedKey): string | null {
-    return this.stored[key] ?? this.fromEnvironment[key] ?? null;
+    return this.stored[key] ?? this.fromEnvironment[key] ?? this.bundled[key] ?? null;
   }
 
   describe(): Record<FeedKey, FeedKeyState> {
     const entries = FEED_KEYS.map((key): [FeedKey, FeedKeyState] => {
       const value = this.get(key);
-      const from = this.stored[key] ? 'settings' : this.fromEnvironment[key] ? 'environment' : null;
+      const from = this.stored[key]
+        ? 'settings'
+        : this.fromEnvironment[key]
+          ? 'environment'
+          : this.bundled[key]
+            ? 'bundled'
+            : null;
       return [key, { configured: value !== null, from, hint: value ? `••••${value.slice(-4)}` : null }];
     });
     return Object.fromEntries(entries) as Record<FeedKey, FeedKeyState>;
@@ -105,28 +116,29 @@ export class FeedSettingsService {
     this.listeners.push(listener);
   }
 
-  private load(): FeedValues {
-    if (!existsSync(this.file)) return {};
-    try {
-      const raw = JSON.parse(readFileSync(this.file, 'utf8')) as Record<string, unknown>;
-      const values: FeedValues = {};
-      for (const key of FEED_KEYS) {
-        if (typeof raw[key] === 'string' && raw[key]) values[key] = raw[key] as string;
-      }
-      return values;
-    } catch (error) {
-      // A corrupt file must not stop the API; the user can re-enter the keys.
-      this.logger.warn(`Ignoring unreadable ${this.file}: ${error instanceof Error ? error.message : error}`);
-      return {};
-    }
-  }
-
   /** Write-then-rename, so a crash mid-save never leaves a half-written file behind. */
   private save(values: FeedValues): void {
     mkdirSync(dirname(this.file), { recursive: true });
     const temporary = `${this.file}.tmp`;
     writeFileSync(temporary, JSON.stringify(values, null, 2), { mode: 0o600 });
     renameSync(temporary, this.file);
+  }
+}
+
+/** Reads a JSON file of feed keys; a missing or unreadable file simply contributes nothing. */
+function readValues(file: string | null, logger: Logger): FeedValues {
+  if (!file || !existsSync(file)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const values: FeedValues = {};
+    for (const key of FEED_KEYS) {
+      if (typeof raw[key] === 'string' && raw[key]) values[key] = raw[key] as string;
+    }
+    return values;
+  } catch (error) {
+    // A corrupt file must not stop the API; the user can re-enter the keys.
+    logger.warn(`Ignoring unreadable ${file}: ${error instanceof Error ? error.message : error}`);
+    return {};
   }
 }
 

@@ -321,7 +321,7 @@ impl RuntimeContext {
     }
 
     pub fn api_env(&self) -> BTreeMap<String, String> {
-        let pairs: [(&str, String); 17] = [
+        let pairs: [(&str, String); 18] = [
             ("NODE_ENV", "production".to_owned()),
             ("SCIP_RUNTIME", "desktop".to_owned()),
             ("API_PORT", self.ports.api.to_string()),
@@ -339,6 +339,8 @@ impl RuntimeContext {
             ("WEB_DIST_DIR", path_arg(&self.resources.web_dir())),
             // Keys typed into the app's settings screen (AIS, OpenSky, TomTom...), kept with the data.
             ("SETTINGS_FILE", path_arg(&self.dirs.root.join("settings.json"))),
+            // Keys shipped inside this build, if any (scripts/stage-defaults.mjs); lowest precedence.
+            ("BUNDLED_FEEDS_FILE", path_arg(&self.resources.root.join("defaults").join("feeds.json"))),
             // Chosen at install time: demo installs animate fake vehicles, production ones wait
             // for real trackers and phones.
             ("SIMULATOR_ENABLED", self.simulator.to_string()),

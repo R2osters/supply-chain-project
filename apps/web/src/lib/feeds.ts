@@ -8,7 +8,8 @@
 
 export interface FeedKey {
   configured: boolean;
-  from: 'settings' | 'environment' | null;
+  /** `bundled`: shipped inside this build of SCIP (keys.local.json at build time). */
+  from: 'settings' | 'environment' | 'bundled' | null;
   /** Masked tail such as `••••3f9a`, never the key itself. */
   hint: string | null;
 }

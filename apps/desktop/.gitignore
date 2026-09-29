@@ -11,3 +11,6 @@ web-dist/
 
 # Download cache used by the staging scripts
 .cache/
+
+# The builder's own data-feed keys, bundled into their build (see keys.example.json)
+keys.local.json

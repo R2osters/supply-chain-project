@@ -1,0 +1,9 @@
+{
+  "_readme": "Copy to keys.local.json (gitignored) and fill the keys you have; leave the others empty. They are bundled into YOUR build only. Free sign-ups: AISStream https://aisstream.io (GitHub login) — live ships worldwide; TomTom https://developer.tomtom.com — live road traffic; NASA FIRMS https://firms.modaps.eosdis.nasa.gov/api/map_key/ — satellite fire detections; OpenSky https://opensky-network.org (Account → API client) — higher aircraft quota. MarineTraffic is paid.",
+  "aisStreamApiKey": "",
+  "tomtomApiKey": "",
+  "firmsMapKey": "",
+  "openskyClientId": "",
+  "openskyClientSecret": "",
+  "marineTrafficApiKey": ""
+}

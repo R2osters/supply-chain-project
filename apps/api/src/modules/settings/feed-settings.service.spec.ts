@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import type { AppConfig } from '../../config/configuration';
 import { FeedSettingsService } from './feed-settings.service';
 
-function makeService(file: string, env: { ais?: string; tomtom?: string } = {}) {
+function makeService(file: string, env: { ais?: string; tomtom?: string } = {}, bundledFile: string | null = null) {
   const sections: Record<string, unknown> = {
-    settings: { file },
+    settings: { file, bundledFile },
     maritime: { aisStreamApiKey: env.ais ?? null, marineTrafficApiKey: null },
     aircraft: { openskyClientId: null, openskyClientSecret: null },
     intel: { tomtomApiKey: env.tomtom ?? null, firmsMapKey: null },
@@ -57,5 +57,20 @@ describe('FeedSettingsService', () => {
     const file = tempFile();
     writeFileSync(file, '{not json');
     expect(makeService(file).get('aisStreamApiKey')).toBeNull();
+  });
+
+  it('uses keys bundled in the build when nothing else sets them, lowest precedence', () => {
+    const bundled = tempFile();
+    writeFileSync(bundled, JSON.stringify({ aisStreamApiKey: 'bundled-ais-1111', tomtomApiKey: 'bundled-tt-2222' }));
+    const service = makeService(tempFile(), { tomtom: 'env-tomtom-3333' }, bundled);
+    expect(service.get('aisStreamApiKey')).toBe('bundled-ais-1111');
+    expect(service.describe().aisStreamApiKey).toEqual({ configured: true, from: 'bundled', hint: '••••1111' });
+    // The environment beats the bundled key, and a key typed in the app beats both.
+    expect(service.get('tomtomApiKey')).toBe('env-tomtom-3333');
+    service.update({ aisStreamApiKey: 'typed-4444' });
+    expect(service.get('aisStreamApiKey')).toBe('typed-4444');
+    // Clearing the typed key falls back to the bundled one, not to nothing.
+    service.update({ aisStreamApiKey: null });
+    expect(service.get('aisStreamApiKey')).toBe('bundled-ais-1111');
   });
 });

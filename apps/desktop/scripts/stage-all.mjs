@@ -1,9 +1,10 @@
 // Fills everything the installer ships. Run before `npm run build`:
 //   node scripts/stage-all.mjs            all components
-//   node scripts/stage-all.mjs web api    only some (node, postgres, api, ai, web)
+//   node scripts/stage-all.mjs web api    only some (node, postgres, api, ai, web, defaults)
 import { isMain } from './lib/fetch.mjs';
 import { stageAi } from './stage-ai.mjs';
 import { stageApi } from './stage-api.mjs';
+import { stageDefaults } from './stage-defaults.mjs';
 import { stageNode } from './stage-node.mjs';
 import { stagePostgres } from './stage-postgres.mjs';
 import { stageWeb } from './stage-web.mjs';
@@ -14,6 +15,7 @@ const STAGES = {
   api: stageApi,
   ai: stageAi,
   web: stageWeb,
+  defaults: stageDefaults,
 };
 
 export async function stageAll(names = Object.keys(STAGES)) {
