@@ -22,7 +22,9 @@
  * dispatcher would only discover from an empty map.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { BatteryCharging, Moon, Play, Square, Sun, TriangleAlert, WifiOff } from 'lucide-react';
+import { Banner, Logo, Provenance, type ProvenanceKind } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 import { clear, count, drop, enqueue, peek, trim, type BufferedFix } from '@/lib/drive-buffer';
 
@@ -40,6 +42,110 @@ interface Credential {
   secret: string;
 }
 
+type DriveTheme = 'light' | 'dark';
+const THEME_KEY = 'scip.drive.theme';
+
+/**
+ * Full sun on a windscreen washes out grey-on-grey. In day mode the screen drops the product's
+ * soft greys for ink on pure white and darker secondary text; night mode keeps the regular dark
+ * tokens, which are already high-contrast and do not dazzle a driver at night.
+ */
+const SUNLIGHT_TOKENS = {
+  '--color-bg': '#ffffff',
+  '--color-surface': '#f1f2f3',
+  '--color-surface-2': '#ffffff',
+  '--color-line': '#b9bcc0',
+  '--color-ink': '#0b0c0d',
+  '--color-muted': '#34383c',
+  '--color-dim': '#4a4f54',
+} as CSSProperties;
+
+/**
+ * The driver screen is light by default whatever the dispatcher's desktop preference, because it
+ * is read outdoors. It sets `data-theme` on <html> itself (the tokens hang off that attribute) and
+ * restores the previous value on the way out, so the operator app is left as it was found.
+ */
+function useDriveTheme(): [DriveTheme, () => void] {
+  const [theme, setTheme] = useState<DriveTheme>('light');
+
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(THEME_KEY);
+    } catch {
+      /* private mode: day mode for the session */
+    }
+    if (stored === 'dark') setTheme('dark');
+    const previous = document.documentElement.getAttribute('data-theme');
+    return () => {
+      if (previous) document.documentElement.setAttribute('data-theme', previous);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
+  const toggle = useCallback(() => {
+    setTheme((current) => {
+      const next = current === 'dark' ? 'light' : 'dark';
+      try {
+        window.localStorage.setItem(THEME_KEY, next);
+      } catch {
+        /* ignored */
+      }
+      return next;
+    });
+  }, []);
+
+  return [theme, toggle];
+}
+
+/** Page frame shared by the pairing and tracking screens: one column, phone width, big type. */
+function DriveFrame({
+  theme,
+  onToggleTheme,
+  identifier,
+  children,
+}: {
+  theme: DriveTheme;
+  onToggleTheme: () => void;
+  identifier?: string;
+  children: ReactNode;
+}) {
+  const { t } = useI18n();
+  const ThemeIcon = theme === 'dark' ? Sun : Moon;
+  return (
+    <main
+      className="min-h-screen bg-[var(--color-bg)] text-[16px] text-[var(--color-ink)]"
+      style={theme === 'light' ? SUNLIGHT_TOKENS : undefined}
+    >
+      <div className="mx-auto flex min-h-screen max-w-md flex-col gap-5 px-4 pb-[max(20px,env(safe-area-inset-bottom))] pt-[max(16px,env(safe-area-inset-top))]">
+        <header className="flex items-center justify-between gap-3">
+          <span className="pop flex items-center gap-2.5">
+            <Logo size={28} />
+            <span className="text-[17px] font-semibold tracking-[0.06em]">SCIP</span>
+            <span className="text-[16px] text-[var(--color-muted)]">· {t('drive.title')}</span>
+          </span>
+          <span className="flex items-center gap-2">
+            {identifier && <span className="t-data truncate text-[16px] text-[var(--color-muted)]">{identifier}</span>}
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              aria-label={theme === 'dark' ? t('drive.v3.dayMode') : t('drive.v3.nightMode')}
+              title={theme === 'dark' ? t('drive.v3.dayMode') : t('drive.v3.nightMode')}
+              className="grid h-12 w-12 shrink-0 place-items-center rounded-full border border-[var(--color-line)] bg-[var(--color-surface-2)]"
+            >
+              <ThemeIcon className="h-5 w-5" />
+            </button>
+          </span>
+        </header>
+        {children}
+      </div>
+    </main>
+  );
+}
+
 interface Stats {
   taken: number;
   queued: number;
@@ -50,6 +156,7 @@ interface Stats {
 
 export default function DrivePage() {
   const { t, locale } = useI18n();
+  const [theme, toggleTheme] = useDriveTheme();
 
   const [credential, setCredential] = useState<Credential | null>(null);
   const [tracking, setTracking] = useState(false);
@@ -286,83 +393,81 @@ export default function DrivePage() {
     void wakeLockRef.current?.release();
   }, []);
 
+
   /* ------------------------------------------------------------------ pair */
 
   if (!credential) {
-    return <PairingForm onPaired={setCredential} />;
+    return (
+      <DriveFrame theme={theme} onToggleTheme={toggleTheme}>
+        <PairingForm onPaired={setCredential} />
+      </DriveFrame>
+    );
   }
 
   const speedKmh =
     position?.coords.speed == null ? null : Math.round(position.coords.speed * 3.6);
 
+  // Provenance of what dispatch sees: live while fixes reach the server, stale while they pile
+  // up on the phone, off when the driver has stopped.
+  const provenance: { kind: ProvenanceKind; label: string } = !tracking
+    ? { kind: 'offline', label: t('drive.stopped') }
+    : online
+      ? { kind: 'live', label: t('drive.v3.sending') }
+      : { kind: 'stale', label: t('drive.v3.buffering', { n: stats.queued }) };
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-4 p-5">
-      <header className="flex items-baseline justify-between border-b border-hairline pb-3">
-        <span className="font-mono text-xs tracking-[0.2em] text-ink-faint uppercase">
-          SCIP · {t('drive.title')}
-        </span>
-        <span className="font-mono text-xs text-ink-faint">{credential.identifier}</span>
-      </header>
-
+    <DriveFrame theme={theme} onToggleTheme={toggleTheme} identifier={credential.identifier}>
       {/* The status block is the whole screen at arm's length in daylight. */}
-      <section
-        className={`border p-6 text-center ${
-          tracking ? 'border-ok/40 bg-ok-dim/30' : 'border-hairline bg-panel'
-        }`}
-      >
-        <div className="flex items-center justify-center gap-2">
-          <span
-            className={`h-2.5 w-2.5 rounded-full ${
-              tracking ? 'animate-pulse bg-ok' : 'bg-ink-faint'
-            }`}
-          />
-          <span className="text-lg font-semibold tracking-wide">
-            {tracking ? t('drive.tracking') : t('drive.stopped')}
-          </span>
+      <section className="panel rise flex flex-col items-center gap-4 px-5 py-7 text-center" aria-live="polite">
+        <span className="[&_.prov]:gap-2 [&_.prov]:text-[16px] [&_.prov-dot]:h-3 [&_.prov-dot]:w-3">
+          <Provenance kind={provenance.kind} label={provenance.label} />
+        </span>
+
+        <div className="flex items-end justify-center gap-2">
+          <span className="t-kpi text-[112px] leading-[0.9]">{speedKmh ?? '—'}</span>
+          <span className="t-data pb-3 text-[18px] text-[var(--color-muted)]">km/h</span>
         </div>
 
-        <div className="mt-5 flex items-end justify-center gap-2 tnum">
-          <span className="font-mono text-6xl leading-none font-semibold">
-            {speedKmh ?? '—'}
-          </span>
-          <span className="pb-1 text-sm text-ink-dim">km/h</span>
-        </div>
-
-        {position && (
-          <p className="mt-3 font-mono text-xs text-ink-faint tnum">
+        {position ? (
+          <p className="t-data m-0 text-[16px] text-[var(--color-muted)]">
             {position.coords.latitude.toFixed(5)}, {position.coords.longitude.toFixed(5)} · ±
             {Math.round(position.coords.accuracy)} m
           </p>
+        ) : (
+          tracking && <p className="m-0 text-[16px] text-[var(--color-muted)]">{t('drive.v3.noFix')}</p>
         )}
       </section>
 
       <button
         type="button"
         onClick={tracking ? stop : () => void start()}
-        // 68 px of height: a gloved thumb in a moving cab, not a mouse pointer.
-        className={`h-[68px] w-full text-base font-semibold tracking-wide uppercase transition ${
-          tracking
-            ? 'border border-alert/50 bg-alert-dim/40 text-alert active:bg-alert-dim/70'
-            : 'bg-signal text-void active:bg-signal/80'
+        // 72 px of height: a gloved thumb in a moving cab, not a mouse pointer.
+        className={`btn h-[72px] w-full gap-3 text-[18px] font-semibold [&_svg]:!h-6 [&_svg]:!w-6 ${
+          tracking ? 'border-2 !border-[var(--color-ink)]' : 'btn-primary'
         }`}
       >
+        {tracking ? <Square fill="currentColor" /> : <Play fill="currentColor" />}
         {tracking ? t('drive.stop') : t('drive.start')}
       </button>
 
       {error && (
-        <p className="border border-alert/40 bg-alert-dim/30 p-3 text-sm text-alert">{error}</p>
+        <div className="[&_b]:text-[16px] [&_span]:!text-[16px]">
+          <Banner tone="alert" icon={TriangleAlert} title={error} />
+        </div>
       )}
 
       {!online && (
-        <p className="border border-warn/40 bg-warn-dim/30 p-3 text-sm text-warn">
-          {t('drive.offline')}
-        </p>
+        <div className="[&_b]:text-[16px] [&_span]:!text-[16px]">
+          <Banner tone="warn" icon={WifiOff} title={t('drive.offline')}>
+            {t('drive.v3.buffering', { n: stats.queued })}
+          </Banner>
+        </div>
       )}
 
-      <dl className="grid grid-cols-2 gap-px border border-hairline bg-hairline">
+      <dl className="stagger m-0 grid grid-cols-2 gap-3">
         <Stat label={t('drive.fixes')} value={stats.taken} />
-        <Stat label={t('drive.queued')} value={stats.queued} tone={stats.queued > 50 ? 'warn' : undefined} />
-        <Stat label={t('drive.sent')} value={stats.sent} tone={stats.sent > 0 ? 'ok' : undefined} />
+        <Stat label={t('drive.queued')} value={stats.queued} warn={stats.queued > 50} />
+        <Stat label={t('drive.sent')} value={stats.sent} />
         <Stat
           label={t('drive.lastSent')}
           value={
@@ -377,19 +482,25 @@ export default function DrivePage() {
       </dl>
 
       {stats.rejected > 0 && (
-        <p className="font-mono text-xs text-ink-faint">
+        <p className="t-data m-0 text-[16px] text-[var(--color-muted)]">
           {t('drive.rejectedHint', { n: stats.rejected })}
         </p>
       )}
 
       {tracking && (
-        <p className="border-l-2 border-warn/50 pl-3 text-xs leading-relaxed text-ink-dim">
-          {t('drive.screenWarning')}
-          {wakeLockHeld && ` · ${t('drive.wakeLockOn')}`}
+        <p className="m-0 flex gap-3 text-[16px] leading-relaxed text-[var(--color-muted)]">
+          <TriangleAlert className="mt-1 h-5 w-5 shrink-0 text-[var(--color-warn)]" />
+          <span>
+            {t('drive.screenWarning')}
+            {wakeLockHeld && ` · ${t('drive.wakeLockOn')}`}
+          </span>
         </p>
       )}
 
-      <p className="text-xs leading-relaxed text-ink-faint">{t('drive.batteryHint')}</p>
+      <p className="m-0 flex gap-3 text-[16px] leading-relaxed text-[var(--color-muted)]">
+        <BatteryCharging className="mt-1 h-5 w-5 shrink-0" />
+        <span>{t('drive.batteryHint')}</span>
+      </p>
 
       <button
         type="button"
@@ -400,28 +511,22 @@ export default function DrivePage() {
           setCredential(null);
           setStats({ taken: 0, queued: 0, sent: 0, rejected: 0, lastSentAt: null });
         }}
-        className="mt-auto py-3 text-xs text-ink-faint underline underline-offset-4"
+        className="mt-auto min-h-12 text-[16px] text-[var(--color-muted)] underline underline-offset-4"
       >
         {t('drive.forget')}
       </button>
-    </main>
+    </DriveFrame>
   );
 }
 
-function Stat({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number | string;
-  tone?: 'ok' | 'warn';
-}) {
-  const colour = tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : 'text-ink';
+function Stat({ label, value, warn = false }: { label: string; value: number | string; warn?: boolean }) {
   return (
-    <div className="bg-panel p-3">
-      <dt className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">{label}</dt>
-      <dd className={`mt-1 font-mono text-xl tnum ${colour}`}>{value}</dd>
+    <div className="tile flex flex-col gap-1 p-4">
+      <dt className="flex items-center gap-1.5 text-[16px] text-[var(--color-muted)]">
+        {label}
+        {warn && <TriangleAlert className="h-4 w-4 text-[var(--color-warn)]" aria-hidden />}
+      </dt>
+      <dd className="t-kpi m-0 text-[34px]">{value}</dd>
     </div>
   );
 }
@@ -440,14 +545,13 @@ function PairingForm({ onPaired }: { onPaired: (credential: Credential) => void 
     if (key) setSecret(key);
   }, []);
 
+  const inputClass = 'field t-data !h-14 !rounded-[var(--radius-md)] !border-2 !text-[18px]';
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-5 p-5">
-      <div>
-        <p className="font-mono text-xs tracking-[0.2em] text-ink-faint uppercase">
-          SCIP · {t('drive.title')}
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold">{t('drive.pair')}</h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-dim">{t('drive.pairIntro')}</p>
+    <div className="stagger flex flex-1 flex-col justify-center gap-6">
+      <div className="flex flex-col gap-2">
+        <h1 className="m-0 text-[32px] font-normal leading-tight">{t('drive.pair')}</h1>
+        <p className="m-0 text-[16px] leading-relaxed text-[var(--color-muted)]">{t('drive.pairIntro')}</p>
       </div>
 
       <form
@@ -460,43 +564,41 @@ function PairingForm({ onPaired }: { onPaired: (credential: Credential) => void 
           onPaired(credential);
         }}
       >
-        <label className="flex flex-col gap-1.5">
-          <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-            {t('drive.identifier')}
-          </span>
+        <label className="flex flex-col gap-2">
+          <span className="text-[16px] font-medium">{t('drive.identifier')}</span>
           <input
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
-            className="h-14 border border-hairline bg-panel px-3 font-mono text-base outline-none focus:border-signal"
+            className={inputClass}
           />
         </label>
 
-        <label className="flex flex-col gap-1.5">
-          <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-            {t('drive.secret')}
-          </span>
+        <label className="flex flex-col gap-2">
+          <span className="text-[16px] font-medium">{t('drive.secret')}</span>
           <input
             value={secret}
             onChange={(event) => setSecret(event.target.value)}
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
-            className="h-14 border border-hairline bg-panel px-3 font-mono text-base outline-none focus:border-signal"
+            className={inputClass}
           />
         </label>
 
         <button
           type="submit"
-          className="h-[68px] w-full bg-signal text-base font-semibold tracking-wide text-void uppercase active:bg-signal/80"
+          disabled={!identifier.trim() || !secret.trim()}
+          className="btn btn-primary mt-2 h-[72px] w-full gap-3 text-[18px] [&_svg]:!h-6 [&_svg]:!w-6"
         >
+          <Play fill="currentColor" />
           {t('drive.start')}
         </button>
       </form>
 
-      <p className="text-xs leading-relaxed text-ink-faint">{t('drive.install')}</p>
-    </main>
+      <p className="m-0 text-[16px] leading-relaxed text-[var(--color-muted)]">{t('drive.install')}</p>
+    </div>
   );
 }

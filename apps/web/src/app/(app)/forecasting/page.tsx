@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { Database, Play, Table2, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
 import {
   Area,
@@ -13,8 +14,26 @@ import {
   YAxis,
 } from 'recharts';
 import { api, type Explanation, type Paginated } from '@/lib/api';
-import { Chip, Empty, ErrorNote, Explain, Loading, Panel, fmt } from '@/components/ui';
-import { useI18n } from '@/lib/i18n';
+import {
+  Button,
+  Chip,
+  Empty,
+  ErrorNote,
+  Explain,
+  Legend,
+  PageHeader,
+  Panel,
+  SeverityIcon,
+  type Severity,
+} from '@/components/ui';
+import { useFormat, useI18n } from '@/lib/i18n';
+import {
+  FieldLabel,
+  ResultSkeleton,
+  Timing,
+  WhyToggle,
+  timed,
+} from '../allocation/_components/optimise-kit';
 
 interface ProductRow {
   id: string;
@@ -51,10 +70,21 @@ interface ForecastResponse {
 
 const HORIZONS = [7, 30, 90, 180] as const;
 
+/** Axis text per charte: 11px mono, dim. */
+const AXIS_TICK = { fill: 'var(--color-dim)', fontSize: 11, fontFamily: 'var(--font-mono)' };
+
+function issueSeverity(severity: string): Severity {
+  if (severity === 'BLOCKING') return 'critical';
+  if (severity === 'WARNING') return 'warning';
+  return 'info';
+}
+
 export default function ForecastingPage() {
-  const { t } = useI18n();
+  const { t, intlLocale } = useI18n();
+  const format = useFormat();
   const [productId, setProductId] = useState('');
   const [horizon, setHorizon] = useState<number>(30);
+  const [why, setWhy] = useState(true);
 
   const products = useQuery({
     queryKey: ['products', 'for-forecast'],
@@ -63,17 +93,21 @@ export default function ForecastingPage() {
 
   const forecast = useMutation({
     mutationFn: (input: { productId: string; horizon: number }) =>
-      api<ForecastResponse>(`/ai/forecast/${input.productId}?horizonDays=${input.horizon}`, {
-        method: 'POST',
-      }),
+      timed(() =>
+        api<ForecastResponse>(`/ai/forecast/${input.productId}?horizonDays=${input.horizon}`, {
+          method: 'POST',
+        }),
+      ),
   });
 
   const data = forecast.data;
 
   const chartData =
     data?.forecast.map((point) => ({
-      date: new Date(point.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+      date: new Date(point.date).toLocaleDateString(intlLocale, { day: '2-digit', month: 'short' }),
       demand: point.demand,
+      lowerBound: point.lowerBound,
+      upperBound: point.upperBound,
       // Recharts stacks an area from a base, so the band is [lower, span] rather than two lines.
       lower: point.lowerBound,
       span: Math.max(0, point.upperBound - point.lowerBound),
@@ -84,116 +118,137 @@ export default function ForecastingPage() {
     .sort((a, b) => (a.wape ?? Infinity) - (b.wape ?? Infinity));
   const skipped = (data?.evaluations ?? []).filter((evaluation) => evaluation.skippedReason);
 
-  return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold">{t('fc.title')}</h1>
-        <p className="mt-0.5 max-w-3xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-          {t('fc.intro')}
-        </p>
-      </div>
+  const total = data?.forecast.reduce((sum, point) => sum + point.demand, 0) ?? 0;
+  const product = products.data?.data.find((row) => row.id === productId);
+  const blocking = data?.dataQuality.issues.filter((issue) => issue.severity === 'BLOCKING').length ?? 0;
 
-      <Panel title={t('fc.run')}>
-        <div className="flex flex-wrap items-end gap-3 p-3.5">
-          <label className="min-w-[240px] flex-1">
-            <span className="mb-1 block font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-              {t('fc.product')}
-            </span>
+  const title = forecast.isPending
+    ? t('fc.v3.titleRunning')
+    : data
+      ? t('fc.v3.titleResult', { sku: data.sku, total: format.int(total), days: data.horizonDays })
+      : t('fc.v3.titleIdle');
+
+  const run = () => forecast.mutate({ productId, horizon });
+
+  return (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        kicker={`${t('nav.pillar.optimise')} · ${t('nav.forecasting')}`}
+        title={title}
+        description={t('fc.intro')}
+      />
+
+      {/* ------------------------------------------------------------ form */}
+      <Panel icon={TrendingUp} title={t('fc.run')}>
+        <div className="flex flex-wrap items-end gap-4 px-5 pb-5 pt-3">
+          <div className="min-w-[240px] flex-1">
+            <FieldLabel htmlFor="fc-product">{t('fc.product')}</FieldLabel>
             <select
+              id="fc-product"
               className="field"
               value={productId}
               onChange={(event) => setProductId(event.target.value)}
             >
               <option value="">{t('fc.selectProduct')}</option>
-              {products.data?.data.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.sku} — {product.name}
+              {products.data?.data.map((row) => (
+                <option key={row.id} value={row.id}>
+                  {row.sku} — {row.name}
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
           <div>
-            <span className="mb-1 block font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-              {t('fc.horizon')}
-            </span>
-            <div className="flex gap-1">
+            <span className="t-label mb-1.5 block">{t('fc.horizon')}</span>
+            <div className="segmented" role="group" aria-label={t('fc.horizon')}>
               {HORIZONS.map((option) => (
                 <button
                   key={option}
+                  type="button"
+                  aria-pressed={horizon === option}
                   onClick={() => setHorizon(option)}
-                  className={`btn !px-3 ${horizon === option ? '!border-[var(--color-signal)] !text-[var(--color-signal)]' : ''}`}
                 >
-                  {option}d
+                  {t('fc.v3.days', { n: option })}
                 </button>
               ))}
             </div>
           </div>
 
-          <button
-            className="btn btn-primary"
-            disabled={!productId || forecast.isPending}
-            onClick={() => forecast.mutate({ productId, horizon })}
+          <Button
+            variant="primary"
+            icon={Play}
+            disabled={!productId}
+            loading={forecast.isPending}
+            onClick={run}
           >
             {forecast.isPending ? t('fc.comparing') : t('fc.forecast')}
-          </button>
+          </Button>
         </div>
+        {products.isError && <ErrorNote error={products.error} onRetry={() => void products.refetch()} />}
       </Panel>
 
-      {forecast.isError && <ErrorNote error={forecast.error} />}
+      {forecast.isError && <ErrorNote error={forecast.error} onRetry={productId ? run : undefined} />}
+
       {forecast.isPending && (
-        <Panel loading>
-          <Loading label={t('fc.validating')} />
-        </Panel>
+        <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+          <Panel loading title={t('fc.validating')}>
+            <ResultSkeleton chart rows={3} />
+          </Panel>
+          <Panel loading title={t('fc.comparison')}>
+            <ResultSkeleton rows={6} />
+          </Panel>
+        </div>
       )}
 
-      {data && (
-        <>
-          <div className="grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-            <Panel
-              title={t('fc.chartTitle', { sku: data.sku, days: data.horizonDays })}
-              meta={<Chip tone="signal">{data.selectedModel.replace(/_/g, ' ')}</Chip>}
-            >
-              <div className="h-[300px] p-2.5">
+      {data && !forecast.isPending && (
+        <div className="stagger grid gap-4 xl:grid-cols-[1.6fr_1fr]">
+          <Panel
+            icon={TrendingUp}
+            title={t('fc.chartTitle', { sku: data.sku, days: data.horizonDays })}
+            meta={
+              <Chip tone="neutral" title={t('fc.v3.selectedModel')}>
+                {data.selectedModel.replace(/_/g, ' ').toLowerCase()}
+              </Chip>
+            }
+            actions={<Timing ms={data.elapsedMs} kind="roundtrip" />}
+          >
+            <div className="flex flex-col gap-3 px-5 pb-5 pt-3">
+              {product && (
+                <span className="t-data text-[12px] text-[var(--color-muted)]">
+                  {product.sku} · {product.name}
+                </span>
+              )}
+              <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                    <CartesianGrid stroke="var(--color-hairline)" strokeDasharray="2 4" vertical={false} />
+                  <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                    <CartesianGrid stroke="var(--color-line)" strokeDasharray="2 4" vertical={false} />
                     <XAxis
                       dataKey="date"
-                      stroke="var(--color-hairline-bright)"
-                      tick={{ fill: 'var(--color-ink-faint)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                      stroke="var(--color-line)"
+                      tick={AXIS_TICK}
+                      tickLine={false}
                       interval="preserveStartEnd"
                       minTickGap={30}
                     />
-                    <YAxis
-                      stroke="var(--color-hairline-bright)"
-                      tick={{ fill: 'var(--color-ink-faint)', fontSize: 10, fontFamily: 'var(--font-mono)' }}
-                      width={48}
-                    />
+                    <YAxis stroke="var(--color-line)" tick={AXIS_TICK} tickLine={false} width={52} />
                     <Tooltip
-                      contentStyle={{
-                        background: 'var(--color-panel)',
-                        border: '1px solid var(--color-hairline-bright)',
-                        borderRadius: 2,
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: 11,
-                      }}
-                      labelStyle={{ color: 'var(--color-ink-faint)' }}
+                      content={<ForecastTooltip />}
+                      cursor={{ stroke: 'var(--color-muted)', strokeDasharray: '2 3' }}
                     />
                     {/* Invisible base + visible span renders the interval as a band. */}
-                    <Area dataKey="lower" stackId="band" stroke="none" fill="transparent" />
+                    <Area dataKey="lower" stackId="band" stroke="none" fill="transparent" isAnimationActive={false} />
                     <Area
                       dataKey="span"
                       stackId="band"
                       stroke="none"
-                      fill="var(--color-signal)"
-                      fillOpacity={0.13}
+                      fill="var(--color-muted)"
+                      fillOpacity={0.18}
                       name={t('fc.interval')}
                     />
                     <Line
                       type="monotone"
                       dataKey="demand"
-                      stroke="var(--color-signal)"
+                      stroke="var(--color-ink)"
                       strokeWidth={1.8}
                       dot={false}
                       name={t('fc.series')}
@@ -201,17 +256,27 @@ export default function ForecastingPage() {
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
-              <div className="border-t border-[var(--color-hairline)] p-3.5">
-                <Explain
-                  summary={data.explanation.summary}
-                  reasons={data.explanation.reasons}
-                  assumptions={data.explanation.assumptions}
-                />
+              <Legend
+                items={[
+                  { label: t('fc.series'), colour: 'var(--color-ink)', shape: 'line' },
+                  { label: t('fc.interval'), colour: 'color-mix(in srgb, var(--color-muted) 40%, transparent)' },
+                ]}
+              />
+              <div className="border-t border-[var(--color-line)] pt-3">
+                <WhyToggle open={why} onToggle={() => setWhy((open) => !open)} label={t('fc.v3.why')}>
+                  <Explain
+                    summary={data.explanation.summary}
+                    reasons={data.explanation.reasons}
+                    assumptions={data.explanation.assumptions}
+                  />
+                </WhyToggle>
               </div>
-            </Panel>
+            </div>
+          </Panel>
 
-            <div className="space-y-4">
-              <Panel title={t('fc.comparison')}>
+          <div className="flex flex-col gap-4">
+            <Panel icon={Table2} title={t('fc.comparison')}>
+              <div className="overflow-x-auto px-2 pb-2">
                 <table className="grid-table">
                   <thead>
                     <tr>
@@ -223,103 +288,120 @@ export default function ForecastingPage() {
                   </thead>
                   <tbody>
                     {scored.map((evaluation) => (
-                      <tr
-                        key={evaluation.model}
-                        className={evaluation.selected ? 'bg-[color-mix(in_srgb,var(--color-signal)_7%,transparent)]' : ''}
-                      >
-                        <td className="text-[0.75rem]">
+                      <tr key={evaluation.model} aria-selected={evaluation.selected}>
+                        <td className="text-[13px]">
                           <span className="flex items-center gap-1.5">
-                            {evaluation.selected && (
-                              <span className="h-1.5 w-1.5 bg-[var(--color-signal)]" />
-                            )}
                             {evaluation.model.replace(/_/g, ' ').toLowerCase()}
+                            {evaluation.selected && (
+                              <span className="t-label text-[var(--color-ink)]">{t('fc.v3.chosen')}</span>
+                            )}
                           </span>
                         </td>
-                        <td className="tnum text-right font-mono text-[0.75rem]">
-                          {fmt.num(evaluation.wape, 2)}
+                        <td className="t-data text-right">{format.num(evaluation.wape, 2)}</td>
+                        <td className="t-data text-right text-[var(--color-muted)]">
+                          {format.num(evaluation.mae, 1)}
                         </td>
-                        <td className="tnum text-right font-mono text-[0.6875rem] text-[var(--color-ink-faint)]">
-                          {fmt.num(evaluation.mae, 1)}
-                        </td>
-                        <td className="tnum text-right font-mono text-[0.6875rem] text-[var(--color-ink-faint)]">
-                          {fmt.num(evaluation.rmse, 1)}
+                        <td className="t-data text-right text-[var(--color-muted)]">
+                          {format.num(evaluation.rmse, 1)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-                {skipped.length > 0 && (
-                  <div className="border-t border-[var(--color-hairline)] p-3 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
-                    {t('fc.notEvaluated', {
-                      list: skipped
-                        .map(
-                          (evaluation) =>
-                            `${evaluation.model.toLowerCase()} (${evaluation.skippedReason})`,
-                        )
-                        .join('; '),
-                    })}
-                  </div>
-                )}
-              </Panel>
+              </div>
+              {skipped.length > 0 && (
+                <p className="m-0 border-t border-[var(--color-line)] px-5 py-3 text-[12px] leading-relaxed text-[var(--color-dim)]">
+                  {t('fc.notEvaluated', {
+                    list: skipped
+                      .map((evaluation) => `${evaluation.model.toLowerCase()} (${evaluation.skippedReason})`)
+                      .join('; '),
+                  })}
+                </p>
+              )}
+            </Panel>
 
-              <Panel
-                title={t('fc.dataQuality')}
-                meta={
-                  <Chip tone={data.dataQuality.passed ? 'ok' : 'alert'}>
-                    {data.dataQuality.passed ? t('fc.passed') : t('fc.blocked')}
-                  </Chip>
-                }
-              >
-                <div className="p-3.5">
-                  <div className="tnum font-mono text-[0.75rem] text-[var(--color-ink-dim)]">
-                    {t('fc.rowsUsed', {
-                      used: fmt.int(data.dataQuality.rowsUsed),
-                      total: fmt.int(data.dataQuality.rowsIn),
-                    })}
-                    {data.residualStd !== null &&
-                      ` · ${t('fc.residual', { value: fmt.num(data.residualStd, 1) })}`}
-                  </div>
-                  {data.dataQuality.issues.length > 0 ? (
-                    <ul className="mt-2.5 space-y-1.5">
-                      {data.dataQuality.issues.map((issue) => (
-                        <li key={issue.code} className="flex gap-2">
-                          <Chip
-                            tone={
-                              issue.severity === 'BLOCKING'
-                                ? 'alert'
-                                : issue.severity === 'WARNING'
-                                  ? 'warn'
-                                  : 'neutral'
-                            }
-                          >
-                            {issue.severity}
-                          </Chip>
-                          <span className="text-[0.6875rem] leading-relaxed text-[var(--color-ink-dim)]">
-                            {issue.message}
+            <Panel
+              icon={Database}
+              title={t('fc.dataQuality')}
+              meta={
+                <span className="flex items-center gap-1.5 text-[12.5px] font-normal text-[var(--color-muted)]">
+                  <SeverityIcon severity={data.dataQuality.passed ? 'ok' : 'critical'} size={14} />
+                  {data.dataQuality.passed ? t('fc.passed') : t('fc.blocked')}
+                </span>
+              }
+            >
+              <div className="flex flex-col gap-3 px-5 pb-5 pt-3">
+                <span className="t-data text-[12px] text-[var(--color-muted)]">
+                  {t('fc.rowsUsed', {
+                    used: format.int(data.dataQuality.rowsUsed),
+                    total: format.int(data.dataQuality.rowsIn),
+                  })}
+                  {data.residualStd !== null && ` · ${t('fc.residual', { value: format.num(data.residualStd, 1) })}`}
+                </span>
+                {data.dataQuality.issues.length > 0 ? (
+                  <ul className="stagger m-0 flex list-none flex-col gap-2 p-0" aria-live="polite">
+                    {data.dataQuality.issues.map((issue) => (
+                      <li key={issue.code} className="flex items-start gap-2.5">
+                        <span className="mt-0.5">
+                          <SeverityIcon severity={issueSeverity(issue.severity)} size={14} />
+                        </span>
+                        <span className="flex min-w-0 flex-col gap-0.5">
+                          <span className="text-[13px] leading-relaxed text-[var(--color-ink)]">{issue.message}</span>
+                          <span className="t-data text-[11px] text-[var(--color-dim)]">
+                            {issue.code} · {t('fc.v3.affectedRows', { n: format.int(issue.affectedRows) })}
                           </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="mt-2 text-[0.75rem] text-[var(--color-ink-faint)]">
-                      {t('fc.noIssue')}
-                    </p>
-                  )}
-                </div>
-              </Panel>
-            </div>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="m-0 text-[13px] text-[var(--color-muted)]">{t('fc.noIssue')}</p>
+                )}
+                {blocking > 0 && (
+                  <p className="m-0 text-[12px] text-[var(--color-muted)]">{t('fc.v3.blockedHint')}</p>
+                )}
+              </div>
+            </Panel>
           </div>
-        </>
+        </div>
       )}
 
       {!data && !forecast.isPending && (
         <Panel>
-          <Empty
-            title={t('fc.none')}
-            hint={t('fc.noneHint')}
-          />
+          <Empty icon={TrendingUp} title={t('fc.none')} hint={t('fc.noneHint')} />
         </Panel>
       )}
+    </div>
+  );
+}
+
+/** Tooltip as a surface-2 card: date, forecast and its interval, figures in mono. */
+function ForecastTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: { demand: number; lowerBound: number; upperBound: number } }>;
+  label?: string;
+}) {
+  const { t } = useI18n();
+  const format = useFormat();
+  if (!active || !payload?.length) return null;
+  const point = payload[0].payload;
+  return (
+    <div className="flex flex-col gap-1 rounded-[var(--radius-md)] bg-[var(--color-surface-2)] px-3 py-2 shadow-[var(--shadow-md)]">
+      <span className="t-data text-[11px] text-[var(--color-dim)]">{label}</span>
+      <span className="flex items-baseline justify-between gap-4 text-[12px] text-[var(--color-muted)]">
+        {t('fc.series')}
+        <b className="t-data text-[13px] text-[var(--color-ink)]">{format.int(point.demand)}</b>
+      </span>
+      <span className="flex items-baseline justify-between gap-4 text-[12px] text-[var(--color-muted)]">
+        {t('fc.interval')}
+        <span className="t-data text-[12px] text-[var(--color-muted)]">
+          {format.int(point.lowerBound)} – {format.int(point.upperBound)}
+        </span>
+      </span>
     </div>
   );
 }

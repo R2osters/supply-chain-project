@@ -29,19 +29,31 @@ const cyclone: Hazard = {
   ],
 };
 
-const quake: Hazard = { ...cyclone, id: 'usgs:1', kind: 'EARTHQUAKE', track: null, cone: null };
+const quake: Hazard = { ...cyclone, id: 'usgs:1', kind: 'EARTHQUAKE', severity: 'MEDIUM', track: null, cone: null };
+const fire: Hazard = { ...quake, id: 'firms:1', kind: 'FIRE', severity: 'LOW' };
 
 describe('hazard layers', () => {
-  it('puts every hazard on the map as a coloured point in lon, lat order', () => {
+  it('puts every hazard on the map as a point in lon, lat order', () => {
     const collection = hazardsToGeoJson([cyclone, quake]);
     expect(collection.features).toHaveLength(2);
     expect(collection.features[0].geometry).toEqual({ type: 'Point', coordinates: [-60, 20] });
-    expect(collection.features[1].properties.colour).toBe('#ffa53d');
+  });
+
+  it('colours by severity only, and tells kinds apart by icon', () => {
+    const collection = hazardsToGeoJson([cyclone, quake, fire]);
+    expect(collection.features.map((feature) => feature.properties.tone)).toEqual(['crit', 'warn', 'muted']);
+    expect(collection.features[1].properties.icon).toBe('hazard-EARTHQUAKE-warn');
+  });
+
+  it('marks the selected hazard', () => {
+    const collection = hazardsToGeoJson([cyclone, quake], 'usgs:1');
+    expect(collection.features.map((feature) => feature.properties.selected)).toEqual([false, true]);
   });
 
   it('draws cones and tracks only for hazards that have them', () => {
     expect(conesToGeoJson([cyclone, quake]).features).toHaveLength(1);
     expect(tracksToGeoJson([cyclone, quake]).features).toHaveLength(1);
+    expect(conesToGeoJson([cyclone]).features[0].properties.tone).toBe('crit');
   });
 });
 

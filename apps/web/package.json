@@ -12,6 +12,7 @@
   "dependencies": {
     "@scip/shared": "*",
     "@tanstack/react-query": "^5.64.2",
+    "lucide-react": "^0.460.0",
     "maplibre-gl": "^5.1.0",
     "next": "^15.1.6",
     "react": "^19.0.0",

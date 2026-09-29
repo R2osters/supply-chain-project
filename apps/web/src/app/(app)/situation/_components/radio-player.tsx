@@ -1,10 +1,11 @@
 'use client';
 
+import { ExternalLink, Radio, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import { safeExternalUrl, type RadioStation } from '@/lib/intel';
 import { useFormat, useI18n } from '@/lib/i18n';
-import { Panel } from '@/components/ui';
+import { Button, Panel, Provenance } from '@/components/ui';
 
 /**
  * Plays one station straight from its broadcaster.
@@ -47,24 +48,22 @@ export function RadioPlayer({ station, onClose }: { station: RadioStation; onClo
 
   return (
     <Panel
+      icon={Radio}
       title={t('sit.radio.title')}
-      actions={
-        <button onClick={onClose} className="hover:text-[var(--color-signal)]">
-          {t('sit.close')}
-        </button>
-      }
+      actions={<Button variant="ghost" size="sm" icon={X} onClick={onClose} aria-label={t('common.close')} />}
     >
-      <div className="space-y-2.5 p-3.5">
-        <div>
-          <div className="text-[0.8125rem] text-[var(--color-ink)]">{station.name}</div>
-          <div className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)]">
-            {[station.state, station.country].filter(Boolean).join(', ') || '—'} ·{' '}
-            {fmt.num(station.distanceKm, 0)} km
-          </div>
+      <div className="flex flex-col gap-4 px-5 pb-5 pt-2">
+        <div className="flex flex-col gap-1">
+          <p className="m-0 text-[15px] text-[var(--color-ink)]">{station.name}</p>
+          <p className="m-0 flex flex-wrap items-center gap-x-2 text-[12px] text-[var(--color-muted)]">
+            <span>{[station.state, station.country].filter(Boolean).join(', ') || '—'}</span>
+            <span aria-hidden>·</span>
+            <span className="t-data text-[11px]">{fmt.num(station.distanceKm, 0)} km</span>
+          </p>
         </div>
 
         {station.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-1.5">
             {station.tags.slice(0, 6).map((tag) => (
               <span key={tag} className="chip chip-neutral">
                 {tag}
@@ -83,27 +82,28 @@ export function RadioPlayer({ station, onClose }: { station: RadioStation; onClo
           onError={() => setState('error')}
           className="w-full"
         />
-        {state === 'error' && (
-          <p className="text-[0.6875rem] text-[var(--color-alert)]">{t('sit.radio.error')}</p>
-        )}
+        <span className="flex items-center gap-2" aria-live="polite">
+          {state === 'playing' && <Provenance kind="live" />}
+          {state === 'error' && <Provenance kind="offline" label={t('sit.radio.error')} />}
+        </span>
 
-        <div className="flex items-center justify-between font-mono text-[0.625rem] text-[var(--color-ink-faint)]">
-          <span>
-            {[station.codec, station.bitrate ? `${station.bitrate} kbps` : null].filter(Boolean).join(' · ') ||
-              '—'}
+        <div className="flex items-center justify-between gap-3">
+          <span className="t-data text-[11px] text-[var(--color-dim)]">
+            {[station.codec, station.bitrate ? `${station.bitrate} kbps` : null].filter(Boolean).join(' · ') || '—'}
           </span>
           {homepage && (
             <a
               href={homepage}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:text-[var(--color-signal)]"
+              className="inline-flex items-center gap-1 text-[12.5px] text-[var(--color-info)] underline-offset-4 hover:underline"
             >
-              {t('sit.radio.homepage')} ↗
+              {t('sit.radio.homepage')}
+              <ExternalLink className="h-3.5 w-3.5" />
             </a>
           )}
         </div>
-        <p className="text-[0.625rem] leading-relaxed text-[var(--color-ink-faint)]">{t('sit.radio.privacy')}</p>
+        <p className="m-0 text-[12px] leading-relaxed text-[var(--color-dim)]">{t('sit.radio.privacy')}</p>
       </div>
     </Panel>
   );

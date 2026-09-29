@@ -1,179 +1,91 @@
 'use client';
 
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { FlaskConical, Radio, Search, Ship } from 'lucide-react';
 import maplibregl, { type Map as MapLibreMap, type Marker } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { api, getAccessToken } from '@/lib/api';
-import { Chip, Empty, ErrorNote, Loading, Meter, Panel } from '@/components/ui';
 import { useFormat, useI18n } from '@/lib/i18n';
+import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
+import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
+import { usePalette, type Palette } from '@/lib/theme';
+import {
+  Banner,
+  Chip,
+  DemoTag,
+  Empty,
+  ErrorNote,
+  Facts,
+  Legend,
+  Loading,
+  PageHeader,
+  Panel,
+  Provenance,
+  SeverityIcon,
+} from '@/components/ui';
+import { humanise } from '../shipments/[id]/_components/labels';
+import type {
+  FleetVessel,
+  MaritimeStatus,
+  SearchResponse,
+  TrackResponse,
+  VoyageDetail,
+  VoyageListRow,
+} from './_components/types';
+import { AisProvenance, VoyagePanel } from './_components/voyage-panel';
+import {
+  AT_RISK_HOURS,
+  VESSEL_COLOUR,
+  buildVesselMarker,
+  isSimulatedVessel,
+  paintVesselMarker,
+  rotateVessel,
+  vesselState,
+} from './_components/vessel-marker';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? 'http://localhost:3001';
+const PLANNED = 'sea-planned';
+const ACTUAL = 'sea-actual';
+const KNOTS_TO_KMH = 1.852;
 
-/* --------------------------------------------------------------------- types */
-
-interface VesselPositionSummary {
-  latitude: number;
-  longitude: number;
-  speedKnots: number | null;
-  courseDegrees: number | null;
-  recordedAt: string | null;
-  source: string | null;
-  ageMinutes: number | null;
+interface VesselMotion {
+  track: MotionTrack;
+  lastFixAt: number;
+  fixTime: number;
 }
 
-interface SearchResult {
-  id: string;
-  name: string;
-  formerNames: string[];
-  imoNumber: string | null;
-  mmsi: string | null;
-  callSign: string | null;
-  type: string;
-  flag: string | null;
-  status: string;
-  operator: string | null;
-  capacityTeu: number | null;
-  matchScore: number;
-  isOwnFleet: boolean;
-  isDemoData: boolean;
-  position: VesselPositionSummary | null;
-  currentVoyage: {
-    id: string;
-    voyageNumber: string;
-    status: string;
-    from: { locode: string; name: string };
-    to: { locode: string; name: string };
-    estimatedArrivalAt: string | null;
-  } | null;
-}
-
-interface SearchResponse {
-  query: string;
-  interpretedAs: string;
-  count: number;
-  results: SearchResult[];
-}
-
-interface FleetVessel {
-  vesselId: string;
-  name: string;
-  imoNumber: string | null;
-  mmsi: string | null;
-  type: string;
-  flag: string | null;
-  status: string;
-  latitude: number;
-  longitude: number;
-  speedKnots: number | null;
-  courseDegrees: number | null;
-  lastPositionAt: string;
-  positionSource: string | null;
-  isDemoData: boolean;
-  isOwnFleet: boolean;
-  externalLinks: {
-    marineTraffic: string | null;
-    vesselFinder: string | null;
-    identifierUsed: 'IMO' | 'MMSI' | 'NAME' | null;
-  } | null;
-  voyage: {
-    id: string;
-    voyageNumber: string;
-    status: string;
-    from: string;
-    to: string;
-    toLocode: string;
-    estimatedArrivalAt: string | null;
-    plannedTrack: Array<{ latitude: number; longitude: number }> | null;
-    remainingNm: number | null;
-  } | null;
-}
-
-interface VoyageDetail {
-  id: string;
-  voyageNumber: string;
-  status: string;
-  scheduledDepartureAt: string;
-  scheduledArrivalAt: string;
-  estimatedArrivalAt: string | null;
-  distanceNm: number | null;
-  plannedTrack: Array<{ latitude: number; longitude: number }> | null;
-  vessel: { id: string; name: string; imoNumber: string | null; type: string };
-  originPort: { locode: string; name: string; country: string; latitude: number; longitude: number };
-  destinationPort: { locode: string; name: string; country: string; latitude: number; longitude: number };
-  progressPercent: number;
-  remainingNm: number | null;
-  coveredNm?: number;
-  speedKnots?: number;
-  computedEta: string | null;
-  scheduleDeltaHours?: number;
-  isBehindSchedule?: boolean;
-  etaBasis: string;
-  shipments: Array<{ id: string; trackingNumber: string; status: string }>;
-}
-
-interface TrackResponse {
-  positions: Array<{
-    latitude: number;
-    longitude: number;
-    speedKnots: number | null;
-    recordedAt: string;
-    source: string;
-  }>;
-  positionsTotal: number;
-  sampledEvery: number;
-}
-
-interface MaritimeStatus {
-  source: string;
-  isLive: boolean;
-  detail: string;
-  fixesRecorded: number;
-  fixesForUntrackedVessels: number;
-  howToGoLive: string | null;
-}
-
-/* --------------------------------------------------------------------- style */
-
-const OCEAN_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: '© OpenStreetMap contributors',
-    },
-  },
-  layers: [
-    // A deep blue ground so ocean reads as ocean where tiles are sparse mid-Atlantic.
-    { id: 'background', type: 'background', paint: { 'background-color': '#070c12' } },
-    {
-      id: 'osm',
-      type: 'raster',
-      source: 'osm',
-      paint: { 'raster-opacity': 0.34, 'raster-saturation': -0.7, 'raster-contrast': -0.15 },
-    },
-  ],
-};
-
-/* ---------------------------------------------------------------------- page */
-
+/** Next requires a Suspense boundary around `useSearchParams` for the static pass. */
 export default function MaritimePage() {
+  return (
+    <Suspense fallback={<Loading rows={6} />}>
+      <Maritime />
+    </Suspense>
+  );
+}
+
+function Maritime() {
   const { t } = useI18n();
   const fmt = useFormat();
+  const palette = usePalette();
+  const searchParams = useSearchParams();
 
   const container = useRef<HTMLDivElement | null>(null);
   const map = useRef<MapLibreMap | null>(null);
   const markers = useRef<Map<string, Marker>>(new Map());
+  const motions = useRef<Map<string, VesselMotion>>(new Map());
+  const frame = useRef<number | null>(null);
   const socket = useRef<Socket | null>(null);
+  const paletteRef = useRef<Palette>(palette);
+  paletteRef.current = palette;
 
   const [ready, setReady] = useState(false);
   const [live, setLive] = useState(false);
-  const [term, setTerm] = useState('');
-  const [debounced, setDebounced] = useState('');
+  // The command palette lands here with `?q=`: start the search from it.
+  const [term, setTerm] = useState(() => searchParams.get('q') ?? '');
+  const [debounced, setDebounced] = useState(() => (searchParams.get('q') ?? '').trim());
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Debounced so typing "Gulf Sentinel" is one request, not thirteen.
@@ -194,6 +106,14 @@ export default function MaritimePage() {
     refetchInterval: 20_000,
   });
 
+  // Schedules live on the voyage rows, not on the fleet snapshot: this is what lets the header
+  // say how many ships run behind without opening each voyage.
+  const voyages = useQuery({
+    queryKey: ['maritime', 'voyages', 'schedule'],
+    queryFn: () => api<{ data: VoyageListRow[] }>('/maritime/voyages?limit=200'),
+    refetchInterval: 60_000,
+  });
+
   const search = useQuery({
     queryKey: ['maritime', 'search', debounced],
     queryFn: () =>
@@ -202,9 +122,10 @@ export default function MaritimePage() {
     placeholderData: keepPreviousData,
   });
 
+  const vessels = useMemo(() => fleet.data ?? [], [fleet.data]);
   const selected = useMemo(
-    () => (fleet.data ?? []).find((vessel) => vessel.vesselId === selectedId) ?? null,
-    [fleet.data, selectedId],
+    () => vessels.find((vessel) => vessel.vesselId === selectedId) ?? null,
+    [vessels, selectedId],
   );
 
   const voyage = useQuery({
@@ -221,6 +142,33 @@ export default function MaritimePage() {
     refetchInterval: 30_000,
   });
 
+  /** Hours behind schedule per voyage id (positive = late). */
+  const deltaByVoyage = useMemo(() => {
+    const result = new Map<string, number>();
+    for (const row of voyages.data?.data ?? []) {
+      if (!row.estimatedArrivalAt) continue;
+      result.set(row.id, (Date.parse(row.estimatedArrivalAt) - Date.parse(row.scheduledArrivalAt)) / 3_600_000);
+    }
+    return result;
+  }, [voyages.data]);
+
+  const deltaFor = useCallback(
+    (vessel: FleetVessel): number | null => {
+      if (!vessel.voyage) return null;
+      // The open voyage's live computation beats the stored estimate.
+      if (vessel.vesselId === selectedId && voyage.data?.scheduleDeltaHours !== undefined) {
+        return voyage.data.scheduleDeltaHours;
+      }
+      return deltaByVoyage.get(vessel.voyage.id) ?? null;
+    },
+    [deltaByVoyage, selectedId, voyage.data],
+  );
+
+  const lateCount = useMemo(
+    () => vessels.filter((vessel) => (deltaFor(vessel) ?? 0) >= AT_RISK_HOURS).length,
+    [vessels, deltaFor],
+  );
+
   /* ------------------------------------------------------------------- map */
 
   useEffect(() => {
@@ -228,7 +176,7 @@ export default function MaritimePage() {
 
     const instance = new maplibregl.Map({
       container: container.current,
-      style: OCEAN_STYLE,
+      style: basemapStyle(paletteRef.current, { ocean: true }),
       center: [-15, 25],
       zoom: 2.4,
       attributionControl: { compact: true },
@@ -238,11 +186,74 @@ export default function MaritimePage() {
 
     map.current = instance;
     return () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+      frame.current = null;
       instance.remove();
       map.current = null;
+      markers.current.clear();
+      motions.current.clear();
       setReady(false);
     };
   }, []);
+
+  useBasemapTheme(ready ? map.current : null, palette, { ocean: true });
+
+  // Track colours are literal GL paint: repaint on theme change.
+  useEffect(() => {
+    const instance = map.current;
+    if (!ready || !instance) return;
+    if (instance.getLayer(PLANNED)) instance.setPaintProperty(PLANNED, 'line-color', palette.info);
+    if (instance.getLayer(ACTUAL)) instance.setPaintProperty(ACTUAL, 'line-color', palette.ink);
+  }, [ready, palette]);
+
+  /* ---------------------------------------------------------------- motion */
+
+  // Same glide as the road map (lib/motion.ts): AIS fixes arrive minutes apart, and a ship that
+  // jumps reads as a fault.
+  const animate = (): void => {
+    const now = performance.now();
+    let pending = false;
+    for (const [vesselId, motion] of motions.current) {
+      const marker = markers.current.get(vesselId);
+      if (!marker) continue;
+      const point = positionAt(motion.track, now);
+      marker.setLngLat([point.longitude, point.latitude]);
+      if (isTrackAnimating(motion.track, now)) pending = true;
+    }
+    frame.current = pending ? requestAnimationFrame(animate) : null;
+  };
+
+  const applyFix = (
+    vesselId: string,
+    fix: { latitude: number; longitude: number; speedKnots: number | null; courseDegrees: number | null; recordedAt: string | null },
+  ): void => {
+    const marker = markers.current.get(vesselId);
+    if (!marker) return;
+    const fixTime = fix.recordedAt ? Date.parse(fix.recordedAt) : Date.now();
+    const previous = motions.current.get(vesselId);
+    if (previous && previous.fixTime === fixTime) return;
+
+    const now = performance.now();
+    const drawn = marker.getLngLat();
+    const interval = previous ? now - previous.lastFixAt : null;
+    motions.current.set(vesselId, {
+      track: startTrack(
+        previous ? { latitude: drawn.lat, longitude: drawn.lng } : null,
+        {
+          latitude: fix.latitude,
+          longitude: fix.longitude,
+          speedKmh: fix.speedKnots === null ? null : fix.speedKnots * KNOTS_TO_KMH,
+          headingDegrees: fix.courseDegrees,
+        },
+        now,
+        interval,
+      ),
+      lastFixAt: now,
+      fixTime,
+    });
+    rotateVessel(marker, fix.courseDegrees);
+    if (frame.current === null) frame.current = requestAnimationFrame(animate);
+  };
 
   // Vessel markers
   useEffect(() => {
@@ -250,21 +261,14 @@ export default function MaritimePage() {
     const instance = map.current;
 
     for (const vessel of fleet.data) {
-      const existing = markers.current.get(vessel.vesselId);
-      if (existing) {
-        existing.setLngLat([vessel.longitude, vessel.latitude]);
-        continue;
+      if (!markers.current.has(vessel.vesselId)) {
+        const element = buildVesselMarker(vessel, () => setSelectedId(vessel.vesselId));
+        markers.current.set(
+          vessel.vesselId,
+          new maplibregl.Marker({ element }).setLngLat([vessel.longitude, vessel.latitude]).addTo(instance),
+        );
       }
-
-      const element = buildVesselMarker(vessel, vessel.vesselId === selectedId);
-      element.addEventListener('click', () => setSelectedId(vessel.vesselId));
-
-      markers.current.set(
-        vessel.vesselId,
-        new maplibregl.Marker({ element })
-          .setLngLat([vessel.longitude, vessel.latitude])
-          .addTo(instance),
-      );
+      applyFix(vessel.vesselId, { ...vessel, recordedAt: vessel.lastPositionAt });
     }
 
     const alive = new Set(fleet.data.map((vessel) => vessel.vesselId));
@@ -272,41 +276,50 @@ export default function MaritimePage() {
       if (!alive.has(id)) {
         marker.remove();
         markers.current.delete(id);
+        motions.current.delete(id);
       }
     }
-  }, [ready, fleet.data, selectedId]);
+    // applyFix only touches refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, fleet.data]);
+
+  // State colour and selection ring.
+  useEffect(() => {
+    if (!ready) return;
+    for (const vessel of vessels) {
+      const marker = markers.current.get(vessel.vesselId);
+      if (!marker) continue;
+      paintVesselMarker(marker.getElement(), vessel, vesselState(vessel, deltaFor(vessel)), vessel.vesselId === selectedId);
+    }
+  }, [ready, vessels, selectedId, deltaFor]);
 
   // Planned and actual tracks for the selected vessel
   useEffect(() => {
     if (!ready || !map.current) return;
     const instance = map.current;
+    const colours = paletteRef.current;
 
-    const planned =
-      voyage.data?.plannedTrack ?? selected?.voyage?.plannedTrack ?? null;
-    const plannedCoords = planned?.map(
-      (point) => [point.longitude, point.latitude] as [number, number],
-    );
+    const planned = voyage.data?.plannedTrack ?? selected?.voyage?.plannedTrack ?? null;
+    const plannedCoords = planned?.map((point) => [point.longitude, point.latitude] as [number, number]);
     const actualCoords = track.data?.positions.map(
       (position) => [position.longitude, position.latitude] as [number, number],
     );
 
-    upsertLine(instance, 'sea-planned', plannedCoords ?? [], {
-      'line-color': '#4ea8ff',
-      'line-width': 1.4,
-      'line-opacity': 0.55,
+    upsertLine(instance, PLANNED, selected ? (plannedCoords ?? []) : [], {
+      'line-color': colours.info,
+      'line-width': 1.6,
+      'line-opacity': 0.9,
       'line-dasharray': [3, 3],
     });
-    upsertLine(instance, 'sea-actual', actualCoords ?? [], {
-      'line-color': '#ffb020',
+    upsertLine(instance, ACTUAL, selected ? (actualCoords ?? []) : [], {
+      'line-color': colours.ink,
       'line-width': 2.2,
       'line-opacity': 0.95,
     });
 
     if (selected && (plannedCoords?.length || actualCoords?.length)) {
       const bounds = new maplibregl.LngLatBounds();
-      for (const coordinate of [...(plannedCoords ?? []), ...(actualCoords ?? [])]) {
-        bounds.extend(coordinate);
-      }
+      for (const coordinate of [...(plannedCoords ?? []), ...(actualCoords ?? [])]) bounds.extend(coordinate);
       if (!bounds.isEmpty()) instance.fitBounds(bounds, { padding: 60, duration: 800, maxZoom: 6 });
     }
   }, [ready, selected, voyage.data, track.data]);
@@ -320,126 +333,184 @@ export default function MaritimePage() {
     const connection = io(`${WS_URL}/tracking`, { auth: { token }, transports: ['websocket'] });
     connection.on('connect', () => setLive(true));
     connection.on('disconnect', () => setLive(false));
-    connection.on('vessel:position', (position: { vesselId: string; latitude: number; longitude: number }) => {
-      // Move the marker directly: a dozen ships updating every few seconds should not trigger a
-      // React render each time.
-      markers.current.get(position.vesselId)?.setLngLat([position.longitude, position.latitude]);
-    });
+    connection.on('connect_error', () => setLive(false));
+    connection.on(
+      'vessel:position',
+      (position: {
+        vesselId: string;
+        latitude: number;
+        longitude: number;
+        speedKnots?: number | null;
+        courseDegrees?: number | null;
+        recordedAt?: string | null;
+      }) => {
+        // Move the marker directly: a dozen ships updating every few seconds should not trigger
+        // a React render each time.
+        applyFix(position.vesselId, {
+          latitude: position.latitude,
+          longitude: position.longitude,
+          speedKnots: position.speedKnots ?? null,
+          courseDegrees: position.courseDegrees ?? null,
+          recordedAt: position.recordedAt ?? null,
+        });
+      },
+    );
 
     socket.current = connection;
     return () => {
       connection.close();
       socket.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const flyTo = (latitude: number, longitude: number) =>
+    map.current?.flyTo({ center: [longitude, latitude], zoom: 5, duration: 1000 });
+
+  // Esc closes the voyage panel (charte §10). Ignored while typing in the search box.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (event.key === 'Escape') setSelectedId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  /* ---------------------------------------------------------------- render */
+
   const showingSearch = debounced.length >= 2;
+  const aisSimulated = status.data ? !status.data.isLive : false;
+  const title = fleet.isLoading
+    ? t('sea.v3.title.loading')
+    : vessels.length === 0
+      ? t('sea.v3.title.none')
+      : voyages.isError
+        ? t('sea.v3.title.tracked', { n: vessels.length })
+        : lateCount > 0
+          ? t('sea.v3.title.late', { n: lateCount })
+          : t('sea.v3.title.onTime', { n: vessels.length });
 
   return (
-    <div className="space-y-4">
-      {/* ---------------------------------------------------------- header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold">{t('sea.title')}</h1>
-          <p className="mt-0.5 max-w-3xl text-[0.8125rem] leading-relaxed text-[var(--color-ink-dim)]">
-            {t('sea.intro')}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className={`live-dot ${status.data?.isLive ? '' : 'live-dot-stale'}`} />
-          <Chip tone={status.data?.isLive ? 'ok' : 'neutral'}>
-            {status.data?.isLive ? t('sea.liveAis') : t('sea.simulated')}
-          </Chip>
-        </div>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        kicker={
+          <span className="flex items-center gap-1.5">
+            <Ship className="h-3.5 w-3.5" />
+            {t('sea.v3.kicker')}
+          </span>
+        }
+        title={
+          <span className="flex items-center gap-2.5">
+            {lateCount > 0 && <SeverityIcon severity="warning" size={22} />}
+            {title}
+          </span>
+        }
+        description={t('sea.v3.description')}
+        meta={
+          <>
+            {status.data &&
+              (status.data.isLive ? (
+                <Provenance kind="live" label={t('sea.liveAis')} />
+              ) : (
+                <Provenance kind="demo" label={t('sea.v3.aisSimulated')} />
+              ))}
+            {live ? <Provenance kind="live" label={t('sea.v3.streaming')} /> : <Provenance kind="poll" seconds={20} />}
+          </>
+        }
+      />
+
+      {aisSimulated && (
+        <Banner tone="demo" icon={FlaskConical} title={t('sea.v3.simulatedTitle')}>
+          {t('sea.sourceSimulated')}
+        </Banner>
+      )}
 
       {/* ---------------------------------------------------------- search */}
-      <Panel>
-        <div className="p-3.5">
+      <Panel icon={Search} title={t('common.search')}>
+        <div className="flex flex-col gap-2 px-5 pb-5 pt-2">
           <div className="relative">
             <input
-              className="field !py-2.5 !pl-9 !text-sm"
+              className="field !pl-9"
               placeholder={t('sea.searchPlaceholder')}
+              aria-label={t('sea.searchPlaceholder')}
               value={term}
               onChange={(event) => setTerm(event.target.value)}
               autoFocus
             />
-            <svg
+            <Search
               aria-hidden
-              viewBox="0 0 16 16"
-              className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--color-ink-faint)]"
-            >
-              <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" strokeWidth="1.5" />
-              <path d="M11 11 L14.5 14.5" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]"
+            />
           </div>
+          <p className="m-0 text-[12px] leading-relaxed text-[var(--color-muted)]">{t('sea.searchHint')}</p>
 
-          <p className="mt-2 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
-            {t('sea.searchHint')}
-          </p>
+          {showingSearch && search.isError && <ErrorNote error={search.error} onRetry={() => void search.refetch()} />}
+          {showingSearch && search.isLoading && <Loading rows={3} />}
 
           {showingSearch && search.data && (
-            <div className="mt-3 border-t border-[var(--color-hairline)] pt-2.5">
-              <div className="mb-2 font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-                {t('sea.interpretedAs')}: {search.data.interpretedAs} ·{' '}
-                {t('sea.results', { n: search.data.count })}
-              </div>
+            <div className="fade-in mt-1 flex flex-col gap-2 border-t border-[var(--color-line)] pt-3">
+              <span className="t-label">
+                {t('sea.interpretedAs')}: {search.data.interpretedAs} · {t('sea.results', { n: search.data.count })}
+              </span>
 
               {search.data.results.length === 0 ? (
-                <Empty title={t('sea.noResults')} hint={t('sea.noResultsHint')} />
+                <Empty icon={Search} title={t('sea.noResults')} hint={t('sea.noResultsHint')} />
               ) : (
-                <ul className="divide-y divide-[var(--color-hairline)]">
+                <ul className="stagger m-0 flex list-none flex-col p-0">
                   {search.data.results.map((result) => (
                     <li key={result.id}>
                       <button
+                        type="button"
                         onClick={() => {
                           setSelectedId(result.id);
-                          if (result.position && map.current) {
-                            map.current.flyTo({
-                              center: [result.position.longitude, result.position.latitude],
-                              zoom: 5,
-                              duration: 1100,
-                            });
-                          }
+                          if (result.position) flyTo(result.position.latitude, result.position.longitude);
                         }}
-                        className="flex w-full items-center justify-between gap-4 px-1.5 py-2 text-left transition-colors hover:bg-[color-mix(in_srgb,var(--color-signal)_6%,transparent)]"
+                        aria-pressed={selectedId === result.id}
+                        className="flex w-full items-center justify-between gap-4 rounded-[var(--radius-md)] px-2.5 py-2.5 text-left transition-colors duration-100 hover:bg-[var(--color-surface-2)] aria-[pressed=true]:bg-[var(--color-surface-2)]"
                       >
-                        <span className="min-w-0">
+                        <span className="flex min-w-0 flex-col gap-0.5">
                           <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-[0.875rem] font-medium">{result.name}</span>
+                            <span className="text-[14px] font-medium">{result.name}</span>
                             <Chip tone={result.isOwnFleet ? 'signal' : 'neutral'}>
                               {result.isOwnFleet ? t('sea.ownFleet') : t('sea.publicAis')}
                             </Chip>
-                            {result.isDemoData && <Chip tone="neutral">{t('common.demoData')}</Chip>}
+                            {result.isDemoData && <DemoTag />}
                           </span>
-                          <span className="mt-0.5 block font-mono text-[0.625rem] text-[var(--color-ink-faint)]">
-                            {t('sea.imo')} {result.imoNumber ?? '—'} · {t('sea.mmsi')}{' '}
-                            {result.mmsi ?? '—'} · {result.type.replace(/_/g, ' ').toLowerCase()}
+                          <span className="t-data text-[11px] text-[var(--color-muted)]">
+                            {t('sea.imo')} {result.imoNumber ?? '—'} · {t('sea.mmsi')} {result.mmsi ?? '—'} ·{' '}
+                            {humanise(result.type)}
                             {result.flag ? ` · ${result.flag}` : ''}
                           </span>
                           {result.currentVoyage && (
-                            <span className="mt-0.5 block text-[0.6875rem] text-[var(--color-ink-dim)]">
+                            <span className="text-[12px] text-[var(--color-muted)]">
                               {result.currentVoyage.from.name}
-                              <span className="mx-1.5 text-[var(--color-ink-faint)]">→</span>
+                              <span className="mx-1.5 text-[var(--color-dim)]">→</span>
                               {result.currentVoyage.to.name}
+                              {result.currentVoyage.estimatedArrivalAt && (
+                                <span className="t-data ml-2 text-[11px]">
+                                  {t('sea.eta')} {fmt.dateTime(result.currentVoyage.estimatedArrivalAt)}
+                                </span>
+                              )}
                             </span>
                           )}
                         </span>
 
-                        <span className="shrink-0 text-right">
+                        <span className="flex shrink-0 flex-col items-end gap-1">
                           {result.position ? (
                             <>
-                              <span className="tnum block font-mono text-[0.75rem]">
+                              <span className="t-data text-[12.5px]">
                                 {fmt.num(result.position.speedKnots, 1)} {t('sea.knots')}
                               </span>
-                              <span className="block font-mono text-[0.5625rem] text-[var(--color-ink-faint)]">
-                                {fmt.relative(result.position.recordedAt)}
-                              </span>
+                              <AisProvenance
+                                at={result.position.recordedAt}
+                                simulated={result.isDemoData || result.position.source === 'SIMULATOR'}
+                                live={live}
+                              />
                             </>
                           ) : (
-                            <span className="font-mono text-[0.625rem] text-[var(--color-ink-faint)]">
-                              {t('common.notComputed')}
-                            </span>
+                            <span className="t-data text-[11px] text-[var(--color-dim)]">{t('common.notComputed')}</span>
                           )}
                         </span>
                       </button>
@@ -453,279 +524,167 @@ export default function MaritimePage() {
       </Panel>
 
       {/* ------------------------------------------------------------- body */}
-      <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <Panel
+          icon={Ship}
           title={t('sea.track')}
-          meta={
-            <span className="flex items-center gap-1.5">
-              <span className={`live-dot ${live ? '' : 'live-dot-stale'}`} />
-              <span>{live ? 'streaming' : 'polling'}</span>
-            </span>
-          }
           actions={
-            <span className="flex items-center gap-3">
-              <span className="flex items-center gap-1.5">
-                <span className="h-px w-4 bg-[var(--color-info)]" /> {t('sea.plannedTrack')}
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-px w-4 bg-[var(--color-signal)]" /> {t('sea.actualTrack')}
-              </span>
-            </span>
+            <Legend
+              items={[
+                { label: t('sea.plannedTrack'), colour: 'var(--color-info)', shape: 'dash' },
+                { label: t('sea.actualTrack'), colour: 'var(--color-ink)', shape: 'line' },
+              ]}
+            />
           }
           className="overflow-hidden"
         >
-          <div ref={container} className="h-[470px] w-full" />
-          {status.data && !status.data.isLive && (
-            <div className="border-t border-[var(--color-hairline)] px-3 py-2 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
-              {t('sea.sourceSimulated')}
+          <div className="relative">
+            <div ref={container} className="h-[520px] w-full bg-[var(--color-map)]" role="region" aria-label={t('sea.track')} />
+            <div className="map-card absolute bottom-3 left-3 hidden px-3.5 py-2.5 md:block">
+              <Legend
+                items={[
+                  { label: t('sea.v3.legend.moving'), colour: VESSEL_COLOUR.moving },
+                  { label: t('sea.v3.legend.stopped'), colour: VESSEL_COLOUR.stopped },
+                  { label: t('sea.v3.legend.atRisk'), colour: VESSEL_COLOUR.atRisk },
+                  { label: t('sea.v3.legend.late'), colour: VESSEL_COLOUR.delayed },
+                  { label: t('sea.v3.legend.simulated'), colour: 'var(--color-sim)', shape: 'dash' },
+                ]}
+              />
             </div>
-          )}
+          </div>
         </Panel>
 
-        <div className="space-y-4">
+        <div className="flex min-w-0 flex-col gap-6">
           {selected ? (
-            <>
-              <Panel
-                title={t('sea.voyage')}
-                actions={
-                  <button
-                    onClick={() => setSelectedId(null)}
-                    className="hover:text-[var(--color-signal)]"
-                  >
-                    {t('common.close')}
-                  </button>
-                }
-              >
-                <div className="space-y-3 p-3.5">
-                  <div>
-                    <div className="font-mono text-lg text-[var(--color-signal)]">
-                      {selected.name}
-                    </div>
-                    <div className="font-mono text-[0.625rem] text-[var(--color-ink-faint)]">
-                      {t('sea.imo')} {selected.imoNumber ?? '—'} · {t('sea.mmsi')}{' '}
-                      {selected.mmsi ?? '—'}
-                    </div>
-                  </div>
-
-                  <dl className="space-y-1.5 border-t border-[var(--color-hairline)] pt-2.5">
-                    <Row label={t('sea.type')} value={selected.type.replace(/_/g, ' ').toLowerCase()} />
-                    <Row label={t('sea.flag')} value={selected.flag ?? '—'} />
-                    <Row
-                      label={t('sea.speed')}
-                      value={`${fmt.num(selected.speedKnots, 1)} ${t('sea.knots')}`}
-                    />
-                    <Row
-                      label={t('sea.course')}
-                      value={selected.courseDegrees === null ? '—' : `${fmt.num(selected.courseDegrees, 0)}°`}
-                    />
-                    <Row label={t('sea.lastFix')} value={fmt.relative(selected.lastPositionAt)} />
-                    <Row
-                      label={t('sea.position')}
-                      value={`${selected.latitude.toFixed(3)}, ${selected.longitude.toFixed(3)}`}
-                    />
-                  </dl>
-
-                  {voyage.data ? (
-                    <div className="space-y-2.5 border-t border-[var(--color-hairline)] pt-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-mono text-[0.75rem]">
-                          {voyage.data.voyageNumber}
-                        </span>
-                        <Chip tone="info">{voyage.data.status}</Chip>
-                      </div>
-
-                      <div className="text-[0.8125rem] text-[var(--color-ink-dim)]">
-                        {voyage.data.originPort.name}
-                        <span className="mx-1.5 text-[var(--color-ink-faint)]">→</span>
-                        {voyage.data.destinationPort.name}
-                      </div>
-
-                      <div>
-                        <div className="mb-1 flex items-baseline justify-between">
-                          <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-                            {t('sea.progress')}
-                          </span>
-                          <span className="tnum font-mono text-[0.75rem]">
-                            {voyage.data.progressPercent}%
-                          </span>
-                        </div>
-                        <Meter value={voyage.data.progressPercent / 100} tone="signal" />
-                      </div>
-
-                      <dl className="space-y-1.5">
-                        <Row
-                          label={t('sea.remaining')}
-                          value={`${fmt.int(voyage.data.remainingNm)} ${t('sea.nauticalMiles')}`}
-                        />
-                        <Row
-                          label={t('sea.scheduled')}
-                          value={fmt.dateTime(voyage.data.scheduledArrivalAt)}
-                        />
-                        <Row label={t('sea.eta')} value={fmt.dateTime(voyage.data.computedEta)} />
-                      </dl>
-
-                      {voyage.data.scheduleDeltaHours !== undefined && (
-                        <div
-                          className={`border px-2.5 py-2 text-[0.75rem] ${
-                            voyage.data.isBehindSchedule
-                              ? 'border-[var(--color-alert-dim)] bg-[color-mix(in_srgb,var(--color-alert)_8%,transparent)] text-[var(--color-alert)]'
-                              : 'border-[var(--color-ok-dim)] bg-[color-mix(in_srgb,var(--color-ok)_7%,transparent)] text-[var(--color-ok)]'
-                          }`}
-                        >
-                          {fmt.num(Math.abs(voyage.data.scheduleDeltaHours), 1)} h{' '}
-                          {voyage.data.scheduleDeltaHours > 0
-                            ? t('sea.behindSchedule')
-                            : t('sea.aheadOfSchedule')}
-                        </div>
-                      )}
-
-                      <div className="border-t border-[var(--color-hairline)] pt-2">
-                        <div className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-                          {t('sea.etaBasis')}
-                        </div>
-                        <p className="mt-1 text-[0.6875rem] leading-relaxed text-[var(--color-ink-dim)]">
-                          {voyage.data.etaBasis}
-                        </p>
-                      </div>
-
-                      {voyage.data.shipments.length > 0 && (
-                        <div className="border-t border-[var(--color-hairline)] pt-2">
-                          <div className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-                            {t('ship.title')}
-                          </div>
-                          <ul className="mt-1 space-y-0.5">
-                            {voyage.data.shipments.map((shipment) => (
-                              <li
-                                key={shipment.id}
-                                className="font-mono text-[0.6875rem] text-[var(--color-ink-dim)]"
-                              >
-                                {shipment.trackingNumber} · {shipment.status}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="border-t border-[var(--color-hairline)] pt-3 text-[0.75rem] text-[var(--color-ink-faint)]">
-                      {t('sea.noVoyage')}
-                    </p>
-                  )}
-
-                  {/* Public trackers. Ordinary hyperlinks — no key, no cost — and genuinely
-                      useful alongside our own data: a second opinion, a photograph of the hull,
-                      or the port-call history this system does not store. */}
-                  {selected.externalLinks?.marineTraffic && (
-                    <div className="border-t border-[var(--color-hairline)] pt-2.5">
-                      <div className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-                        {t('sea.externalTrackers')}
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap gap-2">
-                        <a
-                          href={selected.externalLinks.marineTraffic}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn !px-2.5 !py-1 !text-[0.5625rem]"
-                        >
-                          MarineTraffic ↗
-                        </a>
-                        {selected.externalLinks.vesselFinder && (
-                          <a
-                            href={selected.externalLinks.vesselFinder}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn !px-2.5 !py-1 !text-[0.5625rem]"
-                          >
-                            VesselFinder ↗
-                          </a>
-                        )}
-                      </div>
-                      <p className="mt-1.5 text-[0.5625rem] leading-relaxed text-[var(--color-ink-faint)]">
-                        {t('sea.externalHint', {
-                          id: selected.externalLinks.identifierUsed ?? '—',
-                        })}
-                      </p>
-                    </div>
-                  )}
-
-                  {track.data && (
-                    <p className="border-t border-[var(--color-hairline)] pt-2 font-mono text-[0.5625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)]">
-                      {fmt.int(track.data.positionsTotal)} fixes
-                      {track.data.sampledEvery > 1 && ` · 1/${track.data.sampledEvery}`}
-                    </p>
-                  )}
-                </div>
-              </Panel>
-            </>
+            <section key={selected.vesselId} className="panel slide-in-right" aria-label={t('sea.voyage')}>
+              <VoyagePanel
+                vessel={selected}
+                voyage={voyage.data}
+                voyageLoading={voyage.isLoading && Boolean(selected.voyage)}
+                track={track.data}
+                live={live}
+                onClose={() => setSelectedId(null)}
+              />
+            </section>
           ) : (
-            <Panel title={t('sea.fleet')}>
+            <Panel icon={Ship} title={t('sea.fleet')} meta={<span className="t-data text-[11px] text-[var(--color-dim)]">{vessels.length}</span>}>
               {fleet.isError ? (
-                <ErrorNote error={fleet.error} />
+                <ErrorNote error={fleet.error} onRetry={() => void fleet.refetch()} />
               ) : fleet.isLoading ? (
-                <Loading label={t('common.loading')} />
-              ) : (fleet.data ?? []).length === 0 ? (
-                <Empty title={t('sea.selectVessel')} hint={t('sea.selectVesselHint')} />
+                <Loading label={t('common.loading')} rows={6} />
+              ) : vessels.length === 0 ? (
+                <Empty icon={Ship} title={t('sea.selectVessel')} hint={t('sea.selectVesselHint')} />
               ) : (
-                <ul className="max-h-[470px] divide-y divide-[var(--color-hairline)] overflow-y-auto">
-                  {(fleet.data ?? []).map((vessel) => (
-                    <li key={vessel.vesselId}>
-                      <button
-                        onClick={() => {
-                          setSelectedId(vessel.vesselId);
-                          map.current?.flyTo({
-                            center: [vessel.longitude, vessel.latitude],
-                            zoom: 5,
-                            duration: 1000,
-                          });
-                        }}
-                        className="flex w-full items-center justify-between gap-3 px-3.5 py-2 text-left hover:bg-[color-mix(in_srgb,var(--color-signal)_5%,transparent)]"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-[0.8125rem]">{vessel.name}</span>
-                          <span className="block truncate text-[0.625rem] text-[var(--color-ink-faint)]">
-                            {vessel.voyage
-                              ? `${vessel.voyage.from} → ${vessel.voyage.to}`
-                              : t('sea.noVoyage')}
+                <ul className="stagger m-0 flex max-h-[520px] list-none flex-col overflow-y-auto p-0 pb-2">
+                  {vessels.map((vessel) => {
+                    const delta = deltaFor(vessel);
+                    const state = vesselState(vessel, delta);
+                    return (
+                      <li key={vessel.vesselId}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedId(vessel.vesselId);
+                            flyTo(vessel.latitude, vessel.longitude);
+                          }}
+                          className="grid w-full grid-cols-[16px_minmax(0,1fr)_auto] items-start gap-3 px-5 py-2.5 text-left transition-colors duration-100 hover:bg-[var(--color-surface-2)]"
+                        >
+                          <span className="mt-0.5">
+                            {state === 'delayed' ? (
+                              <SeverityIcon severity="critical" size={14} />
+                            ) : state === 'atRisk' ? (
+                              <SeverityIcon severity="warning" size={14} />
+                            ) : (
+                              <span
+                                className="mt-1 block h-2 w-2 rounded-full"
+                                style={{ background: VESSEL_COLOUR[state] }}
+                              />
+                            )}
                           </span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className="tnum block font-mono text-[0.6875rem]">
-                            {fmt.num(vessel.speedKnots, 1)} {t('sea.knots')}
+                          <span className="flex min-w-0 flex-col gap-0.5">
+                            <span className="flex items-center gap-2">
+                              <span className="truncate text-[13.5px] font-medium">{vessel.name}</span>
+                            </span>
+                            <span className="truncate text-[12px] text-[var(--color-muted)]">
+                              {vessel.voyage ? `${vessel.voyage.from} → ${vessel.voyage.to}` : t('sea.noVoyage')}
+                            </span>
+                            <AisProvenance at={vessel.lastPositionAt} simulated={isSimulatedVessel(vessel)} live={live} />
                           </span>
-                          {vessel.voyage?.remainingNm !== null &&
-                            vessel.voyage?.remainingNm !== undefined && (
-                              <span className="tnum block font-mono text-[0.5625rem] text-[var(--color-ink-faint)]">
+                          <span className="flex shrink-0 flex-col items-end gap-0.5">
+                            <span className="t-data text-[12px]">
+                              {fmt.num(vessel.speedKnots, 1)} {t('sea.knots')}
+                            </span>
+                            {vessel.voyage?.remainingNm !== null && vessel.voyage?.remainingNm !== undefined && (
+                              <span className="t-data text-[11px] text-[var(--color-dim)]">
                                 {fmt.int(vessel.voyage.remainingNm)} {t('sea.nauticalMiles')}
                               </span>
                             )}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
+                            {vessel.voyage?.estimatedArrivalAt && (
+                              <span className="t-data text-[11px] text-[var(--color-muted)]">
+                                {t('sea.eta')} {fmt.dateTime(vessel.voyage.estimatedArrivalAt)}
+                              </span>
+                            )}
+                            {delta !== null && Math.abs(delta) >= 1 && (
+                              <span
+                                className="t-data text-[11px]"
+                                style={{ color: delta >= AT_RISK_HOURS ? VESSEL_COLOUR[state] : 'var(--color-muted)' }}
+                              >
+                                {delta > 0 ? '+' : '−'}
+                                {fmt.num(Math.abs(delta), 0)} h
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </Panel>
           )}
 
-          {status.data && (
-            <Panel title="AIS">
-              <dl className="space-y-1.5 p-3.5">
-                <Row label="source" value={status.data.source} />
-                <Row label="fixes" value={fmt.int(status.data.fixesRecorded)} />
-                {status.data.isLive && (
-                  <Row
-                    label="untracked"
-                    value={fmt.int(status.data.fixesForUntrackedVessels)}
-                  />
+          <Panel
+            icon={Radio}
+            title={t('sea.v3.aisSource')}
+            meta={
+              status.data ? (
+                status.data.isLive ? (
+                  <Provenance kind="live" label={t('sea.liveAis')} />
+                ) : (
+                  <Provenance kind="demo" label={t('sea.v3.aisSimulated')} />
+                )
+              ) : null
+            }
+          >
+            {status.isError ? (
+              <ErrorNote error={status.error} onRetry={() => void status.refetch()} />
+            ) : !status.data ? (
+              <Loading rows={3} />
+            ) : (
+              <div className="flex flex-col gap-3 px-5 pb-5 pt-2">
+                <Facts
+                  items={[
+                    [t('sea.v3.source'), <span key="s" className="t-data">{status.data.source}</span>],
+                    [t('sea.v3.fixesRecorded'), <span key="f" className="t-data">{fmt.int(status.data.fixesRecorded)}</span>],
+                    ...(status.data.isLive
+                      ? ([
+                          [
+                            t('sea.v3.untracked'),
+                            <span key="u" className="t-data">{fmt.int(status.data.fixesForUntrackedVessels)}</span>,
+                          ],
+                        ] as Array<[string, ReactNode]>)
+                      : []),
+                  ]}
+                />
+                {status.data.detail && (
+                  <p className="m-0 text-[12px] leading-relaxed text-[var(--color-muted)]">{status.data.detail}</p>
                 )}
-              </dl>
-              {status.data.howToGoLive && (
-                <p className="border-t border-[var(--color-hairline)] px-3.5 py-2.5 text-[0.6875rem] leading-relaxed text-[var(--color-ink-faint)]">
-                  {status.data.howToGoLive}
-                </p>
-              )}
-            </Panel>
-          )}
+                {status.data.howToGoLive && (
+                  <p className="m-0 text-[12px] leading-relaxed text-[var(--color-dim)]">{status.data.howToGoLive}</p>
+                )}
+              </div>
+            )}
+          </Panel>
         </div>
       </div>
     </div>
@@ -733,58 +692,6 @@ export default function MaritimePage() {
 }
 
 /* ------------------------------------------------------------------ helpers */
-
-function buildVesselMarker(vessel: FleetVessel, selected: boolean): HTMLElement {
-  const stationary = (vessel.speedKnots ?? 0) < 0.5;
-  const colour = selected
-    ? 'var(--color-signal)'
-    : vessel.isOwnFleet
-      ? 'var(--color-ok)'
-      : 'var(--color-info)';
-
-  // Built with DOM/SVG calls, never innerHTML: vessel names come from an external AIS feed and
-  // are entirely attacker-controlled text.
-  const heading = Number.isFinite(vessel.courseDegrees) ? Number(vessel.courseDegrees) : 0;
-
-  const element = document.createElement('div');
-  element.style.cursor = 'pointer';
-  element.title = vessel.name;
-
-  const frame = document.createElement('div');
-  frame.style.cssText = 'position:relative;width:20px;height:20px';
-
-  const rotor = document.createElement('div');
-  rotor.style.cssText =
-    'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;transition:transform .5s ease';
-  rotor.style.transform = `rotate(${heading}deg)`;
-
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('width', '14');
-  svg.setAttribute('height', '14');
-  svg.setAttribute('viewBox', '0 0 16 16');
-
-  // A hull outline rather than a chevron: at a glance it reads as a ship, not a truck.
-  const path = document.createElementNS(ns, 'path');
-  path.setAttribute('d', 'M8 0.5 L11 6 L11 12 L8 14.5 L5 12 L5 6 Z');
-  path.setAttribute('fill', colour);
-  path.setAttribute('stroke', 'var(--color-void)');
-  path.setAttribute('stroke-width', '1');
-
-  svg.append(path);
-  rotor.append(svg);
-  frame.append(rotor);
-
-  if (!stationary) {
-    const halo = document.createElement('div');
-    halo.style.cssText = 'position:absolute;inset:-5px;opacity:.3;border-radius:999px';
-    halo.style.border = `1px solid ${colour}`;
-    frame.append(halo);
-  }
-
-  element.append(frame);
-  return element;
-}
 
 function upsertLine(
   map: MapLibreMap,
@@ -813,17 +720,4 @@ function upsertLine(
     layout: { 'line-join': 'round', 'line-cap': 'round' },
     paint: paint as never,
   });
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <dt className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-        {label}
-      </dt>
-      <dd className="tnum truncate text-right font-mono text-[0.75rem] text-[var(--color-ink-dim)]">
-        {value}
-      </dd>
-    </div>
-  );
 }
