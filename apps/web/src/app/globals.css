@@ -941,3 +941,11 @@
     transition-duration: 0ms !important;
   }
 }
+
+/* Outside any @layer on purpose. maplibre-gl.css is unlayered and sets `.maplibregl-map
+   { position: relative }`; unlayered CSS beats every Tailwind layer, so a map container marked
+   `absolute inset-0` collapsed to the height of its attribution bar. Two classes, unlayered:
+   this wins whatever order the stylesheets load in. */
+.maplibregl-map.absolute {
+  position: absolute;
+}
