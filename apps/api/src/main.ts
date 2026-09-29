@@ -2,6 +2,8 @@ import 'reflect-metadata';
 import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
+import { existsSync } from 'node:fs';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -30,7 +32,7 @@ import { PrismaService } from './prisma/prisma.service';
 };
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   const config = app.get(ConfigService<AppConfig, true>);
   const logger = new Logger('Bootstrap');
 
@@ -68,6 +70,13 @@ async function bootstrap(): Promise<void> {
       validationError: { target: false, value: false },
     }),
   );
+
+  const webDistDir = config.get('webDistDir', { infer: true });
+  if (webDistDir && existsSync(webDistDir)) {
+    // `extensions` maps /drive to drive.html, which is how the static export names its pages.
+    app.useStaticAssets(webDistDir, { extensions: ['html'], index: 'index.html' });
+    logger.log(`Serving the web UI from ${webDistDir}`);
+  }
 
   app.useGlobalFilters(new AllExceptionsFilter());
   app.useGlobalInterceptors(new AuditInterceptor(app.get(Reflector), app.get(PrismaService)));

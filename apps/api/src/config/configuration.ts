@@ -36,6 +36,11 @@ export interface AppConfig {
   port: number;
   globalPrefix: string;
   corsOrigins: string[];
+  /**
+   * Static export of the web UI. When set, the API serves it so drivers' phones on the local
+   * network can open the app at http://<this PC>:<port>/drive — the desktop has no web server.
+   */
+  webDistDir: string | null;
   database: { url: string };
   auth: {
     accessSecret: string;
@@ -146,6 +151,8 @@ export default (): AppConfig => {
       'tauri://localhost',
       'http://localhost:3000',
     ]),
+
+    webDistDir: process.env.WEB_DIST_DIR || null,
 
     database: {
       url: process.env.DATABASE_URL ?? '',
