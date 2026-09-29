@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { LOCALES, useI18n, type TranslationKey } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
 import { FirstRun, useSetupStatus } from './_components/first-run';
+import { ForgotPassword } from './_components/forgot-password';
 
 const DEMO_ACCOUNTS: Array<{ email: string; roleKey: TranslationKey; noteKey: TranslationKey }> = [
   { email: 'admin@demo-scip.com', roleKey: 'login.role.admin', noteKey: 'login.note.admin' },
@@ -43,6 +44,7 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [forgotOpen, setForgotOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fallbackTimer = useRef<number | null>(null);
@@ -170,7 +172,16 @@ export default function LoginPage() {
             </label>
 
             <label className="flex flex-col gap-1.5">
-              <span className="text-[12.5px] font-medium text-[var(--color-muted)]">{t('login.passphrase')}</span>
+              <span className="flex items-baseline justify-between gap-2">
+                <span className="text-[12.5px] font-medium text-[var(--color-muted)]">{t('login.passphrase')}</span>
+                <button
+                  type="button"
+                  onClick={() => setForgotOpen(true)}
+                  className="text-[12px] text-[var(--color-muted)] underline-offset-2 hover:text-[var(--color-ink)] hover:underline"
+                >
+                  {t('login.forgot.link')}
+                </button>
+              </span>
               <input
                 className="field !h-[42px] !text-[14px]"
                 type="password"
@@ -188,6 +199,19 @@ export default function LoginPage() {
               {busy ? t('login.authenticating') : t('login.signIn')}
             </Button>
           </form>
+
+          {forgotOpen && (
+            <ForgotPassword
+              email={email}
+              onClose={() => setForgotOpen(false)}
+              onRecovered={(recoveredEmail, temporaryPassword) => {
+                setEmail(recoveredEmail);
+                setPassword(temporaryPassword);
+                setError(null);
+                setForgotOpen(false);
+              }}
+            />
+          )}
 
           {showDemo && (
           <div className="flex flex-col gap-2 border-t border-[var(--color-line)] pt-5">

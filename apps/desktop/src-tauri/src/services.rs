@@ -346,7 +346,7 @@ impl RuntimeContext {
     }
 
     pub fn api_env(&self) -> BTreeMap<String, String> {
-        let pairs: [(&str, String); 21] = [
+        let pairs: [(&str, String); 22] = [
             ("NODE_ENV", "production".to_owned()),
             ("SCIP_RUNTIME", "desktop".to_owned()),
             ("API_PORT", self.ports.api.to_string()),
@@ -373,6 +373,8 @@ impl RuntimeContext {
             ("API_HOST", self.listen_host().to_owned()),
             ("DEVICE_GATEWAY_HOST", self.listen_host().to_owned()),
             ("NETWORK_SETTINGS_FILE", path_arg(&self.network_settings_file())),
+            // Only this shell knows it: the sign-in screen's "forgot password" on this computer.
+            ("LOCAL_RECOVERY_TOKEN", self.secrets.local_recovery_token.clone()),
         ];
         pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()
     }
@@ -436,6 +438,7 @@ mod tests {
                 jwt_refresh_secret: "refresh".into(),
                 ai_service_token: "ai-token".into(),
                 postgres_password: "pg-pass_-".into(),
+                local_recovery_token: "recovery".into(),
             },
             resources: ResourceLayout::new("/res"),
             database: DatabaseConfig::Embedded,
@@ -452,6 +455,11 @@ mod tests {
             simulator: false,
             ..ctx()
         }
+    }
+
+    #[test]
+    fn api_receives_the_local_recovery_token() {
+        assert_eq!(ctx().api_env().get("LOCAL_RECOVERY_TOKEN").map(String::as_str), Some("recovery"));
     }
 
     #[test]

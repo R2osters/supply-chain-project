@@ -11,6 +11,7 @@ use crate::events::{
     ErrorEvent, EventSink, StartupSnapshot, SupervisorEvent, ERROR_EVENT, PROGRESS_EVENT, READY_EVENT,
 };
 use crate::paths::DataDirs;
+use crate::recovery::{self, RecoveredAccount};
 use crate::services::{resolve_resources_root, RuntimeContext, RESOURCES_DIR_ENV};
 use crate::startup;
 use crate::supervisor::clock::SystemClock;
@@ -23,6 +24,8 @@ struct AppState {
     snapshot: Mutex<StartupSnapshot>,
     data_dir: Mutex<Option<PathBuf>>,
     supervisor: Mutex<Option<Arc<Supervisor>>>,
+    /// API base URL and local recovery token, once the services are prepared.
+    recovery: Mutex<Option<(String, String)>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -41,6 +44,24 @@ fn get_runtime_info(app: AppHandle, state: tauri::State<'_, Arc<AppState>>) -> R
         version: app.package_info().version.to_string(),
         data_dir: state.data_dir.lock().unwrap().as_ref().map(|p| p.display().to_string()),
     }
+}
+
+/// "Mot de passe oublié ?" on this computer: gives an administrator a temporary password, shown
+/// once on the sign-in screen and changed at the next sign-in (see recovery.rs).
+#[tauri::command]
+async fn recover_admin_password(
+    state: tauri::State<'_, Arc<AppState>>,
+    email: Option<String>,
+) -> Result<RecoveredAccount, String> {
+    let (api, token) = state
+        .recovery
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or_else(|| "SCIP est encore en train de démarrer. Réessayez dans un instant.".to_owned())?;
+    tauri::async_runtime::spawn_blocking(move || recovery::request(&api, &token, email.as_deref()))
+        .await
+        .map_err(|_| "La récupération du mot de passe a échoué.".to_owned())?
 }
 
 /// Lets a page that loaded after some events were emitted catch up.
@@ -88,6 +109,7 @@ fn boot(app: AppHandle, state: Arc<AppState>) {
         ctx.dirs.logs.clone(),
     ));
     *state.supervisor.lock().unwrap() = Some(Arc::clone(&supervisor));
+    *state.recovery.lock().unwrap() = Some((ctx.api_base_url(), ctx.secrets.local_recovery_token.clone()));
     if startup::boot(&supervisor, &ctx, sink.as_ref()) {
         supervisor.monitor();
     }
@@ -147,7 +169,11 @@ pub fn run() {
         // webview itself never navigates away from the app.
         .plugin(tauri_plugin_opener::init())
         .manage(Arc::clone(&state))
-        .invoke_handler(tauri::generate_handler![get_runtime_info, get_startup_status])
+        .invoke_handler(tauri::generate_handler![
+            get_runtime_info,
+            get_startup_status,
+            recover_admin_password
+        ])
         .setup(move |app| {
             match_system_theme(app.handle());
             let handle: AppHandle = app.handle().clone();

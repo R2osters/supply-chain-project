@@ -21,6 +21,10 @@ pub struct Secrets {
     pub jwt_refresh_secret: String,
     pub ai_service_token: String,
     pub postgres_password: String,
+    /// Lets this desktop shell reset an administrator's password when it was forgotten (no
+    /// e-mail on a desktop install). Added after 0.2.0: `fill_missing` generates it for older
+    /// configs on their next start.
+    pub local_recovery_token: String,
 }
 
 /// Where the SCIP database lives. Written by the installer (`--provision`); absent means embedded.
@@ -89,6 +93,7 @@ impl Secrets {
             &mut self.jwt_refresh_secret,
             &mut self.ai_service_token,
             &mut self.postgres_password,
+            &mut self.local_recovery_token,
         ] {
             if slot.trim().is_empty() {
                 *slot = generate_secret()?;
@@ -170,6 +175,24 @@ mod tests {
         let first: LocalConfig = load_or_create(&path).unwrap();
         let second: LocalConfig = load_or_create(&path).unwrap();
         assert_eq!(first.secrets, second.secrets);
+    }
+
+    #[test]
+    fn config_from_0_2_0_gains_a_recovery_token_and_keeps_its_secrets() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path: PathBuf = tmp.path().join("config.json");
+        std::fs::write(
+            &path,
+            r#"{"secrets":{"jwtAccessSecret":"a","jwtRefreshSecret":"r","aiServiceToken":"t","postgresPassword":"p"}}"#,
+        )
+        .unwrap();
+        let config: LocalConfig = load_or_create(&path).unwrap();
+        assert_eq!(config.secrets.postgres_password, "p");
+        assert_eq!(config.secrets.local_recovery_token.len(), 64, "48 random bytes, base64url");
+        assert_eq!(
+            load_or_create(&path).unwrap().secrets.local_recovery_token,
+            config.secrets.local_recovery_token
+        );
     }
 
     #[test]
