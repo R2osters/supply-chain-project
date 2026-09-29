@@ -19,42 +19,45 @@ three minutes.
 
 ---
 
-## Quick start
+## Install (Windows)
 
-**You need:** Docker Desktop (running), Node 20+, Python 3.12.
+SCIP is a Windows desktop application. Run `SCIP_<version>_x64-setup.exe`, then open **SCIP**
+from the Start menu. Everything runs on this computer: the app starts its own PostgreSQL +
+PostGIS, API and AI engine, and stores its data in `%LOCALAPPDATA%\com.scip.desktop`.
+
+On first launch, create your company and administrator account, or choose
+**Explore with demo data** (demo accounts: `admin@demo-scip.com` / `DemoPassw0rd!2026`).
+
+Drivers' phones on the same network open `http://<this PC>:3001/drive`. GPS trackers (GT06)
+point at this PC on TCP port 5023. See [DEPLOYMENT.md](DEPLOYMENT.md) for the network,
+backup and build details, and [docs/desktop-architecture.md](docs/desktop-architecture.md)
+for how the pieces fit.
+
+## Develop
+
+**You need:** Node 20+, Docker Desktop (for the development database), Python 3.12, and for the
+desktop shell Rust (stable, MSVC).
 
 ```bash
 git clone <this repo> && cd "supply chain project"
 cp .env.example .env
-```
-
-**1 — infrastructure** (Postgres 16 + PostGIS, Redis, MinIO, MailHog):
-
-```bash
-docker compose up -d postgres redis minio mailhog
-```
-
-**2 — dependencies, schema and demo data:**
-
-```bash
 npm install
+npm run db:up                                   # PostgreSQL 16 + PostGIS on localhost:5433
 npm run build --workspace @scip/shared
 npm run db:migrate:deploy --workspace @scip/api
 npm run db:seed --workspace @scip/api
 ```
 
-**3 — the AI service** (Python 3.12 — OR-Tools and scipy ship wheels for it; 3.13 would build
-from source):
+The AI service (Python 3.12: OR-Tools and scipy ship wheels for it):
 
 ```bash
 cd services/ai
 python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt   # Windows
-# .venv/bin/python -m pip install -r requirements.txt     # macOS / Linux
+.venv/Scripts/python -m pip install -r requirements.txt
 .venv/Scripts/python -m uvicorn app.main:app --port 8000
 ```
 
-**4 — the API and the web app**, each in its own terminal from the repo root:
+Then the API and the web app, each in its own terminal from the repo root:
 
 ```bash
 npm run dev:api
@@ -64,21 +67,23 @@ npm run dev:api
 npm run dev:web
 ```
 
-Then open **http://localhost:3000** and sign in as `admin@demo-scip.com` /
-`DemoPassw0rd!2026`. Every seeded account uses that passphrase; the login screen lists them.
+Open **http://localhost:3000** and sign in as `admin@demo-scip.com` / `DemoPassw0rd!2026`.
 
-<details>
-<summary>Everything in containers instead</summary>
+To build the installer instead:
 
 ```bash
-docker compose --profile full up -d --build
+npm run desktop:stage
 ```
 
-Brings up all six services. The API applies its own migrations on start; seed it once with
-`npm run db:seed --workspace @scip/api`.
-</details>
+```bash
+npm run desktop:build
+```
 
-### Where things listen
+The first command downloads the pinned runtimes and builds every component into
+`apps/desktop/src-tauri/resources`; the second writes the installer to
+`apps/desktop/src-tauri/target/release/bundle/nsis/`.
+
+### Where things listen in development
 
 | | URL |
 |---|---|
@@ -86,13 +91,7 @@ Brings up all six services. The API applies its own migrations on start; seed it
 | API | http://localhost:3001/api/v1 |
 | API reference (Swagger) | http://localhost:3001/api/v1/docs |
 | AI service | http://localhost:8000 · docs at `/docs` |
-| Mail (MailHog) | http://localhost:8025 |
-| Object storage (MinIO) | http://localhost:9001 |
 | Postgres | `localhost:5433` |
-| Redis | `localhost:6380` |
-
-Postgres and Redis use non-default host ports on purpose, so this stack cannot collide with
-one already running on your machine.
 
 ---
 

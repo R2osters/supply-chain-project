@@ -13,15 +13,15 @@ SCIP.exe (Tauri 2)
     └── scip-ai.exe (PyInstaller) 127.0.0.1:<port libre>
 ```
 
-Les données vivent dans `%LOCALAPPDATA%\SCIP\` : `pgdata\`, `files\`, `models\`, `logs\`, `config.json`.
+Les données vivent dans `%LOCALAPPDATA%\com.scip.desktop\` : `pgdata\`, `files\`, `models\`, `logs\`, `config.json`.
 
 ## Séquence de démarrage
 
 1. Choisir des ports libres et générer (ou relire) les secrets locaux : JWT, jeton IA, mot de passe Postgres.
 2. Au premier lancement, `initdb` puis `CREATE EXTENSION postgis`.
-3. Démarrer Postgres et attendre `pg_isready`.
+3. Démarrer Postgres et attendre qu'il réponde à `SELECT 1`, puis créer la base `scip` si elle manque.
 4. Exécuter `prisma migrate deploy`.
-5. Démarrer l'IA puis l'API, et attendre leurs endpoints `/health`.
+5. Démarrer l'IA (facultative : un échec dégrade OPTIMIZE sans bloquer l'application), puis l'API, et attendre leurs endpoints `/health`.
 6. Injecter l'URL de l'API dans la WebView, puis afficher l'interface. Au premier lancement,
    c'est l'assistant de configuration qui s'affiche (tenant et compte admin).
 
@@ -68,6 +68,9 @@ services/ai/  FastAPI, plus un spec PyInstaller
 
 ## Réseau (GPS et app chauffeur)
 
-Le logiciel écoute en TCP sur le port 5023 (GT06) et en HTTP pour la PWA chauffeur.
-L'installeur ajoute les règles au pare-feu Windows. Pour les camions hors du réseau local,
+Le logiciel écoute en TCP sur le port 5023 (GT06) et en HTTP sur le port 3001 (s'il est libre) :
+l'API y sert aussi l'interface, donc la PWA chauffeur s'ouvre sur `http://<PC>:3001/drive`.
+Au premier lancement, Windows demande d'autoriser « Node.js JavaScript Runtime » (le processus de l'API).
+Limite connue : un navigateur de téléphone n'accorde le GPS qu'en HTTPS ; en HTTP sur le réseau local,
+la PWA enregistre les livraisons mais pas la position. Pour les camions hors du réseau local,
 il faut une redirection de port sur la box vers le PC, documentée dans `TRACKING.fr.md`.

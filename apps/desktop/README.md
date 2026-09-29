@@ -45,7 +45,7 @@ missing, the splash lists the missing files. `SCIP_RESOURCES_DIR` overrides the 
 
 ## Data and environment
 
-Data lives in `%LOCALAPPDATA%\SCIP` (`pgdata`, `files`, `models`, `logs`, `config.json`);
+Data lives in `%LOCALAPPDATA%\com.scip.desktop` (`pgdata`, `files`, `models`, `logs`, `config.json`);
 `SCIP_DATA_DIR` overrides it. Secrets (JWT, AI token, Postgres password) are generated on
 first run into `config.json`. Each sidecar logs to `logs/<name>.log`, the shell to
 `logs/desktop.log`.

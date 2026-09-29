@@ -1,139 +1,91 @@
 # Deployment
 
-## Local — everything in containers
+SCIP ships as one Windows installer. There is no server to deploy: each installation runs its
+own database, API and AI engine on the user's computer. Why, and what that costs:
+[ADR 0001](docs/adr/0001-logiciel-de-bureau-tout-en-un.md).
+
+## Build the installer
+
+On Windows, with Node 20+, Rust (stable, MSVC), Python 3.12 and PyInstaller:
 
 ```bash
-cp .env.example .env
-docker compose --profile full up -d --build
-npm run db:seed --workspace @scip/api      # once, optional
+npm install
+npm run desktop:stage
+npm run desktop:build
 ```
 
-Six services: postgres, redis, minio, mailhog, ai, api, web. The API applies its own migrations on
-start (`prisma migrate deploy`, which only applies migrations that already exist — it never
-generates or resets, which is what makes it safe on boot).
+`desktop:stage` fills `apps/desktop/src-tauri/resources/`. A subset can be rebuilt with
+`node apps/desktop/scripts/stage-all.mjs api web`.
 
-## Local — infrastructure in Docker, apps on the host
+| Component | Source | Pinned version |
+|---|---|---|
+| `node/node.exe` | nodejs.org, SHA-256 checked against `SHASUMS256.txt` | 24 LTS (`stage-node.mjs`) |
+| `postgres/` | EDB binaries zip + OSGeo PostGIS bundle, GUI tools and translations dropped | 16.15 + PostGIS 3.6.2 (`stage-postgres.mjs`) |
+| `api/` | `apps/api` built, production `node_modules`, Prisma CLI, bundled demo seed | lockfile |
+| `ai/` | `services/ai` frozen with PyInstaller (`build-desktop.ps1`) | `requirements.txt` |
+| `web/` + `web-dist/` | static export of `apps/web` | lockfile |
 
-Faster to iterate on. See the [README quick start](README.md#quick-start).
+Downloads are cached in `apps/desktop/.cache/`. The installer lands in
+`apps/desktop/src-tauri/target/release/bundle/nsis/`.
 
-```bash
-docker compose up -d postgres redis minio mailhog
-```
+### Signing
 
-## Environment
+Unsigned installers trigger Windows SmartScreen ("Windows protected your PC"). Before
+distributing outside a test group, buy a code-signing certificate (OV or EV) and set
+`bundle.windows.certificateThumbprint` (or `signCommand`) in `apps/desktop/src-tauri/tauri.conf.json`.
+
+## What the installed app does
+
+- **Install:** per user, no admin rights needed. Program files go under
+  `%LOCALAPPDATA%\SCIP`; data is kept apart from them so an upgrade never touches it.
+- **Data:** everything lives in `%LOCALAPPDATA%\com.scip.desktop`: `pgdata`, `files` (proof of delivery), `models`,
+  `logs`, `config.json` (generated secrets). Uninstalling keeps this folder unless the user ticks
+  the uninstaller's "delete application data" box.
+- **Start-up:** on the first launch the app creates the database cluster. On every launch it
+  starts PostgreSQL and applies pending migrations (`prisma migrate deploy` never resets data),
+  then starts the AI engine and the API. If the AI engine fails, the app still opens and only
+  the OPTIMIZE screens are degraded.
+- **Shut-down:** closing the window stops PostgreSQL cleanly. A Windows Job Object ensures a
+  killed app does not leave orphan processes behind.
+
+## Network
+
+| Port | Who uses it | Bound to |
+|---|---|---|
+| 3001 (random if taken) | the app, and drivers' phones at `http://<PC>:3001/drive` | all interfaces |
+| 5023/TCP | GT06 GPS trackers | all interfaces |
+| random | PostgreSQL, AI engine | 127.0.0.1 only |
+
+On first launch Windows asks whether "Node.js JavaScript Runtime" may accept connections (it
+is the API process). Allow it on private networks so phones and trackers can connect; decline
+it to keep SCIP reachable from this PC only.
+
+- **Trackers outside the office network:** forward TCP 5023 on the router to this PC.
+- **PC turned off:** positions sent by trackers are lost.
+
+Phone browsers only grant GPS to HTTPS pages or localhost. On a plain `http://<PC>` address the
+driver app can still record deliveries, but it cannot read the phone's position. HTTPS on the
+LAN (a local certificate) is the planned fix.
+
+## Backup
+
+Everything is in `%LOCALAPPDATA%\com.scip.desktop`. With SCIP closed, copying that folder is a complete
+backup. To back up without stopping SCIP, use the bundled `pg_dump.exe` in
+`<install dir>\resources\postgres\bin`. Its port and password are in `config.json`.
+
+## Environment (development)
 
 Everything is read through `ConfigService` with a typed shape; there is no bare `process.env`
-access outside `src/config/configuration.ts`, so a missing variable fails once, loudly, at boot
-rather than at 3 a.m. inside a request handler.
+access outside `apps/api/src/config/configuration.ts`, so a missing variable fails once, at boot.
+In the desktop app the supervisor sets these variables itself (`apps/desktop/src-tauri/src/services.rs`). In
+development they come from `.env` (see `.env.example`).
 
-### Must change before anything non-local
-
-| Variable | Why |
-|---|---|
-| `JWT_ACCESS_SECRET` | boot **refuses** in production if it is short, unset or still the dev placeholder |
-| `JWT_REFRESH_SECRET` | same, and must differ from the access secret |
-| `POSTGRES_PASSWORD` | |
-| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | |
-| `AI_SERVICE_TOKEN` | the API↔AI shared secret |
-
-```bash
-node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
-```
-
-### Optional providers
-
-Each is a stub until configured, and every stub is labelled in the response it affects.
-
-| Variable | Effect |
-|---|---|
-| `FIRMS_MAP_KEY` | active fires in the hazards feed (free NASA key); weather, cyclones, earthquakes need no key |
-| `TOMTOM_API_KEY` | live traffic-flow tiles on the maps, capped by `TOMTOM_DAILY_TILE_BUDGET` |
-| `OSRM_URL` | true road distances instead of great-circle × `ROAD_WINDING_FACTOR` |
-| `NEXT_PUBLIC_MAP_STYLE_URL` | any MapLibre style, including Mapbox, instead of OSM raster |
-| `SIMULATOR_ENABLED=false` | **set this in production** — the simulator is demo scaffolding |
-
-`NEXT_PUBLIC_*` values are inlined at **build** time, so they are build args in
-`apps/web/Dockerfile`, not runtime environment. A container started with a different API URL would
-ignore it.
-
-## Production checklist
-
-**Before the first deploy**
-
-- [ ] Fresh JWT secrets; access ≠ refresh.
-- [ ] `NODE_ENV=production` — this is what enables the secret validation and disables Swagger.
-- [ ] `SIMULATOR_ENABLED=false`.
-- [ ] `CORS_ORIGINS` set to the real web origin, not `*`.
-- [ ] TLS terminated in front of the API. The app is HTTPS-ready but does not terminate TLS
-      itself; put nginx, Traefik or a load balancer in front.
-- [ ] Managed Postgres with PostGIS available, or the extension installed.
-- [ ] Object storage: real S3 or a MinIO instance with its own credentials.
-- [ ] SMTP that is not MailHog.
-
-**Data**
-
-- [ ] Automated backups with a tested restore, not just a snapshot schedule.
-- [ ] Confirm the retention job runs — `gps_positions` grows by ~6 M rows per vehicle-year.
-
-**Operations**
-
-- [ ] Probe `/api/v1/health` for liveness and `/api/v1/health/ready` for readiness. Note that
-      readiness reports the AI service separately and does **not** fail on it: TRACK works
-      without OPTIMIZE, and failing readiness would take the whole API out of the load balancer
-      over a degraded optional feature.
-- [ ] Alert on `domain_events` dead letters (`processedAt IS NULL AND attempts >= 5`).
-- [ ] Watch the AI circuit breaker in the logs.
-
-## Scaling
-
-**API** — stateless; scale horizontally. Two caveats:
-
-- Socket.IO needs sticky sessions, or a Redis adapter for cross-instance broadcast.
-- The scheduled jobs and the domain-event worker run in-process. Event claiming uses
-  `FOR UPDATE SKIP LOCKED` so multiple workers are safe, but the `@Cron` sweeps would duplicate
-  work across replicas. Either run one instance with `SCHEDULER_ENABLED`, or move the cron jobs to
-  a dedicated worker deployment.
-
-**AI service** — stateless. Scale with replicas rather than in-process workers: the solvers are
-CPU-bound, and one runaway solve should not starve others sharing a process.
-
-**Database** — the first thing to feel load is `gps_positions`. Options in order: shorten
-retention, add a BRIN index on `recordedAt`, then partition by month.
-
-**Web** — static except for the shipment detail route; put a CDN in front.
-
-## Backup and restore
-
-```bash
-# backup
-docker exec scip-postgres pg_dump -U scip -Fc scip > scip-$(date +%F).dump
-
-# restore into an empty database
-docker exec -i scip-postgres pg_restore -U scip -d scip --clean --if-exists < scip-2026-08-13.dump
-```
-
-Object storage is backed up separately; the database holds only the keys.
-
-## Troubleshooting
-
-**`prisma migrate` reports drift on a fresh database.** The `postgis/postgis` image pre-installs
-`postgis`, `postgis_topology`, `fuzzystrmatch` and `postgis_tiger_geocoder`. Extension tracking is
-deliberately *not* enabled in `schema.prisma` for exactly this reason; `CREATE EXTENSION` lives in
-the first migration instead. If you re-enable the preview feature you will get this back.
-
-**API starts, then 500s on analytics.** Almost always a new aggregate returning `bigint`.
-`main.ts` installs a `BigInt.prototype.toJSON`; if you add a service that serialises outside Nest's
-response path, it needs the same treatment.
-
-**`ECONNABORTED` from the AI service.** A forecast over a long history with all six models takes a
-few seconds. `AI_SERVICE_TIMEOUT_MS` defaults to 30 s; raise it before suspecting the model.
-
-**Ports already in use.** Postgres and Redis are mapped to 5433 and 6380 on purpose so this stack
-cannot collide with an existing local instance. Change `POSTGRES_PORT` / `REDIS_PORT` if even those
-are taken.
-
-**Windows: `node-gyp` errors on install.** There should be none — password hashing uses
-`@node-rs/argon2`, which ships prebuilt N-API binaries precisely to avoid needing a toolchain.
-
-**Python: `pip install` builds OR-Tools or scipy from source.** You are on 3.13. Use 3.12, which
-has wheels for every pinned dependency.
+| Variable | Desktop value | Purpose |
+|---|---|---|
+| `SCIP_RUNTIME` | `desktop` | single company: registration closes after setup |
+| `DATABASE_URL` | local cluster, generated password | PostgreSQL |
+| `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` | generated on first run | token signing |
+| `STORAGE_DIR` | `%LOCALAPPDATA%\com.scip.desktop\files` | proof-of-delivery files |
+| `WEB_DIST_DIR` | `resources\web` | UI served to phones |
+| `SMTP_HOST` | unset | mail disabled until configured |
+| `DEVICE_GATEWAY_PORT` | `5023` | GT06 listener |
