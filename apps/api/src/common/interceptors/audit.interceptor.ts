@@ -21,6 +21,17 @@ const SENSITIVE_KEYS = new Set([
   'signature',
 ]);
 
+/**
+ * Exact names, plus any field that *ends* in one of them: `aisStreamApiKey` and
+ * `openskyClientSecret` are credentials too, and an exact-match list would log them in clear.
+ */
+function isSensitive(key: string): boolean {
+  const lower = key.toLowerCase();
+  if (SENSITIVE_KEYS.has(lower)) return true;
+  for (const suffix of SENSITIVE_KEYS) if (lower.endsWith(suffix)) return true;
+  return false;
+}
+
 /** Recursively strips credentials so an audit trail never becomes a password dump. */
 export function redact(value: unknown, depth = 0): unknown {
   if (depth > 6 || value === null || value === undefined) return value;
@@ -29,7 +40,7 @@ export function redact(value: unknown, depth = 0): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
-    out[key] = SENSITIVE_KEYS.has(key.toLowerCase()) ? REDACTED : redact(val, depth + 1);
+    out[key] = isSensitive(key) ? REDACTED : redact(val, depth + 1);
   }
   return out;
 }
