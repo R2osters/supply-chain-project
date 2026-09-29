@@ -14,6 +14,7 @@ import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
 import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
 import { usePalette, type Palette } from '@/lib/theme';
 import { Banner, DemoTag, Empty, ErrorNote, Legend, Loading, Provenance, SeverityIcon } from '@/components/ui';
+import { LiveTrafficCards, LiveTrafficStatus, LiveTrafficToggles, useLiveTraffic } from './_components/live-traffic-layer';
 import { ReplayControls, type HistoryFix } from './_components/replay';
 import { FixProvenance, VehicleDetail } from './_components/vehicle-detail';
 import {
@@ -262,6 +263,9 @@ function LiveMap() {
   }, []);
 
   useBasemapTheme(ready ? map.current : null, palette);
+
+  // Aircraft and AIS vessels, drawn under the replay track so a replayed day stays on top.
+  const liveTraffic = useLiveTraffic(ready ? map.current : null, ready, palette, REPLAY_TRACK);
 
   // GL layers hold literal colours: repaint them when the theme changes.
   useEffect(() => {
@@ -546,6 +550,7 @@ function LiveMap() {
               <Layers />
               {t('map.layer.traffic')}
             </button>
+            <LiveTrafficToggles live={liveTraffic} />
           </div>
         </div>
 
@@ -568,6 +573,8 @@ function LiveMap() {
             </button>
           ))}
         </div>
+
+        <LiveTrafficStatus live={liveTraffic} />
 
         {fleet.isError && fleet.data && (
           <Banner tone="warn" icon={WifiLow} title={t('map.v3.weakNetwork', { time: fmt.time(new Date(fleet.dataUpdatedAt)) })}>
@@ -655,9 +662,13 @@ function LiveMap() {
             { label: t('map.v3.legend.demo'), colour: 'var(--color-sim)', shape: 'dash' },
             { label: t('map.v3.legend.replay'), colour: 'var(--color-ink)', shape: 'line' },
             { label: t('map.v3.legend.warehouse'), colour: 'var(--color-muted)' },
+            ...(liveTraffic.showAircraft ? [{ label: t('live.legend.aircraft'), colour: 'var(--color-ink)' }] : []),
+            ...(liveTraffic.showVessels ? [{ label: t('live.legend.vessel'), colour: 'var(--color-ink)' }] : []),
           ]}
         />
       </div>
+
+      <LiveTrafficCards live={liveTraffic} />
     </div>
   );
 }

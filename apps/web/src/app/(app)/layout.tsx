@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, LogOut, Moon, Search, Sun, WifiOff, X } from 'lucide-react';
+import { Bell, LogOut, Moon, Search, Settings, Sun, WifiOff, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -217,6 +217,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             onSignOut={() => void signOut()}
             signOutLabel={t('nav.signOut')}
             accountLabel={t('shell.account')}
+            settingsLabel={can('company:update') ? t('settings.nav') : null}
           />
         </div>
 
@@ -290,6 +291,7 @@ function UserMenu({
   onSignOut,
   signOutLabel,
   accountLabel,
+  settingsLabel,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -298,6 +300,8 @@ function UserMenu({
   onSignOut: () => void;
   signOutLabel: string;
   accountLabel: string;
+  /** Null when the user may not change company settings: the entry is hidden, not disabled. */
+  settingsLabel: string | null;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -338,6 +342,16 @@ function UserMenu({
             <span className="t-data text-[11px] capitalize text-[var(--color-muted)]">{role}</span>
           </div>
           <div className="my-1 h-px bg-[var(--color-line)]" />
+          {settingsLabel && (
+            <Link
+              href="/settings"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-[13px] text-[var(--color-ink)] hover:bg-[var(--color-surface)]"
+            >
+              <Settings className="h-4 w-4 text-[var(--color-muted)]" />
+              {settingsLabel}
+            </Link>
+          )}
           <button
             type="button"
             role="menuitem"
