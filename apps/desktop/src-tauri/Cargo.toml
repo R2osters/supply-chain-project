@@ -1,6 +1,6 @@
 [package]
 name = "scip-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "SCIP desktop shell and process supervisor"
 authors = ["SCIP"]
 edition = "2021"
