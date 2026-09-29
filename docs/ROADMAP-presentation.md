@@ -12,7 +12,7 @@ sources sans clé et l'audit de sécurité ([security-audit.md](security-audit.m
 | Optimisation (OPTIMISE) | Prévisions de demande, recommandations de commande expliquées, allocation fournisseurs (MILP), tournées (VRP), scénarios, risque de retard |
 | Réseau | Fournisseurs (score de performance), commandes d'achat, stocks, référentiel complet (produits, entrepôts, véhicules, chauffeurs, clients, transporteurs) |
 | Sécurité | Rôles et permissions, isolation des données, Argon2id, verrouillage de compte, jetons rafraîchis avec détection de rejeu, API limitée à ce PC par défaut, audit dynamique rejouable (`scripts/security/`) |
-| Qualité | ~390 tests API, ~70 tests web, ~110 tests Rust (application) + ~60 (installeur), CI qui produit l'installeur |
+| Qualité | 471 tests API, 130 tests web, 119 tests Rust (application) + 61 (installeur) + 17 (écrans de l'installeur), CI qui produit l'installeur |
 
 ## Manques, par priorité
 
@@ -20,9 +20,9 @@ sources sans clé et l'audit de sécurité ([security-audit.md](security-audit.m
 
 | # | Manque | Pourquoi c'est bloquant | Effort |
 |---|---|---|---|
-| 1 | **Gestion des utilisateurs** (liste, invitation, rôle, désactivation, réinitialisation du mot de passe par l'administrateur) | Après une installation réelle, seul l'administrateur existe et aucun écran ne permet d'ajouter un collègue ou un chauffeur. L'API sait inviter, l'interface non. | 1 j |
-| 2 | **Mot de passe oublié sans e-mail** | L'envoi d'e-mails est désactivé en local : un mot de passe oublié est aujourd'hui une impasse. Réinitialisation par l'administrateur (n° 1) + code de secours pour l'administrateur. | 0,5 j |
-| 3 | **Cartes hors connexion** | Toutes les cartes chargent leurs tuiles sur internet (OpenStreetMap). Sans Wi-Fi en salle, les cartes sont vides. Embarquer un fond de carte léger (monde + Afrique de l'Ouest détaillée) comme repli. | 1 j |
+| 1 | ~~**Gestion des utilisateurs**~~ **Fait** | Écran Utilisateurs : liste, création avec mot de passe temporaire (montré une fois), rôle, lien chauffeur, désactivation, réinitialisation par l'administrateur. Changement obligatoire du mot de passe temporaire à la connexion, imposé par l'API (HTTP et socket de suivi). Chaque rôle arrive sur une page qu'il a le droit d'ouvrir (chauffeur → livraisons). | — |
+| 2 | ~~**Mot de passe oublié sans e-mail**~~ **Fait** | « Mot de passe oublié ? » sur l'écran de connexion : dans l'application de ce PC, un administrateur reçoit un mot de passe temporaire (jeton local connu du seul shell, API en `127.0.0.1`) ; ailleurs, l'administrateur réinitialise depuis Utilisateurs. | — |
+| 3 | ~~**Cartes hors connexion**~~ **Fait** | Fond de carte monde Natural Earth embarqué (côtes, frontières, fleuves, lacs, villes, 4 Mo) sous les tuiles OpenStreetMap : sans internet, les six cartes restent lisibles. Pas de détail rue par rue hors ligne. | — |
 | 4 | **Scénario de démonstration** | Un parcours de 10 minutes qui montre la boucle complète (retard détecté → risque de rupture → recommandation → commande), où trouver avions et navires en direct, quoi dire. | 0,5 j |
 | 5 | **Sauvegarde et restauration en un clic** (Réglages) | Les données ne vivent que sur ce PC ; aujourd'hui la sauvegarde demande `pg_dump` en ligne de commande. | 0,5 j |
 
