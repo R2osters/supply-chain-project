@@ -1,12 +1,25 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Main window: read supervisor state and listen to its events. Nothing else.",
-  "windows": ["main"],
+  "description": "Main window: read supervisor state, listen to its events, open http(s) links in the system browser.",
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "allow-get-runtime-info",
-    "allow-get-startup-status"
+    "allow-get-startup-status",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "http://*"
+        }
+      ]
+    }
   ]
 }

@@ -296,7 +296,7 @@ impl RuntimeContext {
     }
 
     pub fn api_env(&self) -> BTreeMap<String, String> {
-        let pairs: [(&str, String); 15] = [
+        let pairs: [(&str, String); 16] = [
             ("NODE_ENV", "production".to_owned()),
             ("SCIP_RUNTIME", "desktop".to_owned()),
             ("API_PORT", self.ports.api.to_string()),
@@ -312,6 +312,8 @@ impl RuntimeContext {
             ("DEVICE_GATEWAY_PORT", DEVICE_GATEWAY_PORT.to_string()),
             ("CHECKPOINT_DISABLE", "1".to_owned()),
             ("WEB_DIST_DIR", path_arg(&self.resources.web_dir())),
+            // Keys typed into the app's settings screen (AIS, OpenSky, TomTom...), kept with the data.
+            ("SETTINGS_FILE", path_arg(&self.dirs.root.join("settings.json"))),
         ];
         pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()
     }

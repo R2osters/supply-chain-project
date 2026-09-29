@@ -143,6 +143,9 @@ pub fn run() {
         // otherwise it would start a second Postgres on the same data folder.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| focus_main_window(app)))
         .plugin(log_plugin())
+        // External links (aisstream.io, opensky-network.org...) open in the user's browser; the
+        // webview itself never navigates away from the app.
+        .plugin(tauri_plugin_opener::init())
         .manage(Arc::clone(&state))
         .invoke_handler(tauri::generate_handler![get_runtime_info, get_startup_status])
         .setup(move |app| {
