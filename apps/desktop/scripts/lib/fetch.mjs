@@ -43,9 +43,16 @@ export function extractZip(archive, destination) {
   execFileSync(tar, ['-xf', archive, '-C', destination], { stdio: 'inherit' });
 }
 
+/**
+ * Runs a build tool. On Windows npm/npx are .cmd shims that need a shell, and a shell splits
+ * arguments on spaces — this repository lives under "supply chain project" — so arguments are
+ * quoted here rather than at every call site.
+ */
 export function run(command, args, options = {}) {
-  console.log(`  > ${command} ${args.join(' ')}`);
-  execFileSync(command, args, { stdio: 'inherit', shell: process.platform === 'win32', ...options });
+  const useShell = process.platform === 'win32';
+  const quoted = useShell ? args.map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg)) : args;
+  console.log(`  > ${command} ${quoted.join(' ')}`);
+  execFileSync(command, quoted, { stdio: 'inherit', shell: useShell, ...options });
 }
 
 /** True when the calling module was run directly (`node stage-x.mjs`) rather than imported. */

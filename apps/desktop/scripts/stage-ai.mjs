@@ -15,7 +15,8 @@ export async function stageAi() {
     throw new Error(`PyInstaller output not found in ${built}`);
   }
   const target = join(RESOURCES_DIR, 'ai');
-  rmSync(target, { recursive: true, force: true });
+  // Retries: antivirus scanners briefly lock freshly written .exe/.node files on Windows.
+  rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
   cpSync(built, target, { recursive: true });
   console.log(`  ai -> ${target}`);
 }

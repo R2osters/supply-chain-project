@@ -1,7 +1,7 @@
 // Stages the NestJS API as a self-contained folder: resources/api/{dist,prisma,node_modules}.
 // It is a regular `npm install --omit=dev` of the built API rather than a bundle, because Nest
 // relies on decorator metadata that bundlers strip, and Prisma loads its engine from disk.
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_DIR, RESOURCES_DIR, run, isMain } from './lib/fetch.mjs';
 
@@ -13,7 +13,8 @@ export async function stageApi() {
   run('npm', ['run', 'build', '--workspace', '@scip/api'], { cwd: REPO_DIR });
 
   const target = join(RESOURCES_DIR, 'api');
-  rmSync(target, { recursive: true, force: true });
+  // Retries: antivirus scanners briefly lock freshly written .exe/.node files on Windows.
+  rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
   mkdirSync(target, { recursive: true });
 
   cpSync(join(apiDir, 'dist'), join(target, 'dist'), { recursive: true });
@@ -48,7 +49,43 @@ export async function stageApi() {
     cwd: target,
   });
   run('npx', ['prisma', 'generate', '--schema', 'prisma/schema.prisma'], { cwd: target });
+
+  // The demo seed is TypeScript run through ts-node in development. Bundle it into one JS file
+  // so a fresh install can offer "load demo data" (see the API's setup module). Only the seed's
+  // own sources are bundled; packages resolve from the runtime node_modules installed above.
+  run('npx', [
+    'esbuild',
+    join(apiDir, 'prisma', 'seed.ts'),
+    '--bundle',
+    '--platform=node',
+    '--target=node22',
+    '--packages=external',
+    `--outfile=${join(target, 'seed.js')}`,
+  ], { cwd: REPO_DIR });
+  pruneUnusedPrismaEngines(join(target, 'node_modules'));
   console.log(`  api -> ${target}`);
+}
+
+/**
+ * Prisma ships a WebAssembly engine per database for edge runtimes, plus source maps. The
+ * desktop API runs on Node with the native library engine against PostgreSQL only, so the rest
+ * is ~70 MB of dead weight in the installer. The CLI keeps its PostgreSQL wasm for migrations.
+ */
+function pruneUnusedPrismaEngines(nodeModules) {
+  const clientRuntime = join(nodeModules, '@prisma', 'client', 'runtime');
+  const cliBuild = join(nodeModules, 'prisma', 'build');
+  const prune = (dir, shouldDelete) => {
+    for (const file of readdirSync(dir)) {
+      if (shouldDelete(file)) rmSync(join(dir, file), { force: true });
+    }
+  };
+  // npm/prisma download cache left behind by `npm install`: never read at runtime.
+  rmSync(join(nodeModules, '.cache'), { recursive: true, force: true });
+  prune(clientRuntime, (f) => /^query_(engine|compiler)_bg\./.test(f) || f.endsWith('.map'));
+  prune(
+    cliBuild,
+    (f) => /^query_(engine|compiler)_bg\.(mysql|sqlite|sqlserver|cockroachdb)/.test(f) || f.endsWith('.map'),
+  );
 }
 
 if (isMain(import.meta.url)) {

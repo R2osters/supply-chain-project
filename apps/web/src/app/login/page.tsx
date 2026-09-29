@@ -7,6 +7,7 @@ import { Banner, Button, Logo } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { LOCALES, useI18n, type TranslationKey } from '@/lib/i18n';
 import { useTheme } from '@/lib/theme';
+import { FirstRun, useSetupStatus } from './_components/first-run';
 
 const DEMO_ACCOUNTS: Array<{ email: string; roleKey: TranslationKey; noteKey: TranslationKey }> = [
   { email: 'admin@demo-scip.com', roleKey: 'login.role.admin', noteKey: 'login.note.admin' },
@@ -35,8 +36,13 @@ export default function LoginPage() {
   const { t, locale, setLocale } = useI18n();
   const { theme, toggleTheme } = useTheme();
 
-  const [email, setEmail] = useState('admin@demo-scip.com');
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const setup = useSetupStatus();
+  // Without the status (server build, older API) keep the historical behaviour: demo accounts on.
+  const needsSetup = setup.data?.needsSetup === true;
+  const showDemo = setup.data ? setup.data.demoAccounts : true;
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const fallbackTimer = useRef<number | null>(null);
@@ -45,12 +51,26 @@ export default function LoginPage() {
     if (!loading && user) router.replace('/dashboard');
   }, [loading, user, router]);
 
+  // Pre-fill the demo administrator only when those accounts exist on this install.
+  useEffect(() => {
+    if (showDemo && !email) {
+      setEmail(DEMO_ACCOUNTS[0].email);
+      setPassword(DEMO_PASSWORD);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only react to the status arriving
+  }, [showDemo]);
+
   useEffect(
     () => () => {
       if (fallbackTimer.current !== null) window.clearTimeout(fallbackTimer.current);
     },
     [],
   );
+
+  async function enter(accountEmail: string, accountPassword: string) {
+    await signIn(accountEmail, accountPassword);
+    router.replace('/dashboard');
+  }
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -123,6 +143,14 @@ export default function LoginPage() {
 
         {/* -------------------------------------------------------------- form */}
         <section className="rise flex flex-col gap-6 rounded-[var(--radius-lg)] bg-[var(--color-surface-2)] p-6 shadow-[var(--shadow-sm)] md:p-8">
+          {needsSetup ? (
+            <FirstRun
+              demoAvailable={setup.data?.demoAvailable ?? false}
+              onCreated={enter}
+              onDemoLoaded={() => void setup.refetch()}
+            />
+          ) : (
+          <>
           <header className="flex flex-col gap-1">
             <h2 className="t-h2 m-0">{t('login.signIn')}</h2>
             <p className="m-0 text-[13px] text-[var(--color-muted)]">{t('login.v3.subtitle')}</p>
@@ -161,6 +189,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          {showDemo && (
           <div className="flex flex-col gap-2 border-t border-[var(--color-line)] pt-5">
             <span className="t-label">{t('login.demoAccounts')}</span>
             <ul className="stagger m-0 flex list-none flex-col gap-1 p-0" role="listbox" aria-label={t('login.demoAccounts')}>
@@ -200,6 +229,9 @@ export default function LoginPage() {
             </ul>
             <p className="m-0 text-[12px] leading-relaxed text-[var(--color-dim)]">{t('login.roleNote')}</p>
           </div>
+          )}
+          </>
+          )}
         </section>
       </div>
     </main>

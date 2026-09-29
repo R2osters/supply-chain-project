@@ -26,7 +26,8 @@ export async function stageNode() {
   extractZip(archive, CACHE_DIR);
 
   const target = join(RESOURCES_DIR, 'node');
-  rmSync(target, { recursive: true, force: true });
+  // Retries: antivirus scanners briefly lock freshly written .exe/.node files on Windows.
+  rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
   mkdirSync(target, { recursive: true });
   // Only the executable: npm and corepack are build-time tools, not runtime dependencies.
   copyFileSync(join(extracted, 'node.exe'), join(target, 'node.exe'));

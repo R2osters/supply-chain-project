@@ -27,7 +27,8 @@ export async function stagePostgres() {
   if (!existsSync(gisExtracted)) extractZip(gisZip, CACHE_DIR);
 
   const target = join(RESOURCES_DIR, 'postgres');
-  rmSync(target, { recursive: true, force: true });
+  // Retries: antivirus scanners briefly lock freshly written .exe/.node files on Windows.
+  rmSync(target, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
   for (const dir of KEEP) {
     cpSync(join(pgExtracted, 'pgsql', dir), join(target, dir), { recursive: true });
   }
