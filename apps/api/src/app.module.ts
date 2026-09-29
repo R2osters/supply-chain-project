@@ -36,6 +36,7 @@ import { SatellitesModule } from './modules/satellites/satellites.module';
 import { RadioModule } from './modules/radio/radio.module';
 import { SetupModule } from './modules/setup/setup.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { CompaniesModule } from './modules/companies/companies.module';
 import { AircraftModule } from './modules/aircraft/aircraft.module';
 
 @Module({
@@ -67,6 +68,7 @@ import { AircraftModule } from './modules/aircraft/aircraft.module';
     AuthModule,
     SetupModule,
     SettingsModule,
+    CompaniesModule,
     AircraftModule,
     HealthModule,
     MasterDataModule,
