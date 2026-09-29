@@ -1,0 +1,85 @@
+# Tests every push; builds the Windows installer on master and on version tags.
+name: desktop
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: npm ci
+      - run: npm run build --workspace @scip/shared
+      - run: npx prisma generate
+        working-directory: apps/api
+      - name: API unit tests
+        run: npm test --workspace @scip/api
+      - name: Web typecheck and unit tests
+        run: |
+          npm run typecheck --workspace @scip/web
+          npx vitest run
+        working-directory: apps/web
+      # Tauri's build script embeds the frontend folder, which must exist even for tests.
+      - name: Placeholder frontend for the Rust build
+        run: New-Item -ItemType Directory -Force apps/desktop/web-dist | Out-Null
+        shell: pwsh
+      - name: Desktop shell tests and lint
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+        working-directory: apps/desktop/src-tauri
+
+  installer:
+    needs: test
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # build-desktop.ps1 picks Python 3.12 through the py launcher and installs PyInstaller itself.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      # PostgreSQL, PostGIS and Node archives: ~500 MB that rarely change.
+      - uses: actions/cache@v4
+        with:
+          path: apps/desktop/.cache
+          key: desktop-downloads-${{ hashFiles('apps/desktop/scripts/stage-node.mjs', 'apps/desktop/scripts/stage-postgres.mjs') }}
+      - run: npm ci
+      - name: Stage runtimes, API, AI and web export
+        run: npm run desktop:stage
+      # Unsigned until a code-signing certificate is configured (see DEPLOYMENT.md, Signing).
+      - name: Build the NSIS installer
+        run: npm run desktop:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scip-windows-installer
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
