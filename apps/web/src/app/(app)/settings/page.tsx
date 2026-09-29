@@ -19,6 +19,7 @@ import {
 import { useFormat, useI18n, type TranslationKey } from '@/lib/i18n';
 import { Button, Empty, ErrorNote, Facts, Loading, PageHeader, Panel, Provenance } from '@/components/ui';
 import { useToast } from '@/components/toast';
+import { NetworkPanel } from './_components/network-panel';
 
 const LABEL: Record<FeedField, TranslationKey> = {
   aisStream: 'settings.aisStream',
@@ -46,7 +47,10 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader kicker={t('settings.kicker')} title={t('settings.title')} description={t('settings.description')} />
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <FeedsForm />
+        <div className="flex flex-col gap-6">
+          <NetworkPanel />
+          <FeedsForm />
+        </div>
         {can('gps:read') && <FeedStatus />}
       </div>
     </div>

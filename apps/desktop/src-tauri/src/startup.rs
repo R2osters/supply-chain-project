@@ -24,6 +24,7 @@ pub fn prepare(dirs: DataDirs, resources_root: Option<PathBuf>) -> Result<Runtim
     })?;
     let resources = ResourceLayout::new(root);
     check_resources(&resources)?;
+    let lan_access: bool = crate::services::read_lan_access(&dirs.root.join("network.json"));
     Ok(RuntimeContext {
         dirs,
         ports,
@@ -31,6 +32,7 @@ pub fn prepare(dirs: DataDirs, resources_root: Option<PathBuf>) -> Result<Runtim
         resources,
         database: config.database.unwrap_or_default(),
         simulator: config.simulator.unwrap_or(true),
+        lan_access,
     })
 }
 
@@ -183,6 +185,7 @@ mod tests {
             resources: ResourceLayout::new("/r"),
             database: Default::default(),
             simulator: true,
+            lan_access: false,
         };
         for step in ctx.startup_plan() {
             assert_ne!(step_label(step.name()), step.name(), "no label for {}", step.name());

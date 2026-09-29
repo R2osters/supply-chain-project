@@ -1,8 +1,19 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength, ValidateIf } from 'class-validator';
 import { Audit, RequirePermissions } from '../../common/decorators';
 import { FeedSettingsService } from './feed-settings.service';
+import { NetworkSettingsService } from './network-settings.service';
+
+export class UpdateNetworkSettingsDto {
+  @IsBoolean()
+  lanAccess!: boolean;
+
+  /** Required to expose SCIP while the demo accounts still use their published password. */
+  @IsOptional()
+  @IsBoolean()
+  acknowledgeDemoRisk?: boolean;
+}
 
 /** Omit a field to leave it unchanged; send null or an empty string to clear it. */
 export class UpdateFeedSettingsDto {
@@ -47,7 +58,25 @@ export class UpdateFeedSettingsDto {
 @ApiTags('settings')
 @Controller('settings')
 export class SettingsController {
-  constructor(private readonly feeds: FeedSettingsService) {}
+  constructor(
+    private readonly feeds: FeedSettingsService,
+    private readonly network: NetworkSettingsService,
+  ) {}
+
+  @Get('network')
+  @RequirePermissions('company:update')
+  @ApiOperation({ summary: 'Whether SCIP listens to the local network (drivers phones, GPS trackers)' })
+  getNetwork() {
+    return this.network.status();
+  }
+
+  @Put('network')
+  @RequirePermissions('company:update')
+  @Audit('settings.network.update', 'settings')
+  @ApiOperation({ summary: 'Enable or disable local network access; applies after SCIP restarts' })
+  updateNetwork(@Body() dto: UpdateNetworkSettingsDto) {
+    return this.network.update(dto.lanAccess, dto.acknowledgeDemoRisk === true);
+  }
 
   @Get('feeds')
   @RequirePermissions('company:update')

@@ -58,6 +58,7 @@ export class TrackingGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     try {
       const payload = this.jwt.verify<JwtAccessPayload>(token, {
         secret: this.config.get('auth', { infer: true }).accessSecret,
+        algorithms: ['HS256'],
       });
 
       if (payload.type !== 'access') throw new Error('wrong token type');

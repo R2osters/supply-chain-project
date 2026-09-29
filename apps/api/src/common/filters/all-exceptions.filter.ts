@@ -105,6 +105,21 @@ export class AllExceptionsFilter implements ExceptionFilter {
       return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Invalid query payload' };
     }
 
+    // Postgres rejects some input outright (a NUL byte in a search string, for instance); that is
+    // the client's input, not a server fault.
+    if (exception instanceof Prisma.PrismaClientUnknownRequestError) {
+      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Invalid request' };
+    }
+
+    // body-parser errors carry their own status and a `type` such as entity.too.large.
+    const parserError = exception as { type?: unknown; status?: unknown };
+    if (typeof parserError?.type === 'string' && parserError.type.startsWith('entity.')) {
+      if (parserError.type === 'entity.too.large') {
+        return { status: HttpStatus.PAYLOAD_TOO_LARGE, error: 'Payload Too Large', message: 'Request body too large' };
+      }
+      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Malformed request body' };
+    }
+
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       error: 'Internal Server Error',

@@ -35,6 +35,11 @@ export interface AppConfig {
   env: string;
   isProduction: boolean;
   port: number;
+  /**
+   * Interface the API binds to. 127.0.0.1 by default: nothing on the network can reach it until
+   * an administrator enables local network access (drivers' phones, trackers) in the settings.
+   */
+  host: string;
   globalPrefix: string;
   corsOrigins: string[];
   /**
@@ -109,6 +114,12 @@ export interface AppConfig {
     /** TCP listener for hardware GPS trackers. Off in development unless asked for. */
     enabled: boolean;
     port: number;
+    /** Same rule as the API: this PC only, unless local network access is enabled. */
+    host: string;
+  };
+  network: {
+    /** Where the local-network choice is saved (network.json in the data folder on desktop). */
+    settingsFile: string | null;
   };
   maritime: {
     aisStreamApiKey: string | null;
@@ -174,6 +185,7 @@ export default (): AppConfig => {
     env,
     isProduction,
     port: int(process.env.API_PORT, 3001),
+    host: process.env.API_HOST || '127.0.0.1',
     globalPrefix: process.env.API_GLOBAL_PREFIX ?? 'api/v1',
     // The desktop webview serves the UI from its own origin, which differs by WebView2 settings.
     corsOrigins: list(process.env.CORS_ORIGINS, [
@@ -263,6 +275,11 @@ export default (): AppConfig => {
       // 5023 is the port Traccar uses for GT06, so a device already configured for a Traccar
       // installation points here without being re-flashed by SMS.
       port: int(process.env.DEVICE_GATEWAY_PORT, 5023),
+      host: process.env.DEVICE_GATEWAY_HOST || '127.0.0.1',
+    },
+
+    network: {
+      settingsFile: process.env.NETWORK_SETTINGS_FILE || null,
     },
 
     maritime: {

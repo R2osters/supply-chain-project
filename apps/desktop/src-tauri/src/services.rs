@@ -141,6 +141,18 @@ pub struct RuntimeContext {
     pub database: DatabaseConfig,
     /// Simulated vehicle movements; `config.json` → `simulator`, on when absent.
     pub simulator: bool,
+    /// Listen to the local network (drivers' phones, GPS trackers). Saved by the API's settings
+    /// screen in `network.json`; off when absent, so a fresh install is reachable from this PC only.
+    pub lan_access: bool,
+}
+
+/// `network.json` → `lanAccess`. Anything unreadable counts as off: exposure is opt-in.
+pub fn read_lan_access(path: &Path) -> bool {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|raw: String| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|value: serde_json::Value| value.get("lanAccess").and_then(serde_json::Value::as_bool))
+        .unwrap_or(false)
 }
 
 /// Specs are a few hundred bytes and the plan has seven entries built once per launch:
@@ -164,6 +176,19 @@ impl StartupStep {
 }
 
 impl RuntimeContext {
+    /// Interface for the API and the GT06 gateway: every interface only when LAN access is on.
+    pub fn listen_host(&self) -> &'static str {
+        if self.lan_access {
+            "0.0.0.0"
+        } else {
+            "127.0.0.1"
+        }
+    }
+
+    pub fn network_settings_file(&self) -> PathBuf {
+        self.dirs.root.join("network.json")
+    }
+
     /// Embedded: the base64url alphabet needs no percent-encoding, which is why secrets use it.
     /// External: the URL the installer stored, already encoded.
     pub fn database_url(&self) -> String {
@@ -321,7 +346,7 @@ impl RuntimeContext {
     }
 
     pub fn api_env(&self) -> BTreeMap<String, String> {
-        let pairs: [(&str, String); 18] = [
+        let pairs: [(&str, String); 21] = [
             ("NODE_ENV", "production".to_owned()),
             ("SCIP_RUNTIME", "desktop".to_owned()),
             ("API_PORT", self.ports.api.to_string()),
@@ -344,6 +369,10 @@ impl RuntimeContext {
             // Chosen at install time: demo installs animate fake vehicles, production ones wait
             // for real trackers and phones.
             ("SIMULATOR_ENABLED", self.simulator.to_string()),
+            // This PC only unless the administrator enabled local network access.
+            ("API_HOST", self.listen_host().to_owned()),
+            ("DEVICE_GATEWAY_HOST", self.listen_host().to_owned()),
+            ("NETWORK_SETTINGS_FILE", path_arg(&self.network_settings_file())),
         ];
         pairs.into_iter().map(|(k, v)| (k.to_owned(), v)).collect()
     }
@@ -411,6 +440,7 @@ mod tests {
             resources: ResourceLayout::new("/res"),
             database: DatabaseConfig::Embedded,
             simulator: true,
+            lan_access: false,
         }
     }
 
@@ -422,6 +452,26 @@ mod tests {
             simulator: false,
             ..ctx()
         }
+    }
+
+    #[test]
+    fn api_and_gateway_listen_on_this_pc_only_by_default() {
+        let env = ctx().api_env();
+        assert_eq!(env.get("API_HOST").map(String::as_str), Some("127.0.0.1"));
+        assert_eq!(env.get("DEVICE_GATEWAY_HOST").map(String::as_str), Some("127.0.0.1"));
+        let lan = RuntimeContext { lan_access: true, ..ctx() };
+        assert_eq!(lan.api_env().get("API_HOST").map(String::as_str), Some("0.0.0.0"));
+    }
+
+    #[test]
+    fn lan_access_is_read_from_network_json_and_off_otherwise() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("network.json");
+        assert!(!read_lan_access(&file));
+        std::fs::write(&file, r#"{ "lanAccess": true }"#).unwrap();
+        assert!(read_lan_access(&file));
+        std::fs::write(&file, "{ not json").unwrap();
+        assert!(!read_lan_access(&file));
     }
 
     #[test]

@@ -121,6 +121,8 @@ impl Runtime for SupervisorRuntime {
             .map_err(|e| ProvisionError::new(step, "config", e.to_string(), false))?;
         let mut ctx: RuntimeContext =
             startup::prepare(dirs, self.resources_root.clone()).map_err(|e| event_error(step, &e))?;
+        // The temporary API of an installation is never exposed, whatever network.json says.
+        ctx.lan_access = false;
         // Never the preferred 3001: a SCIP already running there (an upgrade started with the
         // window open) would answer our health check and receive the plan. Nobody bookmarks
         // this temporary API, so any free port does.
@@ -459,6 +461,7 @@ mod tests {
             resources: ResourceLayout::new("/r"),
             database: DatabaseConfig::External { url: "x".into() },
             simulator: false,
+            lan_access: false,
         };
         let db = ExternalDatabase {
             host: "db".into(),

@@ -3,7 +3,7 @@ import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory, Reflector } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import type { NextFunction, Request, Response } from 'express';
+import { json, urlencoded, type NextFunction, type Request, type Response } from 'express';
 import { existsSync } from 'node:fs';
 import { extname, relative, resolve, sep } from 'node:path';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -34,7 +34,8 @@ import { PrismaService } from './prisma/prisma.service';
 };
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  // Body parsers are registered below with explicit limits instead of Express's 100 KB default.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, bodyParser: false });
   const config = app.get(ConfigService<AppConfig, true>);
   const logger = new Logger('Bootstrap');
 
@@ -44,6 +45,13 @@ async function bootstrap(): Promise<void> {
   const isProduction = config.get('isProduction', { infer: true });
 
   app.setGlobalPrefix(prefix);
+
+  // Proof of delivery carries up to five photos in base64 (10 MB each once decoded); nothing else
+  // needs more than a couple of megabytes. The large limit applies to that route only, so the rest
+  // of the API cannot be fed huge bodies.
+  app.use(`/${prefix}/deliveries`, json({ limit: '70mb' }));
+  app.use(json({ limit: '2mb' }));
+  app.use(urlencoded({ extended: true, limit: '1mb' }));
 
   app.use(
     helmet({
@@ -119,8 +127,12 @@ async function bootstrap(): Promise<void> {
     logger.log(`Swagger UI: http://localhost:${port}/${prefix}/docs`);
   }
 
-  await app.listen(port, '0.0.0.0');
-  logger.log(`SCIP API listening on http://localhost:${port}/${prefix}`);
+  const host = config.get('host', { infer: true });
+  await app.listen(port, host);
+  logger.log(
+    `SCIP API listening on http://${host === '0.0.0.0' ? 'localhost' : host}:${port}/${prefix}` +
+      (host === '127.0.0.1' ? ' (this PC only)' : ' (local network enabled)'),
+  );
 }
 
 /**

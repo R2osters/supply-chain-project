@@ -66,6 +66,7 @@ export class DeviceGatewayService implements OnModuleInit, OnModuleDestroy {
 
   private readonly enabled: boolean;
   private readonly port: number;
+  private readonly host: string;
 
   private packetsDecoded = 0;
   private packetsRejected = 0;
@@ -78,6 +79,7 @@ export class DeviceGatewayService implements OnModuleInit, OnModuleDestroy {
     const gateway = config.get('deviceGateway', { infer: true });
     this.enabled = gateway.enabled;
     this.port = gateway.port;
+    this.host = gateway.host;
   }
 
   onModuleInit(): void {
@@ -92,7 +94,7 @@ export class DeviceGatewayService implements OnModuleInit, OnModuleDestroy {
       this.logger.error(`Device gateway server error: ${error.message}`);
     });
 
-    this.server.listen(this.port, '0.0.0.0', () => {
+    this.server.listen(this.port, this.host, () => {
       this.logger.log(
         `Device gateway listening on tcp/${this.port} — point a GT06 tracker here with ` +
           `SMS: server#<host>#${this.port}#`,
