@@ -4,9 +4,9 @@ import type { Palette } from '@/lib/theme';
 import { hazardIconId } from './map-layers';
 
 /**
- * Turns the Lucide kind icons into MapLibre sprites, one per kind and tone (4 × 3).
+ * Turns the Lucide kind icons into MapLibre sprites, one per kind and tone (7 × 3).
  *
- * The page renders the four icons once in a hidden node; this reads their SVG, recolours the
+ * The page renders every kind's icon once in a hidden node; this reads their SVG, recolours the
  * stroke with the palette and registers each as an image. Reusing the rendered Lucide markup keeps
  * the map pictograms identical to the list and detail panels, without shipping a sprite sheet or a
  * glyph server. Called again on a theme switch: `updateImage` swaps pixels in place.

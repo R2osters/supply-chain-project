@@ -486,7 +486,7 @@ export interface RiskAnalyzeRequest {
   /** Live natural-hazard exposures of the company's assets. Absent when no feed was reachable. */
   hazards?: Array<{
     hazardId: string;
-    kind: 'CYCLONE' | 'EARTHQUAKE' | 'FIRE' | 'SEVERE_WEATHER';
+    kind: 'CYCLONE' | 'EARTHQUAKE' | 'FIRE' | 'SEVERE_WEATHER' | 'FLOOD' | 'DROUGHT' | 'VOLCANO';
     title: string;
     severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
     subjectType: 'WAREHOUSE' | 'SHIPMENT' | 'SUPPLIER';

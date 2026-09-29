@@ -2,11 +2,19 @@
  * The shapes the hazards endpoints return.
  *
  * These are a contract with the web client, which is built against the exact field names below.
- * Every source — NOAA, USGS, NASA, Open-Meteo — is normalised into `Hazard` so the map, the
- * exposure list and the risk engine each handle one shape instead of five upstream dialects.
+ * Every source — NOAA, USGS, NASA, Open-Meteo, GDACS — is normalised into `Hazard` so the map, the
+ * exposure list and the risk engine each handle one shape instead of seven upstream dialects.
  */
 
-export const HAZARD_KINDS = ['CYCLONE', 'EARTHQUAKE', 'FIRE', 'SEVERE_WEATHER'] as const;
+export const HAZARD_KINDS = [
+  'CYCLONE',
+  'EARTHQUAKE',
+  'FIRE',
+  'SEVERE_WEATHER',
+  'FLOOD',
+  'DROUGHT',
+  'VOLCANO',
+] as const;
 export type HazardKind = (typeof HAZARD_KINDS)[number];
 
 export const SEVERITY_LEVELS = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
@@ -42,7 +50,7 @@ export interface Hazard {
   cone: LonLatRing[] | null;
 }
 
-export type SourceId = 'nhc' | 'usgs' | 'firms' | 'open-meteo' | 'gdelt';
+export type SourceId = 'nhc' | 'usgs' | 'firms' | 'open-meteo' | 'gdelt' | 'gdacs' | 'eonet';
 export type SourceState = 'OK' | 'STALE' | 'UNAVAILABLE' | 'DISABLED';
 
 export interface SourceStatus {

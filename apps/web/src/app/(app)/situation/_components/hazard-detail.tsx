@@ -17,6 +17,8 @@ import { Button, DisabledReason, Facts, Panel, Provenance, SeverityIcon } from '
 import { SUBJECT_ICON, SUBJECT_KEY } from './exposure-panel';
 import { KIND_ICON, KIND_KEY, SEVERITY_KEY, feedProvenance, hazardSeverity } from './hazard-kind';
 
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/;
+
 /**
  * One hazard, with what an operator needs to judge it: which of our assets it touches, the facts
  * from the source, the weather right there now, and what local news is saying. News is a
@@ -60,6 +62,9 @@ export function HazardDetail({
 
   const sourceUrl = safeExternalUrl(hazard.url);
   const details = Object.entries(hazard.details).filter(([, value]) => value !== null && value !== '');
+  // Feeds send instants as ISO strings (GDACS `since`, EONET `firstReported`); read them as dates.
+  const detailText = (value: string | number | boolean | null): string =>
+    typeof value === 'string' && ISO_INSTANT.test(value) ? fmt.dateTime(value) : String(value);
 
   return (
     <Panel
@@ -146,23 +151,31 @@ export function HazardDetail({
               {details.slice(0, 8).map(([key, value]) => (
                 <div key={key} className="flex items-baseline justify-between gap-3">
                   <dt className="t-data text-[11px] text-[var(--color-muted)]">{key}</dt>
-                  <dd className="t-data m-0 truncate text-right text-[12px] text-[var(--color-ink)]">{String(value)}</dd>
+                  <dd className="t-data m-0 truncate text-right text-[12px] text-[var(--color-ink)]">{detailText(value)}</dd>
                 </div>
               ))}
             </dl>
           </section>
         )}
 
-        {sourceUrl && (
-          <a
-            href={sourceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 self-start text-[13px] text-[var(--color-info)] underline-offset-4 hover:underline"
-          >
-            {t('sit.hazard.officialSource')}
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
+        {(sourceUrl || source?.attribution) && (
+          <div className="flex flex-col gap-1">
+            {sourceUrl && (
+              <a
+                href={sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 self-start text-[13px] text-[var(--color-info)] underline-offset-4 hover:underline"
+              >
+                {t('sit.hazard.officialSource')}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
+            {/* The credit line travels with the data: GDACS, NASA and the others license it on that condition. */}
+            {source?.attribution && (
+              <span className="t-data break-words text-[11px] text-[var(--color-dim)]">{source.attribution}</span>
+            )}
+          </div>
         )}
 
         {/* ------------------------------------------------------------- weather */}

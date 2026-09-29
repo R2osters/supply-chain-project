@@ -29,7 +29,7 @@ from typing import Sequence
 from .inventory import stockout_probability
 
 #: Weight of each category in the health score. They sum to 100, so the worst possible score is 0.
-#: NATURAL_HAZARD (earthquakes, wildfires) took its 5 points from DEMAND_RISK: erratic demand is
+#: NATURAL_HAZARD (earthquakes, eruptions, wildfires) took its 5 points from DEMAND_RISK: erratic demand is
 #: buffered by inventory policy, while a fire at a warehouse is not something policy can absorb.
 HEALTH_WEIGHTS: dict[str, float] = {
     "STOCKOUT_RISK": 30.0,
@@ -41,12 +41,16 @@ HEALTH_WEIGHTS: dict[str, float] = {
     "NATURAL_HAZARD": 5.0,
 }
 
-#: Which risk category each live hazard kind feeds. Cyclones and storms are weather; earthquakes
-#: and fires are not, and lumping them in would make "weather risk" mean "anything outdoors".
+#: Which risk category each live hazard kind feeds. Cyclones, storms, floods and droughts are
+#: weather (hydro-meteorological, driven by rain or its absence); earthquakes, eruptions and fires
+#: are not, and lumping them in would make "weather risk" mean "anything outdoors".
 HAZARD_CATEGORY: dict[str, str] = {
     "CYCLONE": "WEATHER_RISK",
     "SEVERE_WEATHER": "WEATHER_RISK",
+    "FLOOD": "WEATHER_RISK",
+    "DROUGHT": "WEATHER_RISK",
     "EARTHQUAKE": "NATURAL_HAZARD",
+    "VOLCANO": "NATURAL_HAZARD",
     "FIRE": "NATURAL_HAZARD",
 }
 
@@ -541,16 +545,29 @@ def _hazard_findings(hazards: Sequence[dict], reference_impact: float) -> list[R
 def _hazard_action(kind: str) -> str:
     return {
         "CYCLONE": (
-            "Follow the NHC advisory. Reroute or hold shipments crossing the forecast cone, move "
-            "stock that can be moved, and secure the site before landfall."
+            "Follow the official advisory (NHC, or the regional centre outside the Atlantic and "
+            "eastern Pacific). Reroute or hold shipments crossing the storm's path, move stock "
+            "that can be moved, and secure the site before landfall."
         ),
         "SEVERE_WEATHER": (
             "Hold or reroute departures through the affected area until conditions ease, and "
             "warn drivers already on the road."
         ),
+        "FLOOD": (
+            "Check which roads and river crossings are closed, move stock off the ground floor, "
+            "and reroute or hold shipments through the flooded area."
+        ),
+        "DROUGHT": (
+            "Expect lower river levels and water restrictions: check barge and inland-port "
+            "capacity, crop-dependent suppliers, and build buffer stock on affected lanes."
+        ),
         "EARTHQUAKE": (
             "Confirm staff and the site are safe, inspect for damage, and check road and port "
             "status before dispatching."
+        ),
+        "VOLCANO": (
+            "Follow the civil-protection and aviation ash advisories: expect airport closures "
+            "and road restrictions downwind, and move air freight to other routes."
         ),
         "FIRE": (
             "Watch the fire's spread, prepare to move stock, and reroute shipments around "

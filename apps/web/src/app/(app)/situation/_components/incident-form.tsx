@@ -5,7 +5,7 @@ import { ArrowLeft, FilePlus2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '@/lib/api';
-import type { Exposure, Hazard, HazardSeverity } from '@/lib/intel';
+import type { Exposure, Hazard, HazardKind, HazardSeverity } from '@/lib/intel';
 import { useFormat, useI18n } from '@/lib/i18n';
 import { Button, ErrorNote, Panel } from '@/components/ui';
 import { useToast } from '@/components/toast';
@@ -15,6 +15,9 @@ import { KIND_KEY, SEVERITY_KEY } from './hazard-kind';
 /** The two incident types an external hazard maps to (POST /incidents, `type`). */
 type IncidentType = 'WEATHER' | 'OTHER';
 const SEVERITIES: HazardSeverity[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
+
+/** Hazards driven by the weather — rain, wind or its absence — are filed as WEATHER incidents. */
+const WEATHER_KINDS: ReadonlySet<HazardKind> = new Set(['CYCLONE', 'SEVERE_WEATHER', 'FLOOD', 'DROUGHT']);
 
 /**
  * Files an incident from a hazard (POST /incidents). Everything is prefilled from the signal —
@@ -40,9 +43,7 @@ export function IncidentForm({
   const titleRef = useRef<HTMLInputElement | null>(null);
 
   const [title, setTitle] = useState(hazard.title.slice(0, 200));
-  const [type, setType] = useState<IncidentType>(
-    hazard.kind === 'CYCLONE' || hazard.kind === 'SEVERE_WEATHER' ? 'WEATHER' : 'OTHER',
-  );
+  const [type, setType] = useState<IncidentType>(WEATHER_KINDS.has(hazard.kind) ? 'WEATHER' : 'OTHER');
   const [severity, setSeverity] = useState<HazardSeverity>(hazard.severity);
   const [description, setDescription] = useState(() =>
     [

@@ -17,11 +17,28 @@ const LEVEL_CUTOFFS: Array<[number, SeverityLevel]> = [
 
 const LEVEL_RANK: Record<SeverityLevel, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
 
+/** The score range each level covers under the cut-offs above (LOW starts at 0.1: never "nothing"). */
+const LEVEL_BAND: Record<SeverityLevel, [number, number]> = {
+  LOW: [0.1, 0.34],
+  MEDIUM: [0.35, 0.59],
+  HIGH: [0.6, 0.84],
+  CRITICAL: [0.85, 1],
+};
+
 export function levelFromScore(score: number): SeverityLevel {
   for (const [cutoff, level] of LEVEL_CUTOFFS) {
     if (score >= cutoff) return level;
   }
   return 'LOW';
+}
+
+/**
+ * A score inside a level's band: `position` 0 is the band's floor, 1 its ceiling. For sources that
+ * publish a level of their own (an alert colour) plus a finer figure to order events within it.
+ */
+export function scoreInBand(level: SeverityLevel, position: number): number {
+  const [floor, ceiling] = LEVEL_BAND[level];
+  return round(floor + (ceiling - floor) * clamp01(position), 2);
 }
 
 export function severityRank(level: SeverityLevel): number {
@@ -48,6 +65,35 @@ export function isInBoundingBox(latitude: number, longitude: number, box: Boundi
   if (latitude < box.minLat || latitude > box.maxLat) return false;
   if (box.minLon <= box.maxLon) return longitude >= box.minLon && longitude <= box.maxLon;
   return longitude >= box.minLon || longitude <= box.maxLon;
+}
+
+/**
+ * Radius of a disc with this area, km. A burned area or a drought is not a disc, so this is only
+ * "how far the affected area reaches from its centre, on average" — a footprint for matching.
+ */
+export function equalAreaRadiusKm(areaKm2: number): number {
+  return Number.isFinite(areaKm2) && areaKm2 > 0 ? Math.sqrt(areaKm2 / Math.PI) : 0;
+}
+
+/**
+ * Footprint of a fire reported with its burned area (GDACS, EONET): the area's disc radius plus
+ * 5 km for smoke and closed roads, kept within 10–50 km. Without an area, 15 km.
+ */
+export function fireAreaRadiusKm(areaHa: number | null): number {
+  if (areaHa === null || !Number.isFinite(areaHa) || areaHa <= 0) return 15;
+  return Math.min(50, Math.max(10, Math.round(equalAreaRadiusKm(areaHa / 100)) + 5));
+}
+
+/**
+ * ISO instant from an upstream timestamp. Several feeds (GDACS, Open-Meteo) send zone-less times
+ * that are UTC; JavaScript would read those as local time, so they are pinned to UTC here.
+ */
+export function parseUtcIso(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 40) return null;
+  const text = value.trim();
+  const zoned = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/.test(text) ? `${text}Z` : text;
+  const ms = Date.parse(zoned);
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
 }
 
 /** Finite number or null: upstream feeds send "", null and strings interchangeably. */

@@ -8,7 +8,18 @@ export type FeedStatus = 'OK' | 'STALE' | 'UNAVAILABLE' | 'DISABLED';
 
 /* ------------------------------------------------------------------ hazards */
 
-export type HazardKind = 'CYCLONE' | 'EARTHQUAKE' | 'FIRE' | 'SEVERE_WEATHER';
+export type HazardKind = 'CYCLONE' | 'EARTHQUAKE' | 'FIRE' | 'SEVERE_WEATHER' | 'FLOOD' | 'DROUGHT' | 'VOLCANO';
+
+/** Every kind, in legend order. The map draws one sprite per kind, so a kind missing here has no icon. */
+export const HAZARD_KINDS: readonly HazardKind[] = [
+  'CYCLONE',
+  'EARTHQUAKE',
+  'FIRE',
+  'SEVERE_WEATHER',
+  'FLOOD',
+  'DROUGHT',
+  'VOLCANO',
+];
 export type HazardSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface Hazard {

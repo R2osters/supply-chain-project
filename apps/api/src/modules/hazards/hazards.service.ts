@@ -1,6 +1,13 @@
 import { BadRequestException, Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GateFullError, RequestGate, TtlCache, UpstreamError, haversineKm } from '../../common/http';
+import {
+  GateFullError,
+  RequestGate,
+  TtlCache,
+  UpstreamError,
+  haversineKm,
+  type CachedValue,
+} from '../../common/http';
 import { requireCompanyId } from '../../common/tenancy/tenant-scope';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import type { AppConfig } from '../../config/configuration';
@@ -12,6 +19,7 @@ import {
   type ActiveShipment,
   type ExposureAsset,
 } from './hazard-exposure';
+import { mergeKeylessFires, outsideNhcBasins } from './hazard-merge';
 import { isInBoundingBox } from './hazard-severity';
 import type {
   BoundingBox,
@@ -24,7 +32,22 @@ import type {
   WeatherResponse,
 } from './hazard.types';
 import type { HazardsQueryDto, NewsQueryDto, WeatherQueryDto } from './hazards.dto';
+import {
+  EONET_ATTRIBUTION,
+  eonetFireToHazard,
+  fetchEonetFires,
+  type EonetFire,
+} from './sources/eonet-wildfires';
 import { boxesAroundPoints, clampFirmsBox, fetchFirmsArea, firmsAreaKey } from './sources/firms-fires';
+import {
+  GDACS_ATTRIBUTION,
+  GDACS_QUERIES,
+  fetchGdacsEvents,
+  gdacsEventToHazard,
+  liveGdacsEvents,
+  type GdacsEvent,
+  type GdacsQuery,
+} from './sources/gdacs-events';
 import { fetchGdeltArticles, placeQueryFromHazard, sanitiseQuery } from './sources/gdelt-news';
 import { NHC_COVERAGE_NOTE, fetchNhcHazards } from './sources/nhc-cyclones';
 import {
@@ -60,7 +83,19 @@ const SOURCE_META: Record<SourceId, { label: string; attribution: string }> = {
     attribution: `${OPEN_METEO_ATTRIBUTION} — https://open-meteo.com/`,
   },
   gdelt: { label: 'GDELT news', attribution: 'GDELT Project (https://www.gdeltproject.org/)' },
+  gdacs: {
+    label: 'GDACS global disaster alerts',
+    attribution: `${GDACS_ATTRIBUTION} (https://www.gdacs.org/)`,
+  },
+  eonet: {
+    label: 'NASA EONET wildfires',
+    attribution: `${EONET_ATTRIBUTION} (https://eonet.gsfc.nasa.gov/)`,
+  },
 };
+
+/** NHC's coverage caveat when GDACS is answering for the other basins. */
+const NHC_COVERAGE_WITH_GDACS_NOTE =
+  'NHC covers the Atlantic and eastern/central North Pacific; cyclones in other basins come from GDACS.';
 
 /** Active shipment states: the goods are between two places and can be caught by weather. */
 const ACTIVE_SHIPMENT_STATUSES = ['DEPARTED', 'IN_TRANSIT', 'DELAYED'] as const;
@@ -80,6 +115,14 @@ interface Loaded<T> {
   status: SourceStatus;
 }
 
+/** The two keyless global feeds, loaded together because their events are merged together. */
+interface OpenFeeds {
+  gdacs: Loaded<GdacsEvent[]>;
+  eonet: Loaded<EonetFire[]>;
+  /** Whether the GDACS query that carries cyclones answered (fresh or stale). */
+  cyclonesCovered: boolean;
+}
+
 /**
  * Natural hazards near the map viewport and near the company's own assets.
  *
@@ -95,6 +138,17 @@ export class HazardsService {
   private readonly nhcCache = new TtlCache<Hazard[]>({ ttlMs: 5 * MINUTE_MS, staleMs: 60 * MINUTE_MS, maxEntries: 1 });
   private readonly usgsCache = new TtlCache<Hazard[]>({ ttlMs: 5 * MINUTE_MS, staleMs: 60 * MINUTE_MS, maxEntries: 1 });
   private readonly firmsCache = new TtlCache<Hazard[]>({ ttlMs: 30 * MINUTE_MS, staleMs: 120 * MINUTE_MS, maxEntries: 200 });
+  /** One entry per GDACS query (see GDACS_QUERIES). Liveness is judged on read, not on load. */
+  private readonly gdacsCache = new TtlCache<GdacsEvent[]>({
+    ttlMs: 20 * MINUTE_MS,
+    staleMs: 180 * MINUTE_MS,
+    maxEntries: 3,
+  });
+  private readonly eonetCache = new TtlCache<EonetFire[]>({
+    ttlMs: 30 * MINUTE_MS,
+    staleMs: 180 * MINUTE_MS,
+    maxEntries: 1,
+  });
   private readonly weatherCache = new TtlCache<WeatherObservation>({
     ttlMs: 10 * MINUTE_MS,
     staleMs: 60 * MINUTE_MS,
@@ -128,19 +182,24 @@ export class HazardsService {
 
   async listHazards(query: HazardsQueryDto): Promise<HazardsResponse> {
     const bbox = parseBoundingBox(query);
-    const [nhc, usgs, firms] = await Promise.all([
+    // Read once: whether fires come from FIRMS or from the keyless feeds is decided per request.
+    const firmsKey = this.firmsMapKey;
+    const [nhc, usgs, firms, open] = await Promise.all([
       this.loadCyclones(),
       this.loadEarthquakes(),
-      this.loadFiresForViewport(bbox),
+      this.loadFiresForViewport(bbox, firmsKey),
+      this.loadOpenFeeds(!firmsKey),
     ]);
+    const openHazards = this.openFeedHazards(open, nhc.value !== null);
+    noteNhcCoverage(nhc.status, open.cyclonesCovered);
 
-    const global = [...(nhc.value ?? []), ...(usgs.value ?? [])];
+    const global = [...(nhc.value ?? []), ...(usgs.value ?? []), ...openHazards];
     const visible = bbox ? global.filter((h) => hazardTouchesBox(h, bbox)) : global;
     const hazards = [...visible, ...(firms.value ?? [])].sort((a, b) => b.severityScore - a.severityScore);
 
     return {
       generatedAt: new Date().toISOString(),
-      sources: [nhc.status, usgs.status, firms.status],
+      sources: [nhc.status, usgs.status, open.gdacs.status, firms.status, open.eonet.status],
       hazards,
     };
   }
@@ -199,20 +258,30 @@ export class HazardsService {
   /** Company-scoped exposure; also the input the risk engine receives. */
   async companyExposure(companyId: string): Promise<ExposureResponse> {
     const assets = await this.loadAssets(companyId);
-    const [nhc, usgs, firms, weather] = await Promise.all([
+    const firmsKey = this.firmsMapKey;
+    const [nhc, usgs, firms, weather, open] = await Promise.all([
       this.loadCyclones(),
       this.loadEarthquakes(),
-      this.loadFiresAroundAssets(assets),
+      this.loadFiresAroundAssets(assets, firmsKey),
       this.loadSevereWeather(assets),
+      this.loadOpenFeeds(!firmsKey),
     ]);
+    const openHazards = this.openFeedHazards(open, nhc.value !== null);
+    noteNhcCoverage(nhc.status, open.cyclonesCovered);
 
-    const hazards = [...(nhc.value ?? []), ...(usgs.value ?? []), ...(firms.value ?? []), ...(weather.value ?? [])];
+    const hazards = [
+      ...(nhc.value ?? []),
+      ...(usgs.value ?? []),
+      ...(firms.value ?? []),
+      ...(weather.value ?? []),
+      ...openHazards,
+    ];
 
     return {
       radiusKm: this.exposureRadiusKm,
       generatedAt: new Date().toISOString(),
       exposures: computeExposures(assets, hazards, this.exposureRadiusKm),
-      sources: [nhc.status, usgs.status, firms.status, weather.status],
+      sources: [nhc.status, usgs.status, open.gdacs.status, firms.status, open.eonet.status, weather.status],
     };
   }
 
@@ -263,19 +332,17 @@ export class HazardsService {
 
   /* ================================================================== sources */
 
-  private async loadCyclones(): Promise<Loaded<Hazard[]>> {
-    const loaded = await this.loadSource('nhc', this.nhcCache, 'all', fetchNhcHazards);
-    // The coverage caveat is always shown: "no storms" must not read as "no storms anywhere".
-    loaded.status.note = loaded.status.note ? `${loaded.status.note} ${NHC_COVERAGE_NOTE}` : NHC_COVERAGE_NOTE;
-    return loaded;
+  /** Positions only; the coverage caveat is added by the caller, which knows whether GDACS answered. */
+  private loadCyclones(): Promise<Loaded<Hazard[]>> {
+    return this.loadSource('nhc', this.nhcCache, 'all', fetchNhcHazards);
   }
 
   private loadEarthquakes(): Promise<Loaded<Hazard[]>> {
     return this.loadSource('usgs', this.usgsCache, 'all', fetchUsgsHazards);
   }
 
-  private async loadFiresForViewport(bbox: BoundingBox | null): Promise<Loaded<Hazard[]>> {
-    if (!this.firmsMapKey) return disabledFirms();
+  private async loadFiresForViewport(bbox: BoundingBox | null, key: string | null): Promise<Loaded<Hazard[]>> {
+    if (!key) return disabledFirms();
     if (!bbox) {
       return {
         value: [],
@@ -283,7 +350,7 @@ export class HazardsService {
       };
     }
     const { box, clamped } = clampFirmsBox(bbox);
-    const loaded = await this.loadFireBoxes([box]);
+    const loaded = await this.loadFireBoxes([box], key);
     if (clamped) {
       const note = 'View too large: fires shown for its central 15°×15° only. Zoom in for full coverage.';
       loaded.status.note = loaded.status.note ? `${loaded.status.note} ${note}` : note;
@@ -291,20 +358,19 @@ export class HazardsService {
     return loaded;
   }
 
-  private async loadFiresAroundAssets(assets: ExposureAsset[]): Promise<Loaded<Hazard[]>> {
-    if (!this.firmsMapKey) return disabledFirms();
+  private async loadFiresAroundAssets(assets: ExposureAsset[], key: string | null): Promise<Loaded<Hazard[]>> {
+    if (!key) return disabledFirms();
     if (assets.length === 0) return { value: [], status: status('firms', 'OK', null, 0, 'No located assets to check.') };
     // Pad each box by the exposure radius plus a fire's own footprint, in degrees of latitude.
     const paddingDeg = (this.exposureRadiusKm + 10) / 111;
-    return this.loadFireBoxes(boxesAroundPoints(assets, paddingDeg));
+    return this.loadFireBoxes(boxesAroundPoints(assets, paddingDeg), key);
   }
 
   /**
    * Boxes are fetched one after another rather than in parallel: FIRMS meters transactions per
    * key, and a burst of parallel area queries is what gets a key throttled.
    */
-  private async loadFireBoxes(boxes: BoundingBox[]): Promise<Loaded<Hazard[]>> {
-    const key = this.firmsMapKey as string;
+  private async loadFireBoxes(boxes: BoundingBox[], key: string): Promise<Loaded<Hazard[]>> {
     const byId = new Map<string, Hazard>();
     let ok = 0;
     let stale = 0;
@@ -336,6 +402,97 @@ export class HazardsService {
         ? 'Upstream unavailable; showing the last good data.'
         : null;
     return { value: hazards, status: status('firms', state, oldest?.toISOString() ?? null, hazards.length, note) };
+  }
+
+  /**
+   * GDACS (floods, droughts, eruptions, cyclones, and forest fires when `withFires`) and EONET
+   * wildfires (only when `withFires`). Without a FIRMS key these two are how fires reach the map.
+   */
+  private async loadOpenFeeds(withFires: boolean): Promise<OpenFeeds> {
+    const [gdacs, eonet] = await Promise.all([this.loadGdacs(withFires), this.loadEonet(withFires)]);
+    return { ...gdacs, eonet };
+  }
+
+  /**
+   * The GDACS queries run in parallel and fail independently: droughts being unreachable leaves
+   * floods and cyclones on the map, and the status note says which part is missing.
+   */
+  private async loadGdacs(withFires: boolean): Promise<Omit<OpenFeeds, 'eonet'>> {
+    const queries: GdacsQuery[] = [GDACS_QUERIES.events, GDACS_QUERIES.droughts];
+    if (withFires) queries.push(GDACS_QUERIES.fires);
+
+    type Outcome =
+      | { query: GdacsQuery; result: CachedValue<GdacsEvent[]> }
+      | { query: GdacsQuery; error: string };
+    const outcomes = await Promise.all(
+      queries.map(async (query): Promise<Outcome> => {
+        try {
+          return { query, result: await this.gdacsCache.getOrLoad(query.key, () => fetchGdacsEvents(query)) };
+        } catch (error) {
+          return { query, error: describeError(error) };
+        }
+      }),
+    );
+
+    const answered = outcomes.flatMap((o) => ('result' in o ? [o] : []));
+    const failed = outcomes.flatMap((o) => ('error' in o ? [o] : []));
+    if (answered.length === 0) {
+      const reason = failed[0]?.error ?? null;
+      this.logger.warn(`GDACS unavailable: ${reason}`);
+      const unavailable = status('gdacs', 'UNAVAILABLE', null, 0, reason);
+      return { gdacs: { value: null, status: unavailable }, cyclonesCovered: false };
+    }
+
+    const stale = answered.some(({ result }) => result.stale);
+    const oldest = Math.min(...answered.map(({ result }) => result.fetchedAt.getTime()));
+    const notes: string[] = [];
+    if (failed.length > 0) {
+      notes.push(`Not available right now: ${failed.map(({ query }) => query.label).join(', ')}.`);
+    }
+    if (stale) notes.push('Upstream unavailable; showing the last good data.');
+    return {
+      gdacs: {
+        value: answered.flatMap(({ result }) => result.value),
+        // The count is what GDACS contributes after merging; `openFeedHazards` fills it in.
+        status: status(
+          'gdacs',
+          failed.length > 0 || stale ? 'STALE' : 'OK',
+          new Date(oldest).toISOString(),
+          0,
+          notes.length > 0 ? notes.join(' ') : null,
+        ),
+      },
+      cyclonesCovered: answered.some(({ query }) => query === GDACS_QUERIES.events),
+    };
+  }
+
+  private loadEonet(enabled: boolean): Promise<Loaded<EonetFire[]>> {
+    if (!enabled) {
+      const note = 'Not used while a NASA FIRMS key is set: FIRMS detections cover fires.';
+      return Promise.resolve({ value: [], status: status('eonet', 'DISABLED', null, 0, note) });
+    }
+    return this.loadSource('eonet', this.eonetCache, 'wildfires', () => fetchEonetFires());
+  }
+
+  /**
+   * GDACS and EONET events that are live now, as hazards, after the two merge rules of
+   * `hazard-merge.ts`: GDACS cyclones inside NHC's basins give way to NHC when NHC answered, and a
+   * fire reported by both GDACS and EONET is kept once. Also fills in each feed's count, which is
+   * what it contributed after merging.
+   */
+  private openFeedHazards(open: OpenFeeds, nhcAnswered: boolean): Hazard[] {
+    const live = liveGdacsEvents(open.gdacs.value ?? [], Date.now());
+    const events = nhcAnswered ? outsideNhcBasins(live) : live;
+    const merged = mergeKeylessFires(events, open.eonet.value ?? []);
+
+    const hazards = [...merged.gdacs.map(gdacsEventToHazard), ...merged.eonet.map(eonetFireToHazard)];
+    for (const hazard of hazards) {
+      const other = merged.sameFire.get(hazard.id);
+      if (other) hazard.details.sameFireAs = other;
+    }
+    open.gdacs.status.count = merged.gdacs.length;
+    open.eonet.status.count = merged.eonet.length;
+    return hazards;
   }
 
   /**
@@ -507,10 +664,18 @@ function status(
 }
 
 function disabledFirms(): Loaded<Hazard[]> {
-  return {
-    value: [],
-    status: status('firms', 'DISABLED', null, 0, 'Set FIRMS_MAP_KEY (free from NASA) to show active fires.'),
-  };
+  const note =
+    'Optional: without a key, fires come from GDACS and NASA EONET. A free FIRMS map key adds satellite hotspots.';
+  return { value: [], status: status('firms', 'DISABLED', null, 0, note) };
+}
+
+/**
+ * The coverage caveat is always shown: "no storms" must not read as "no storms anywhere". When
+ * GDACS answered, it says where the other basins' cyclones come from instead.
+ */
+function noteNhcCoverage(nhc: SourceStatus, gdacsCoversOtherBasins: boolean): void {
+  const coverage = gdacsCoversOtherBasins ? NHC_COVERAGE_WITH_GDACS_NOTE : NHC_COVERAGE_NOTE;
+  nhc.note = nhc.note ? `${nhc.note} ${coverage}` : coverage;
 }
 
 /**

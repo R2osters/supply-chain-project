@@ -1,4 +1,4 @@
-import { Activity, CloudLightning, Flame, Tornado, type LucideIcon } from 'lucide-react';
+import { Activity, CloudLightning, Flame, Mountain, SunDim, Tornado, Waves, type LucideIcon } from 'lucide-react';
 import type { Exposure, Hazard, HazardKind, HazardSeverity } from '@/lib/intel';
 import type { TranslationKey } from '@/lib/i18n';
 import type { ProvenanceKind, Severity } from '@/components/ui';
@@ -13,6 +13,10 @@ export const KIND_ICON: Record<HazardKind, LucideIcon> = {
   EARTHQUAKE: Activity,
   FIRE: Flame,
   SEVERE_WEATHER: CloudLightning,
+  FLOOD: Waves,
+  // SunDim, not Sun: the plain sun is the theme switch in the top bar.
+  DROUGHT: SunDim,
+  VOLCANO: Mountain,
 };
 
 export const KIND_KEY: Record<HazardKind, TranslationKey> = {
@@ -20,6 +24,9 @@ export const KIND_KEY: Record<HazardKind, TranslationKey> = {
   EARTHQUAKE: 'sit.kind.earthquake',
   FIRE: 'sit.kind.fire',
   SEVERE_WEATHER: 'sit.kind.weather',
+  FLOOD: 'sit.kind.flood',
+  DROUGHT: 'sit.kind.drought',
+  VOLCANO: 'sit.kind.volcano',
 };
 
 export const SEVERITY_KEY: Record<HazardSeverity, TranslationKey> = {

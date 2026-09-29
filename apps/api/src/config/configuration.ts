@@ -141,11 +141,14 @@ export interface AppConfig {
   };
   /**
    * Public situational feeds: hazards, cameras, radio, satellites, traffic, geocoding.
-   * Everything here works without a key except FIRMS fires and TomTom traffic, which switch on
-   * when their key is set and are reported as unavailable otherwise.
+   * Everything here works without a key except TomTom traffic, which switches on when its key is
+   * set and is reported as unavailable otherwise. FIRMS is optional (see below).
    */
   intel: {
-    /** NASA FIRMS MAP_KEY. Free, but without it the fires layer is empty. */
+    /**
+     * NASA FIRMS MAP_KEY, optional and free. With it, fires are FIRMS satellite hotspots; without
+     * it, they come from the keyless GDACS and NASA EONET feeds. The settings screen overrides it.
+     */
     firmsMapKey: string | null;
     /** TomTom key for live traffic-flow tiles. Free tier: 50 000 tiles/day. */
     tomtomApiKey: string | null;

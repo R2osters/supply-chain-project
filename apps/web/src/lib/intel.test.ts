@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { boundsQuery, newsKeyword, safeExternalUrl, type Hazard } from './intel';
+import { HAZARD_KINDS, boundsQuery, newsKeyword, safeExternalUrl, type Hazard } from './intel';
 
 function hazard(overrides: Partial<Hazard>): Hazard {
   return {
@@ -61,5 +61,20 @@ describe('newsKeyword', () => {
 
   it('uses the title of other hazards as is', () => {
     expect(newsKeyword(hazard({ kind: 'CYCLONE', title: 'Hurricane Maria' }))).toBe('Hurricane Maria');
+  });
+
+  it('searches the place the API names for GDACS and EONET hazards', () => {
+    expect(newsKeyword(hazard({ kind: 'FLOOD', title: 'Flood in Guinea', details: { place: 'Guinea' } }))).toBe('Guinea');
+    expect(newsKeyword(hazard({ kind: 'VOLCANO', title: 'Eruption Etna', details: { place: 'Etna' } }))).toBe('Etna');
+    expect(
+      newsKeyword(hazard({ kind: 'FIRE', title: 'Wildfire Rafter 4B, Schleicher, Texas', details: { place: 'Schleicher, Texas' } })),
+    ).toBe('Schleicher, Texas');
+  });
+});
+
+describe('HAZARD_KINDS', () => {
+  it('lists every kind once, the keyless GDACS kinds included', () => {
+    expect(new Set(HAZARD_KINDS).size).toBe(HAZARD_KINDS.length);
+    expect(HAZARD_KINDS).toEqual(expect.arrayContaining(['FLOOD', 'DROUGHT', 'VOLCANO']));
   });
 });

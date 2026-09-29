@@ -45,6 +45,14 @@ describe('hazard layers', () => {
     expect(collection.features[1].properties.icon).toBe('hazard-EARTHQUAKE-warn');
   });
 
+  it('gives the GDACS kinds their own sprites, still coloured by severity', () => {
+    const flood: Hazard = { ...quake, id: 'gdacs:FL:1', kind: 'FLOOD', severity: 'HIGH' };
+    const drought: Hazard = { ...quake, id: 'gdacs:DR:2', kind: 'DROUGHT', severity: 'LOW' };
+    const eruption: Hazard = { ...quake, id: 'gdacs:VO:3', kind: 'VOLCANO', severity: 'CRITICAL' };
+    const icons = hazardsToGeoJson([flood, drought, eruption]).features.map((feature) => feature.properties.icon);
+    expect(icons).toEqual(['hazard-FLOOD-crit', 'hazard-DROUGHT-muted', 'hazard-VOLCANO-crit']);
+  });
+
   it('marks the selected hazard', () => {
     const collection = hazardsToGeoJson([cyclone, quake], 'usgs:1');
     expect(collection.features.map((feature) => feature.properties.selected)).toEqual([false, true]);

@@ -1,0 +1,197 @@
+{
+  "title": "EONET Events",
+  "description": "Natural events from EONET.",
+  "link": "https://eonet.gsfc.nasa.gov/api/v3/events",
+  "events": [
+    {
+      "id": "EONET_24904",
+      "title": "Wildfire Rafter 4B, Schleicher, Texas",
+      "description": "8 Miles SE from Eldorado, TX",
+      "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_24904",
+      "closed": null,
+      "categories": [
+        {
+          "id": "wildfires",
+          "title": "Wildfires"
+        }
+      ],
+      "sources": [
+        {
+          "id": "IRWIN",
+          "url": "https://irwin.doi.gov/observer/incidents/2026-TXTXS-268989"
+        }
+      ],
+      "geometry": [
+        {
+          "magnitudeValue": 2125,
+          "magnitudeUnit": "acres",
+          "date": "2026-09-26T15:18:00Z",
+          "type": "Point",
+          "coordinates": [
+            -100.49806,
+            30.76633
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EONET_24484",
+      "title": "Wildfire DOME, Mariposa, California",
+      "description": "1 Miles N from Wawona, CA",
+      "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_24484",
+      "closed": null,
+      "categories": [
+        {
+          "id": "wildfires",
+          "title": "Wildfires"
+        }
+      ],
+      "sources": [
+        {
+          "id": "IRWIN",
+          "url": "https://irwin.doi.gov/observer/incidents/2026-CAYNP-000100"
+        }
+      ],
+      "geometry": [
+        {
+          "magnitudeValue": 1177,
+          "magnitudeUnit": "acres",
+          "date": "2026-09-15T11:29:00Z",
+          "type": "Point",
+          "coordinates": [
+            -119.616167,
+            37.5662
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EONET_24719",
+      "title": "Prescribed Fire D2 Dye RX, Coconino, Arizona",
+      "description": null,
+      "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_24719",
+      "closed": null,
+      "categories": [
+        {
+          "id": "wildfires",
+          "title": "Wildfires"
+        }
+      ],
+      "sources": [
+        {
+          "id": "IRWIN",
+          "url": "https://irwin.doi.gov/observer/incidents/2026-AZASF-000955"
+        }
+      ],
+      "geometry": [
+        {
+          "magnitudeValue": 5246,
+          "magnitudeUnit": "acres",
+          "date": "2026-09-17T17:44:00Z",
+          "type": "Point",
+          "coordinates": [
+            -110.9112,
+            34.43545
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EONET_13370",
+      "title": "Wildfire in Australia 1023712",
+      "description": null,
+      "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_13370",
+      "closed": null,
+      "categories": [
+        {
+          "id": "wildfires",
+          "title": "Wildfires"
+        }
+      ],
+      "sources": [
+        {
+          "id": "GDACS",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1023712"
+        }
+      ],
+      "geometry": [
+        {
+          "magnitudeValue": null,
+          "magnitudeUnit": null,
+          "date": "2025-04-27T19:00:00Z",
+          "type": "Point",
+          "coordinates": [
+            127.84730549567904,
+            -17.14074812671574
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EONET_8236",
+      "title": "BOLT Wildfire, Fresno, California",
+      "description": null,
+      "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_8236",
+      "closed": null,
+      "categories": [
+        {
+          "id": "wildfires",
+          "title": "Wildfires"
+        }
+      ],
+      "sources": [
+        {
+          "id": "Earthdata",
+          "url": "https://www.earthdata.nasa.gov/worldview/worldview-image-archive/fresno-june-lightning-complex-fire-california"
+        },
+        {
+          "id": "IRWIN",
+          "url": "https://irwin.doi.gov/observer/"
+        }
+      ],
+      "geometry": [
+        {
+          "magnitudeValue": 856,
+          "magnitudeUnit": "acres",
+          "date": "2024-06-24T18:01:00Z",
+          "type": "Point",
+          "coordinates": [
+            -119.308956,
+            36.79027
+          ]
+        }
+      ]
+    },
+    {
+      "id": "EONET_24878",
+      "title": "Wildfire in Australia 1032443",
+      "description": null,
+      "link": "https://eonet.gsfc.nasa.gov/api/v3/events/EONET_24878",
+      "closed": "2026-09-26T00:00:00Z",
+      "categories": [
+        {
+          "id": "wildfires",
+          "title": "Wildfires"
+        }
+      ],
+      "sources": [
+        {
+          "id": "GDACS",
+          "url": "https://www.gdacs.org/report.aspx?eventtype=WF&eventid=1032443"
+        }
+      ],
+      "geometry": [
+        {
+          "magnitudeValue": 5706,
+          "magnitudeUnit": "hectare",
+          "date": "2026-09-26T19:00:00Z",
+          "type": "Point",
+          "coordinates": [
+            135.16171107242,
+            -17.228291738713
+          ]
+        }
+      ]
+    }
+  ]
+}

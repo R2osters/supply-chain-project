@@ -496,7 +496,7 @@ class RiskHazardIn(Wire):
     """One live natural hazard near one of the company's assets, from the API's hazards module."""
 
     hazard_id: str
-    kind: Literal["CYCLONE", "EARTHQUAKE", "FIRE", "SEVERE_WEATHER"]
+    kind: Literal["CYCLONE", "EARTHQUAKE", "FIRE", "SEVERE_WEATHER", "FLOOD", "DROUGHT", "VOLCANO"]
     title: str
     severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
     subject_type: str

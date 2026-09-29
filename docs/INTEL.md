@@ -17,7 +17,7 @@ upstream calls. None has database tables: everything is live or cached in memory
 
 | Module | Endpoints | Upstream | Key | Detail |
 |---|---|---|---|---|
-| `hazards` | `GET /hazards`, `/hazards/weather`, `/hazards/exposure`, `/hazards/news` | NOAA NHC, USGS, NASA FIRMS, Open-Meteo, GDELT | FIRMS only | [intel/hazards.md](intel/hazards.md) |
+| `hazards` | `GET /hazards`, `/hazards/weather`, `/hazards/exposure`, `/hazards/news` | NOAA NHC, USGS, GDACS, NASA EONET, NASA FIRMS, Open-Meteo, GDELT | none (FIRMS optional) | [intel/hazards.md](intel/hazards.md) |
 | `cameras` | `GET /cameras`, `/cameras/near`, `/cameras/:id`, `/cameras/:id/frame` | TfL, Fintraffic, Ontario 511, DriveBC, Live Traffic NSW, Open Calgary | none | [intel/cameras.md](intel/cameras.md) |
 | `radio` | `GET /radio/stations`, `POST /radio/stations/:id/click` | Radio Browser | none | [intel/radio.md](intel/radio.md) |
 | `satellites` | `GET /satellites/groups`, `/satellites/tle`, `/satellites/visible` | CelesTrak | none | [intel/satellites.md](intel/satellites.md) |
@@ -26,6 +26,13 @@ upstream calls. None has database tables: everything is live or cached in memory
 
 Configuration lives in the `intel` section of `apps/api/src/config/configuration.ts`; the
 variables are documented in `.env.example`.
+
+**Keyless by default.** Every hazard kind works out of the box, with no API key: cyclones (NHC
+in its basins, GDACS elsewhere), earthquakes (USGS), floods, droughts and volcanic eruptions
+(GDACS), fires (GDACS forest fires and NASA EONET wildfires) and severe weather (Open-Meteo). A
+NASA FIRMS map key is optional: when one is set, in the settings screen or as `FIRMS_MAP_KEY`,
+FIRMS satellite hotspots replace the GDACS and EONET fires, decided per request. The only other
+keyed feed is TomTom live traffic.
 
 ## Shared rules
 
@@ -46,7 +53,8 @@ Every connector goes through `apps/api/src/common/http/`:
 - **Delay prediction** uses the Open-Meteo transport severity at the vehicle's last position
   instead of a fixed zero.
 - **Risk analysis** receives the company's hazard exposures and reports them as `WEATHER_RISK`
-  (cyclones, severe weather) and `NATURAL_HAZARD` (earthquakes, fires) findings.
+  (cyclones, severe weather, floods, droughts) and `NATURAL_HAZARD` (earthquakes, eruptions,
+  fires) findings.
 - **Exposure** (`GET /hazards/exposure`) lists every warehouse, active shipment and supplier
   within `HAZARD_EXPOSURE_RADIUS_KM` of an active hazard. It is the default side panel of the
   Situation screen.
@@ -66,6 +74,9 @@ Every connector goes through `apps/api/src/common/http/`:
 
 | Source | Constraint |
 |---|---|
+| GDACS | Published openly for disaster information, no key. Credit "GDACS — European Commission JRC / UN OCHA" and link to the event's GDACS report, as the Sources panel and each hazard's detail do. Alerts are automatic impact estimates, not official warnings: a national service's warning takes precedence. |
+| NASA EONET | Public domain (NASA data are not copyrighted); NASA asks to be acknowledged. Its wildfires are US incident records from IRWIN, also US government data. |
+| NASA FIRMS (optional) | Free with a personal map key and NASA's acknowledgement text. |
 | Open-Meteo | CC BY 4.0: the attribution link must stay next to the weather it describes. The free API is for non-commercial use; commercial use needs their paid plan. |
 | Radio Browser | The directory is public domain; each stream belongs to its broadcaster. Playing a stream exposes the listener's IP address to the broadcaster. |
 | Public cameras | Each operator's licence applies (Open Government Licences, CC BY 4.0, TfL terms). All require attribution. Frames are relayed, never stored. |

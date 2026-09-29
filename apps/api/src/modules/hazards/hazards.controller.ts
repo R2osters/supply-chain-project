@@ -14,11 +14,13 @@ export class HazardsController {
   @Get()
   @RequirePermissions('gps:read')
   @ApiOperation({
-    summary: 'Active natural hazards: cyclones, earthquakes, fires',
+    summary: 'Active natural hazards: cyclones, earthquakes, fires, floods, droughts, eruptions',
     description:
-      'Without a bounding box: worldwide cyclones (NHC basins only) and earthquakes. With one: ' +
-      'those inside it plus active fires, which are only ever fetched for a bounded area. Each ' +
-      'source reports its own status, so one feed being down never empties the map.',
+      'Without a bounding box: every global feed worldwide — cyclones (NHC in its basins, GDACS ' +
+      'elsewhere), earthquakes (USGS), floods, droughts and eruptions (GDACS), and, when no FIRMS ' +
+      'key is set, fires from GDACS and NASA EONET. With one: those inside it, plus NASA FIRMS ' +
+      'fires when a key is set (FIRMS is only ever fetched for a bounded area). Each source ' +
+      'reports its own status, so one feed being down never empties the map.',
   })
   list(@Query() query: HazardsQueryDto) {
     return this.hazards.listHazards(query);
@@ -42,8 +44,8 @@ export class HazardsController {
     summary: 'Which of your warehouses, shipments and suppliers sit near an active hazard',
     description:
       'An asset is exposed when it is within the configured radius plus the hazard’s own ' +
-      'radius. Cyclones are also matched against their forecast track. Sorted by severity, ' +
-      'then distance.',
+      'radius. Cyclones are also matched against their forecast track. Every hazard kind is ' +
+      'checked, keyless feeds included. Sorted by severity, then distance.',
   })
   exposure(@CurrentUser() user: AuthenticatedUser) {
     return this.hazards.exposureFor(user);

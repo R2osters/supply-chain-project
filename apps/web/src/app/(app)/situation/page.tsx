@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, getAccessToken, isApiUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import {
+  HAZARD_KINDS,
   boundsQuery,
   type Bounds,
   type Camera,
@@ -15,7 +16,6 @@ import {
   type Exposure,
   type ExposureResponse,
   type Hazard,
-  type HazardKind,
   type HazardsResponse,
   type RadioResponse,
   type RadioStation,
@@ -74,8 +74,6 @@ const LAYERS: Array<{ id: LayerId; label: TranslationKey; icon: LucideIcon }> = 
   { id: 'satellites', label: 'sit.layer.satellites', icon: Satellite },
   { id: 'traffic', label: 'sit.layer.traffic', icon: TrafficCone },
 ];
-
-const HAZARD_KINDS: HazardKind[] = ['CYCLONE', 'EARTHQUAKE', 'FIRE', 'SEVERE_WEATHER'];
 
 /** Below these zooms a layer would mean thousands of points nobody can tell apart. */
 const MIN_ZOOM = { cameras: 5, radio: 4 } as const;

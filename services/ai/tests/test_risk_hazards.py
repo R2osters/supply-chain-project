@@ -98,8 +98,22 @@ class TestHazardFindings:
         assert critical_near > critical_far > 0
         assert critical_near > low_near
 
+    def test_floods_and_droughts_are_weather_eruptions_are_natural_hazards(self):
+        report = analyse(
+            [
+                exposure(hazardId="gdacs:FL:1", kind="FLOOD", title="Flood in Guinea", severity="MEDIUM"),
+                exposure(hazardId="gdacs:DR:2", kind="DROUGHT", title="Drought — Europe-2026", severity="HIGH"),
+                exposure(hazardId="gdacs:VO:3", kind="VOLCANO", title="Eruption Etna", severity="LOW"),
+            ]
+        )
+        by_title = {f.reasons[0].split(" (")[0]: f for f in report.findings}
+        assert by_title["Flood in Guinea"].category == "WEATHER_RISK"
+        assert by_title["Drought — Europe-2026"].category == "WEATHER_RISK"
+        assert by_title["Eruption Etna"].category == "NATURAL_HAZARD"
+        assert "ash" in by_title["Eruption Etna"].recommended_action
+
     def test_unknown_kinds_are_ignored(self):
-        assert analyse([exposure(kind="VOLCANO")]).findings == []
+        assert analyse([exposure(kind="METEORITE")]).findings == []
 
     def test_assumptions_say_whether_a_feed_was_supplied(self):
         without = " ".join(analyse(None).assumptions)
@@ -117,6 +131,22 @@ class TestRiskEndpointWithHazards:
         assert [f["category"] for f in body["findings"]] == ["NATURAL_HAZARD"]
         assert body["findings"][0]["level"] == "HIGH"
         assert body["supplyChainHealthScore"] < 100
+
+    def test_accepts_the_kinds_gdacs_adds(self, client: TestClient):
+        response = client.post(
+            "/risk/analyze",
+            json={
+                "companyId": "c1",
+                "hazards": [
+                    exposure(hazardId="gdacs:FL:1", kind="FLOOD"),
+                    exposure(hazardId="gdacs:DR:2", kind="DROUGHT"),
+                    exposure(hazardId="gdacs:VO:3", kind="VOLCANO"),
+                ],
+            },
+        )
+        assert response.status_code == 200
+        categories = sorted(f["category"] for f in response.json()["findings"])
+        assert categories == ["NATURAL_HAZARD", "WEATHER_RISK", "WEATHER_RISK"]
 
     def test_still_works_without_hazards(self, client: TestClient):
         response = client.post("/risk/analyze", json={"companyId": "c1"})

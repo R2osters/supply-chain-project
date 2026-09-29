@@ -184,10 +184,11 @@ by setting one environment variable:
 | SMS (logged, never silently dropped) | any gateway |
 | GPS hardware → the telemetry simulator | POST real fixes to `/telemetry/gps` |
 
-Live without any key: weather (Open-Meteo, now feeding delay prediction), cyclones (NOAA NHC),
-earthquakes (USGS), local news (GDELT), public traffic cameras, radio stations and satellites.
-Active fires need a free `FIRMS_MAP_KEY`. See [docs/INTEL.md](docs/INTEL.md) for sources,
-licences and the Situation screen.
+Live without any key: weather (Open-Meteo, now feeding delay prediction), cyclones (NOAA NHC,
+and GDACS outside NHC's basins), earthquakes (USGS), floods, droughts and volcanic eruptions
+(GDACS), active fires (GDACS and NASA EONET), local news (GDELT), public traffic cameras, radio
+stations and satellites. A free `FIRMS_MAP_KEY` is optional: it swaps in NASA FIRMS satellite fire
+hotspots. See [docs/INTEL.md](docs/INTEL.md) for sources, licences and the Situation screen.
 
 **Nothing synthetic is presented as real.** Every seeded row carries `isDemoData`, every simulated
 fix carries `isSimulated`, the UI badges them, and analytics report how much of a figure is
