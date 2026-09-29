@@ -1,16 +1,17 @@
 'use client';
 
-import { Bell, LogOut, Moon, Search, Settings, Sun, WifiOff, X } from 'lucide-react';
+import { Bell, KeyRound, LogOut, Moon, Search, Settings, Sun, Users, WifiOff, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { ForcedPasswordChange } from '@/components/account/password-change';
 import { CommandPalette } from '@/components/shell/command-palette';
 import { Banner, Logo, Provenance } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { LOCALES, useI18n } from '@/lib/i18n';
-import { NAV, PILLARS, isActive, type Pillar } from '@/lib/nav';
+import { ACCOUNT_NAV, NAV, PILLARS, isActive, type Pillar } from '@/lib/nav';
 import { useTheme } from '@/lib/theme';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -29,17 +30,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
 
+  // Nothing is fetched behind the "choose your password" screen: the API would refuse it all.
+  const ready = Boolean(user) && !user?.mustChangePassword;
+
   const { data: unread } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => api<{ unread: number }>('/notifications/unread-count'),
-    enabled: Boolean(user),
+    enabled: ready,
     refetchInterval: 30_000,
   });
 
   const { data: aiStatus } = useQuery({
     queryKey: ['ai', 'status'],
     queryFn: () => api<{ reachable: boolean; detail: string }>('/ai/status'),
-    enabled: Boolean(user),
+    enabled: ready,
     refetchInterval: 60_000,
   });
 
@@ -96,6 +100,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [pathname, closeAll]);
 
   const visible = useMemo(() => NAV.filter((item) => (user ? can(item.permission) : false)), [user, can]);
+  const accountPages = useMemo(
+    () => ACCOUNT_NAV.filter((item) => (user ? item.permission === null || can(item.permission) : false)),
+    [user, can],
+  );
+  const paletteItems = useMemo(() => [...visible, ...accountPages], [visible, accountPages]);
   const pillars = PILLARS.filter((pillar) => visible.some((item) => item.pillar === pillar.id));
   const current = visible.find((item) => isActive(pathname, item.href));
   const activePillar: Pillar = current?.pillar ?? pillars[0]?.id ?? 'TRACK';
@@ -111,6 +120,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+
+  // Signed in with a temporary password: the person chooses their own before anything else.
+  if (user.mustChangePassword) return <ForcedPasswordChange />;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -218,6 +230,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             signOutLabel={t('nav.signOut')}
             accountLabel={t('shell.account')}
             settingsLabel={can('company:update') ? t('settings.nav') : null}
+            usersLabel={can('user:read') ? t('users.nav') : null}
+            passwordLabel={t('account.nav')}
           />
         </div>
 
@@ -277,7 +291,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {children}
       </main>
 
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={visible} />
+      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
       {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
     </div>
   );
@@ -292,6 +306,8 @@ function UserMenu({
   signOutLabel,
   accountLabel,
   settingsLabel,
+  usersLabel,
+  passwordLabel,
 }: {
   open: boolean;
   onToggle: () => void;
@@ -302,6 +318,10 @@ function UserMenu({
   accountLabel: string;
   /** Null when the user may not change company settings: the entry is hidden, not disabled. */
   settingsLabel: string | null;
+  /** Null when the user may not see the company's accounts. */
+  usersLabel: string | null;
+  /** Everyone may change their own password. */
+  passwordLabel: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -342,6 +362,16 @@ function UserMenu({
             <span className="t-data text-[11px] capitalize text-[var(--color-muted)]">{role}</span>
           </div>
           <div className="my-1 h-px bg-[var(--color-line)]" />
+          {usersLabel && (
+            <Link
+              href="/users"
+              role="menuitem"
+              className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-[13px] text-[var(--color-ink)] hover:bg-[var(--color-surface)]"
+            >
+              <Users className="h-4 w-4 text-[var(--color-muted)]" />
+              {usersLabel}
+            </Link>
+          )}
           {settingsLabel && (
             <Link
               href="/settings"
@@ -352,6 +382,14 @@ function UserMenu({
               {settingsLabel}
             </Link>
           )}
+          <Link
+            href="/account"
+            role="menuitem"
+            className="flex w-full items-center gap-2 rounded-[var(--radius-sm)] px-3 py-2 text-left text-[13px] text-[var(--color-ink)] hover:bg-[var(--color-surface)]"
+          >
+            <KeyRound className="h-4 w-4 text-[var(--color-muted)]" />
+            {passwordLabel}
+          </Link>
           <button
             type="button"
             role="menuitem"

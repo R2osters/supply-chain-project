@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { CircleAlert, Save, Trash2, X } from 'lucide-react';
+import { CircleAlert, Save, Trash2, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { api } from '@/lib/api';
 import {
@@ -173,6 +173,7 @@ export function EntityForm({
   onCancel,
   resetOnSuccess = false,
   successTick = 0,
+  onChange,
 }: {
   fields: readonly FieldSpec[];
   initial?: Record<string, unknown> | null;
@@ -186,6 +187,11 @@ export function EntityForm({
   resetOnSuccess?: boolean;
   /** Incremented by the parent when a submission succeeded. */
   successTick?: number;
+  /**
+   * Every edit, for specs that depend on a value (a field that only applies to one role). The
+   * form keeps what was typed when the parent then passes a different `fields` list.
+   */
+  onChange?: (values: FormValues) => void;
 }) {
   const { t } = useI18n();
   const errorText = useFieldErrorText();
@@ -207,6 +213,7 @@ export function EntityForm({
     const next = { ...values, [name]: value };
     setValues(next);
     if (touched) setErrors(validateForm(fields, next));
+    onChange?.(next);
   };
 
   const submit = (event: React.FormEvent) => {
@@ -371,6 +378,8 @@ export function ConfirmDialog({
   error,
   onConfirm,
   onCancel,
+  confirmIcon = Trash2,
+  errorTitle,
 }: {
   title: ReactNode;
   body?: ReactNode;
@@ -379,6 +388,10 @@ export function ConfirmDialog({
   error?: unknown;
   onConfirm: () => void;
   onCancel: () => void;
+  /** The confirm button's icon; a bin unless the action is not a deletion. */
+  confirmIcon?: LucideIcon;
+  /** Title of the refusal banner; "could not delete" unless the action is not a deletion. */
+  errorTitle?: string;
 }) {
   const { t } = useI18n();
   const titleId = useId();
@@ -404,13 +417,13 @@ export function ConfirmDialog({
         </h2>
         {body && <div className="text-[13px] leading-relaxed text-[var(--color-muted)]">{body}</div>}
         {Boolean(error) && (
-          <Banner tone="alert" icon={CircleAlert} title={t('md.deleteFailed')}>
+          <Banner tone="alert" icon={CircleAlert} title={errorTitle ?? t('md.deleteFailed')}>
             {errorMessage(error)}
           </Banner>
         )}
         <div className="flex flex-wrap justify-end gap-2">
           <Button onClick={onCancel}>{t('common.cancel')}</Button>
-          <Button variant="destructive" icon={Trash2} loading={pending} onClick={onConfirm}>
+          <Button variant="destructive" icon={confirmIcon} loading={pending} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </div>

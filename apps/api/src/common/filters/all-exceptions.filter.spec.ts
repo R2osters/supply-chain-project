@@ -1,4 +1,4 @@
-import type { ArgumentsHost } from '@nestjs/common';
+import { ForbiddenException, type ArgumentsHost } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 
@@ -39,6 +39,20 @@ describe('AllExceptionsFilter', () => {
     const { status, body } = statusFor(error);
     expect(status).toBe(400);
     expect(JSON.stringify(body)).not.toContain('0x00');
+  });
+
+  it('passes a machine-readable code through, so a client can react to it', () => {
+    const { status, body } = statusFor(
+      new ForbiddenException({ statusCode: 403, error: 'Forbidden', code: 'password-change-required', message: 'Change it' }),
+    );
+    expect(status).toBe(403);
+    expect(body).toMatchObject({ statusCode: 403, code: 'password-change-required', message: 'Change it' });
+  });
+
+  it('never forwards a code that is not a short token', () => {
+    expect(statusFor(new ForbiddenException('plain')).body).not.toHaveProperty('code');
+    expect(statusFor(new ForbiddenException({ message: 'x', code: { sql: 'SELECT' } })).body).not.toHaveProperty('code');
+    expect(statusFor(new ForbiddenException({ message: 'x', code: 'Has Spaces And CAPS' })).body).not.toHaveProperty('code');
   });
 
   it('still hides unexpected errors behind a generic 500', () => {

@@ -17,6 +17,11 @@ interface ErrorBody {
   timestamp: string;
   /** Correlates a client-visible error with the server log line that has the stack. */
   traceId?: string;
+  /**
+   * Stable machine-readable reason when the thrown HttpException carries one (for example
+   * `password-change-required`), so a client can react without parsing the English message.
+   */
+  code?: string;
 }
 
 /**
@@ -32,7 +37,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
-    const { status, error, message } = this.normalize(exception);
+    const { status, error, message, code } = this.normalize(exception);
     const traceId = Math.random().toString(36).slice(2, 10);
 
     if (status >= 500) {
@@ -51,6 +56,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       path: request.url,
       timestamp: new Date().toISOString(),
       traceId,
+      ...(code ? { code } : {}),
     };
     response.status(status).json(body);
   }
@@ -59,6 +65,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     status: number;
     error: string;
     message: string | string[];
+    code?: string;
   } {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -66,11 +73,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (typeof payload === 'string') {
         return { status, error: exception.name, message: payload };
       }
-      const obj = payload as { message?: string | string[]; error?: string };
+      const obj = payload as { message?: string | string[]; error?: string; code?: unknown };
       return {
         status,
         error: obj.error ?? exception.name,
         message: obj.message ?? exception.message,
+        // Only a short token-like string: never an object that could smuggle internals out.
+        ...(typeof obj.code === 'string' && /^[a-z0-9-]{1,64}$/.test(obj.code) ? { code: obj.code } : {}),
       };
     }
 

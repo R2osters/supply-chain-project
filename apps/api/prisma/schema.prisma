@@ -110,6 +110,9 @@ model User {
   lastLoginAt       DateTime?
   failedLoginCount  Int       @default(0)
   lockedUntil       DateTime?
+  /// Set when an administrator (or the desktop's local recovery) hands out a temporary password:
+  /// the API refuses everything but the password change until the user picks their own.
+  mustChangePassword Boolean  @default(false)
   /// Set when role = SUPPLIER: restricts visibility to that supplier's own rows.
   linkedSupplierId  String?
   /// Set when role = CUSTOMER.

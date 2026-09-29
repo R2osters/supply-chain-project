@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { join } from 'node:path';
 import configuration, { type AppConfig } from './config/configuration';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { PasswordChangeGuard } from './common/guards/password-change.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { PrismaModule } from './prisma/prisma.module';
 import { MailModule } from './modules/mail/mail.module';
@@ -37,6 +38,7 @@ import { RadioModule } from './modules/radio/radio.module';
 import { SetupModule } from './modules/setup/setup.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { CompaniesModule } from './modules/companies/companies.module';
+import { UsersModule } from './modules/users/users.module';
 import { AircraftModule } from './modules/aircraft/aircraft.module';
 
 @Module({
@@ -69,6 +71,7 @@ import { AircraftModule } from './modules/aircraft/aircraft.module';
     SetupModule,
     SettingsModule,
     CompaniesModule,
+    UsersModule,
     AircraftModule,
     HealthModule,
     MasterDataModule,
@@ -96,9 +99,11 @@ import { AircraftModule } from './modules/aircraft/aircraft.module';
     JobsModule,
   ],
   providers: [
-    // Order matters: throttle first (cheapest rejection), then authenticate, then authorise.
+    // Order matters: throttle first (cheapest rejection), then authenticate, then hold back an
+    // account that must replace a temporary password, then authorise.
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: PasswordChangeGuard },
     { provide: APP_GUARD, useClass: PermissionsGuard },
   ],
 })

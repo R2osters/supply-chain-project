@@ -10,17 +10,10 @@ import {
   MinLength,
 } from 'class-validator';
 import { USER_ROLES, type UserRole } from '@scip/shared';
+import { STRONG_PASSWORD } from '../password-policy';
 
-const lower = ({ value }: { value: unknown }): unknown =>
+export const lower = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
-
-/**
- * Password policy: 12+ chars with three of four character classes. Length is weighted more
- * heavily than symbol gymnastics because it is what actually resists offline cracking, and the
- * hash is Argon2id regardless.
- */
-const STRONG_PASSWORD =
-  /^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*\d)|(?=.*[a-z])(?=.*[A-Z])(?=.*[^\w\s])|(?=.*[a-z])(?=.*\d)(?=.*[^\w\s])|(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]))[\s\S]{12,}$/;
 
 export class RegisterDto {
   @ApiProperty({ example: 'ops@acme-logistics.com' })
@@ -163,6 +156,15 @@ export class InviteUserDto {
   linkedCustomerId?: string;
 }
 
+/** Body of POST /auth/local-recovery. No e-mail means "the first administrator". */
+export class LocalRecoveryDto {
+  @ApiPropertyOptional({ example: 'admin@acme-logistics.com' })
+  @IsOptional()
+  @IsEmail()
+  @Transform(lower)
+  email?: string;
+}
+
 export class AuthTokensDto {
   @ApiProperty()
   accessToken!: string;
@@ -182,5 +184,7 @@ export class AuthTokensDto {
     role: UserRole;
     companyId: string | null;
     emailVerified: boolean;
+    /** True after a temporary password: every route but the password change answers 403. */
+    mustChangePassword: boolean;
   };
 }

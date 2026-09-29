@@ -25,7 +25,8 @@ export function CommandPalette({
 }: {
   open: boolean;
   onClose: () => void;
-  items: NavItem[];
+  /** Pillar modules, then account pages (users, settings, password). */
+  items: Array<Pick<NavItem, 'href' | 'labelKey' | 'icon'>>;
 }) {
   const { t } = useI18n();
   const router = useRouter();

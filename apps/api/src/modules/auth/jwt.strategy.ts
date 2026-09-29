@@ -44,6 +44,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         linkedSupplierId: true,
         linkedCustomerId: true,
         lockedUntil: true,
+        mustChangePassword: true,
       },
     });
 
@@ -61,6 +62,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       companyId: user.companyId,
       linkedSupplierId: user.linkedSupplierId,
       linkedCustomerId: user.linkedCustomerId,
+      mustChangePassword: user.mustChangePassword,
     };
   }
 }

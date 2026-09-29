@@ -3,18 +3,21 @@ import {
   Database,
   Factory,
   FlaskConical,
+  KeyRound,
   LayoutDashboard,
   Map,
   Package,
   Radar,
   RadioTower,
   Route,
+  Settings,
   Ship,
   Sparkles,
   Split,
   TrendingUp,
   TriangleAlert,
   Truck,
+  Users,
   Warehouse,
   type LucideIcon,
 } from 'lucide-react';
@@ -55,6 +58,23 @@ export const NAV: NavItem[] = [
   { href: '/purchase-orders', labelKey: 'nav.orders', permission: 'purchase_order:read', pillar: 'NETWORK', icon: ClipboardList },
   { href: '/inventory', labelKey: 'nav.inventory', permission: 'inventory:read', pillar: 'NETWORK', icon: Warehouse },
   { href: '/master-data', labelKey: 'md.nav', permission: 'product:read', pillar: 'NETWORK', icon: Database },
+];
+
+/**
+ * Account pages: reached from the account menu rather than a pillar's module row, and listed in
+ * the ⌘K palette too. `permission: null` is open to every signed-in user.
+ */
+export interface AccountNavItem {
+  href: string;
+  labelKey: TranslationKey;
+  permission: Permission | null;
+  icon: LucideIcon;
+}
+
+export const ACCOUNT_NAV: AccountNavItem[] = [
+  { href: '/users', labelKey: 'users.nav', permission: 'user:read', icon: Users },
+  { href: '/settings', labelKey: 'settings.nav', permission: 'company:update', icon: Settings },
+  { href: '/account', labelKey: 'account.nav', permission: null, icon: KeyRound },
 ];
 
 export const PILLARS: Array<{ id: Pillar; labelKey: TranslationKey; icon: LucideIcon }> = [

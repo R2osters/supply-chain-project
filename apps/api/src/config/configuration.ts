@@ -85,6 +85,12 @@ export interface AppConfig {
     passwordResetTtlMinutes: number;
     maxFailedLogins: number;
     lockoutMinutes: number;
+    /**
+     * Shared secret between the desktop shell and this API for POST /auth/local-recovery (the
+     * "forgotten password" of an install that cannot send e-mail). Only the shell knows it — it
+     * lives in the user's own config.json. Null disables the endpoint, which then answers 404.
+     */
+    localRecoveryToken: string | null;
   };
   throttle: { ttlSeconds: number; limit: number; authLimit: number };
   ai: { url: string; timeoutMs: number; token: string };
@@ -227,6 +233,7 @@ export default (): AppConfig => {
       passwordResetTtlMinutes: int(process.env.PASSWORD_RESET_TTL_MINUTES, 30),
       maxFailedLogins: int(process.env.MAX_FAILED_LOGINS, 8),
       lockoutMinutes: int(process.env.LOCKOUT_MINUTES, 15),
+      localRecoveryToken: process.env.LOCAL_RECOVERY_TOKEN?.trim() || null,
     },
 
     throttle: {

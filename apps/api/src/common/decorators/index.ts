@@ -14,6 +14,15 @@ export const PERMISSIONS_KEY = 'scip:permissions';
 export const RequirePermissions = (...permissions: Permission[]): MethodDecorator & ClassDecorator =>
   SetMetadata(PERMISSIONS_KEY, permissions);
 
+export const ALLOW_PENDING_PASSWORD_CHANGE_KEY = 'scip:allowPendingPasswordChange';
+/**
+ * Keeps a route reachable for an account that still holds a temporary password (profile, the
+ * password change itself, sign-out everywhere). Every other authenticated route answers
+ * 403 `password-change-required` until the user has chosen their own password.
+ */
+export const AllowPendingPasswordChange = (): MethodDecorator & ClassDecorator =>
+  SetMetadata(ALLOW_PENDING_PASSWORD_CHANGE_KEY, true);
+
 export const AUDIT_KEY = 'scip:audit';
 export interface AuditMeta {
   action: string;

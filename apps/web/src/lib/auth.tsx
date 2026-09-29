@@ -13,6 +13,7 @@ import {
 import {
   api,
   getRefreshToken,
+  onPasswordChangeRequired,
   onSessionLost,
   setAccessToken,
   setRefreshToken,
@@ -26,6 +27,14 @@ interface AuthState {
   loading: boolean;
   signIn(email: string, password: string): Promise<void>;
   signOut(): Promise<void>;
+  /**
+   * Changes the signed-in user's password and keeps them signed in. The API ends every session
+   * on a password change, this one included, so this signs in again with the new password.
+   * Also how an account leaves its temporary password (`mustChangePassword`).
+   */
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
+  /** Re-reads the profile (role, names, `mustChangePassword`) from the API. */
+  refreshUser(): Promise<void>;
   /** Same permission matrix the API enforces — the UI hides what the server would refuse. */
   can(permission: Permission): boolean;
 }
@@ -68,9 +77,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       router.replace('/login');
     });
 
+    // A request refused with "choose your password first" (a temporary password handed out
+    // while this tab was open): flag the session once, and the shell shows the password screen.
+    onPasswordChangeRequired(() => {
+      setUser((current) => (current && !current.mustChangePassword ? { ...current, mustChangePassword: true } : current));
+    });
+
     void restore();
     return () => {
       cancelled = true;
+      onPasswordChangeRequired(null);
     };
   }, [clear, router]);
 
@@ -94,6 +110,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.replace('/login');
   }, [clear, router]);
 
+  const changePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      const email = user?.email;
+      await api('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+      if (!email) return;
+      try {
+        // A fresh session with the new password, whose profile no longer asks for a change.
+        await signIn(email, newPassword);
+      } catch {
+        // The password did change; only the new session failed. Sign in again by hand.
+        clear();
+        router.replace('/login');
+      }
+    },
+    [user?.email, signIn, clear, router],
+  );
+
+  const refreshUser = useCallback(async () => {
+    setUser(await api<SessionUser>('/auth/me'));
+  }, []);
+
   const can = useCallback(
     (permission: Permission) =>
       user ? roleHasPermission(user.role as UserRole, permission) : false,
@@ -101,8 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ user, loading, signIn, signOut, can }),
-    [user, loading, signIn, signOut, can],
+    () => ({ user, loading, signIn, signOut, changePassword, refreshUser, can }),
+    [user, loading, signIn, signOut, changePassword, refreshUser, can],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

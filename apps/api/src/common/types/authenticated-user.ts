@@ -9,6 +9,12 @@ export interface AuthenticatedUser {
   companyId: string | null;
   linkedSupplierId: string | null;
   linkedCustomerId: string | null;
+  /**
+   * The account holds a temporary password. Read from the database on every request (not from
+   * the token), so the flag clears the moment the password is changed. PasswordChangeGuard
+   * refuses every route but the few needed to change it while this is true.
+   */
+  mustChangePassword?: boolean;
 }
 
 export interface JwtAccessPayload {

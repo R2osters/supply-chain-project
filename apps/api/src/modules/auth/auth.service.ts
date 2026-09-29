@@ -229,7 +229,8 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: record.userId },
-        data: { passwordHash, failedLoginCount: 0, lockedUntil: null },
+        // The holder chose this password themselves: any temporary one is gone.
+        data: { passwordHash, failedLoginCount: 0, lockedUntil: null, mustChangePassword: false },
       }),
       this.prisma.passwordResetToken.update({
         where: { id: record.id },
@@ -257,7 +258,12 @@ export class AuthService {
     }
 
     const passwordHash = await this.passwords.hash(dto.newPassword);
-    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
+    // Clearing mustChangePassword is what lifts PasswordChangeGuard: a temporary password
+    // handed out by an administrator is replaced by one only its holder knows.
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustChangePassword: false },
+    });
     await this.tokens.revokeAllForUser(userId);
 
     return { success: true };
@@ -399,5 +405,6 @@ function publicUser(user: User) {
     role: user.role as UserRole,
     companyId: user.companyId,
     emailVerified: user.emailVerifiedAt !== null,
+    mustChangePassword: user.mustChangePassword,
   };
 }

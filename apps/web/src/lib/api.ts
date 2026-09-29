@@ -21,6 +21,13 @@ const REFRESH_KEY = 'scip.refresh';
 let accessToken: string | null = null;
 let refreshInFlight: Promise<boolean> | null = null;
 let onUnauthenticated: (() => void) | null = null;
+let onPasswordChange: (() => void) | null = null;
+
+/**
+ * `code` of the API's 403 while the account still holds a temporary password: every route but
+ * the password change answers it until the holder has chosen their own.
+ */
+export const PASSWORD_CHANGE_REQUIRED = 'password-change-required';
 
 export function setAccessToken(token: string | null): void {
   accessToken = token;
@@ -45,6 +52,14 @@ export function onSessionLost(handler: () => void): void {
   onUnauthenticated = handler;
 }
 
+/**
+ * Called when any request meets the "choose your password first" refusal, so the app shows its
+ * password screen once instead of every screen reporting its own error.
+ */
+export function onPasswordChangeRequired(handler: (() => void) | null): void {
+  onPasswordChange = handler;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -53,6 +68,12 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+  }
+
+  /** The API's machine-readable reason, when it gave one (`password-change-required`…). */
+  get code(): string | undefined {
+    const code = (this.detail as { code?: unknown } | undefined)?.code;
+    return typeof code === 'string' ? code : undefined;
   }
 }
 
@@ -153,7 +174,9 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
     } catch {
       /* body was not JSON; the status-based message stands */
     }
-    throw new ApiError(message, response.status, detail);
+    const error = new ApiError(message, response.status, detail);
+    if (response.status === 403 && error.code === PASSWORD_CHANGE_REQUIRED) onPasswordChange?.();
+    throw error;
   }
 
   return response;
@@ -174,6 +197,8 @@ export interface SessionUser {
   role: string;
   companyId: string | null;
   emailVerified: boolean;
+  /** Signed in with a temporary password: the app asks for a new one before anything else. */
+  mustChangePassword?: boolean;
 }
 
 export interface Explanation {
