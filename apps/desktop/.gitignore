@@ -1,0 +1,13 @@
+# Rust build output and Tauri-generated schemas
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Sidecar binaries: staged by scripts/, never committed (hundreds of MB)
+src-tauri/resources/*
+!src-tauri/resources/README.md
+
+# Static export of apps/web, copied in at build time
+web-dist/
+
+# Download cache used by the staging scripts
+.cache/

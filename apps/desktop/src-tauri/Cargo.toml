@@ -1,0 +1,45 @@
+[package]
+name = "scip-desktop"
+version = "0.1.0"
+description = "SCIP desktop shell and process supervisor"
+authors = ["SCIP"]
+edition = "2021"
+rust-version = "1.80"
+publish = false
+
+[lib]
+# The `_lib` suffix avoids a name clash between the lib and bin targets on Windows (cargo issue #8519).
+name = "scip_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-log = "2"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+base64 = "0.22"
+getrandom = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_System_JobObjects",
+  "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+# Smaller installer; the shell does little CPU work, the sidecars do the heavy lifting.
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
