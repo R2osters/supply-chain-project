@@ -2,10 +2,25 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bell, CheckCheck, FilterX, MailWarning } from 'lucide-react';
 import { api, type Paginated } from '@/lib/api';
-import { Chip, Empty, ErrorNote, Loading, Panel, fmt } from '@/components/ui';
-import { useI18n } from '@/lib/i18n';
+import {
+  AlertRow,
+  Button,
+  DemoTag,
+  Empty,
+  ErrorNote,
+  Loading,
+  PageHeader,
+  Panel,
+  Provenance,
+  toSeverity,
+} from '@/components/ui';
+import { useToast } from '@/components/toast';
+import { useFormat, useI18n } from '@/lib/i18n';
+import { FilterPill, useListKeys } from '../shipments/_components/track-kit';
 
 interface NotificationRow {
   id: string;
@@ -18,6 +33,8 @@ interface NotificationRow {
   readAt: string | null;
   deliveryError: string | null;
   createdAt: string;
+  /** Every scalar is returned; optional for older API builds. */
+  isDemoData?: boolean;
 }
 
 const TARGET_PATH: Record<string, (id: string) => string> = {
@@ -28,10 +45,23 @@ const TARGET_PATH: Record<string, (id: string) => string> = {
   recommendations: () => '/recommendations',
 };
 
+type Filter = 'all' | 'unread' | 'critical';
+
+function hrefOf(notification: NotificationRow): string | undefined {
+  const entity = notification.target?.entity;
+  const id = notification.target?.id;
+  return entity && TARGET_PATH[entity] ? TARGET_PATH[entity](id ?? '') : undefined;
+}
+
 export default function NotificationsPage() {
   const client = useQueryClient();
+  const router = useRouter();
+  const toast = useToast();
   const { t } = useI18n();
-  const [unreadOnly, setUnreadOnly] = useState(false);
+  const f = useFormat();
+  const [filter, setFilter] = useState<Filter>('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const unreadOnly = filter === 'unread';
 
   const list = useQuery({
     queryKey: ['notifications', { unreadOnly }],
@@ -44,123 +74,202 @@ export default function NotificationsPage() {
 
   const markRead = useMutation({
     mutationFn: (id: string) => api(`/notifications/${id}/read`, { method: 'POST' }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => {
+      toast.show({ message: t('notif.v3.markedRead'), tone: 'success', durationMs: 3000 });
+      client.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (error) => toast.show({ message: (error as Error).message ?? String(error), tone: 'error' }),
   });
 
   const markAll = useMutation({
     mutationFn: () => api('/notifications/read-all', { method: 'POST' }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => {
+      toast.show({ message: t('notif.v3.allMarkedRead'), tone: 'success' });
+      client.invalidateQueries({ queryKey: ['notifications'] });
+    },
+    onError: (error) => toast.show({ message: (error as Error).message ?? String(error), tone: 'error' }),
   });
 
+  const loaded = list.data?.data ?? [];
+  const isCritical = (row: NotificationRow) => toSeverity(row.severity) === 'critical';
+  const rows = filter === 'critical' ? loaded.filter(isCritical) : loaded;
+  const unread = list.data?.unreadCount ?? 0;
+  const criticalUnread = loaded.filter((row) => isCritical(row) && !row.readAt).length;
+
+  const ids = useMemo(() => rows.map((row) => row.id), [rows]);
+  const select = useCallback((id: string | null) => setSelectedId(id), []);
+  const openSelected = useCallback(
+    (id: string) => {
+      const row = rows.find((candidate) => candidate.id === id);
+      const href = row && hrefOf(row);
+      if (href) router.push(href);
+    },
+    [rows, router],
+  );
+  useListKeys(ids, selectedId, select, openSelected);
+
+  // A new unread critical alert is announced assertively (charte §10); everything else politely.
+  const [announcement, setAnnouncement] = useState('');
+  const previousCritical = useRef<number | null>(null);
+  useEffect(() => {
+    if (!list.data) return;
+    if (previousCritical.current !== null && criticalUnread > previousCritical.current) {
+      setAnnouncement(t('notif.v3.newCritical', { n: criticalUnread }));
+    }
+    previousCritical.current = criticalUnread;
+  }, [criticalUnread, list.data, t]);
+
+  const title = !list.data
+    ? t('notif.title')
+    : unread === 0
+      ? t('notif.v3.titleNone')
+      : criticalUnread > 0
+        ? t('notif.v3.titleCritical', { n: f.int(unread), c: f.int(criticalUnread) })
+        : t(unread === 1 ? 'notif.v3.titleOne' : 'notif.v3.titleMany', { n: f.int(unread) });
+
   return (
-    <div className="space-y-4">
-      <Panel
-        title={t('notif.title')}
-        meta={
-          list.data && list.data.unreadCount > 0 ? (
-            <Chip tone="alert">{t('notif.unread', { n: list.data.unreadCount })}</Chip>
-          ) : null
-        }
-        loading={list.isFetching}
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        kicker={t('notif.v3.kicker')}
+        title={title}
+        description={t('notif.noneHint')}
+        meta={<Provenance kind="poll" seconds={30} />}
         actions={
-          <div className="flex items-center gap-3">
-            <label className="flex cursor-pointer items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={unreadOnly}
-                onChange={(event) => setUnreadOnly(event.target.checked)}
-                className="accent-[var(--color-signal)]"
-              />
-              {t('notif.unreadOnly')}
-            </label>
-            <button
-              onClick={() => markAll.mutate()}
-              disabled={markAll.isPending}
-              className="hover:text-[var(--color-signal)]"
-            >
-              {t('notif.markAllRead')}
-            </button>
-          </div>
+          <Button
+            icon={CheckCheck}
+            onClick={() => markAll.mutate()}
+            loading={markAll.isPending}
+            disabled={unread === 0}
+          >
+            {t('notif.v3.markAllRead')}
+          </Button>
         }
+      />
+
+      <div className="sr-only" aria-live="polite">
+        {list.data ? title : ''}
+      </div>
+      <div className="sr-only" aria-live="assertive">
+        {announcement}
+      </div>
+
+      <div className="rise flex flex-wrap items-center gap-2">
+        <FilterPill active={filter === 'all'} count={list.data && !unreadOnly ? list.data.meta.total : null} onClick={() => setFilter('all')}>
+          {t('notif.v3.pillAll')}
+        </FilterPill>
+        <FilterPill active={filter === 'unread'} count={list.data ? unread : null} onClick={() => setFilter(filter === 'unread' ? 'all' : 'unread')}>
+          {t('notif.v3.pillUnread')}
+        </FilterPill>
+        <FilterPill
+          active={filter === 'critical'}
+          count={list.data ? loaded.filter(isCritical).length : null}
+          onClick={() => setFilter(filter === 'critical' ? 'all' : 'critical')}
+        >
+          {t('notif.v3.pillCritical')}
+        </FilterPill>
+        <span className="ml-auto hidden items-center gap-1.5 text-[12px] text-[var(--color-dim)] md:flex">
+          <kbd className="kbd">J</kbd>
+          <kbd className="kbd">K</kbd>
+          {t('notif.v3.keysHint')}
+        </span>
+      </div>
+
+      <Panel
+        icon={Bell}
+        title={t('notif.title')}
+        meta={unread > 0 ? <span key={unread} className="pill-count pop">{t('notif.unread', { n: unread })}</span> : null}
+        loading={list.isFetching}
       >
         {list.isError ? (
-          <ErrorNote error={list.error} />
+          <ErrorNote error={list.error} onRetry={() => list.refetch()} />
         ) : list.isLoading ? (
-          <Loading />
-        ) : list.data && list.data.data.length > 0 ? (
-          <ul className="divide-y divide-[var(--color-hairline)]">
-            {list.data.data.map((notification) => {
-              const entity = notification.target?.entity;
-              const id = notification.target?.id;
-              const href =
-                entity && TARGET_PATH[entity] ? TARGET_PATH[entity](id ?? '') : undefined;
-
+          <Loading rows={6} />
+        ) : rows.length > 0 ? (
+          <ul className="stagger m-0 flex list-none flex-col gap-1 p-2" aria-label={t('notif.title')}>
+            {rows.map((notification) => {
+              const href = hrefOf(notification);
+              const isUnread = !notification.readAt;
               return (
                 <li
                   key={notification.id}
-                  className={`p-3.5 ${notification.readAt ? 'opacity-55' : ''}`}
+                  data-row-id={notification.id}
+                  aria-current={notification.id === selectedId || undefined}
+                  onClick={() => setSelectedId(notification.id)}
+                  className={`cursor-pointer rounded-[var(--radius-md)] ${isUnread ? '' : 'opacity-60'}`}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {!notification.readAt && (
-                          <span className="h-1.5 w-1.5 rounded-full bg-[var(--color-signal)]" />
+                  <AlertRow
+                    severity={toSeverity(notification.severity)}
+                    selected={notification.id === selectedId}
+                    title={
+                      <span className="flex items-center gap-2">
+                        {isUnread && (
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full bg-[var(--color-info)]"
+                            aria-label={t('notif.v3.unreadDot')}
+                          />
                         )}
-                        <Chip
-                          tone={
-                            notification.severity === 'CRITICAL'
-                              ? 'alert'
-                              : notification.severity === 'WARNING'
-                                ? 'warn'
-                                : 'neutral'
-                          }
-                        >
-                          {notification.type.replace(/_/g, ' ')}
-                        </Chip>
-                        <span className="font-mono text-[0.5625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)]">
-                          {fmt.relative(notification.createdAt)}
-                        </span>
-                      </div>
-
-                      <h3 className="mt-1.5 text-[0.875rem] font-medium">{notification.title}</h3>
-                      <p className="mt-0.5 max-w-3xl text-[0.75rem] leading-relaxed text-[var(--color-ink-dim)]">
+                        <span className={isUnread ? '' : 'font-normal'}>{notification.title}</span>
+                      </span>
+                    }
+                    context={
+                      <>
                         {notification.body}
-                      </p>
-
-                      {notification.deliveryError && (
-                        <p className="mt-1 font-mono text-[0.625rem] text-[var(--color-warn)]">
-                          {t('notif.emailFailed', { reason: notification.deliveryError })}
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="flex shrink-0 flex-col items-end gap-1.5">
-                      {href && (
-                        <Link
-                          href={href}
-                          className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-[var(--color-signal)] hover:underline"
-                        >
-                          {t('notif.open')}
-                        </Link>
-                      )}
-                      {!notification.readAt && (
-                        <button
-                          onClick={() => markRead.mutate(notification.id)}
-                          className="font-mono text-[0.625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)] hover:text-[var(--color-ink)]"
-                        >
-                          {t('notif.markRead')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                        {notification.deliveryError && (
+                          <span className="mt-1 flex items-center gap-1.5 text-[12px] text-[var(--color-muted)]">
+                            <MailWarning className="h-3.5 w-3.5 shrink-0 text-[var(--color-warn)]" />
+                            {t('notif.emailFailed', { reason: notification.deliveryError })}
+                          </span>
+                        )}
+                      </>
+                    }
+                    source={`${notification.type.replace(/_/g, ' ').toLowerCase()} · ${notification.channel.toLowerCase()}`}
+                    provenance={notification.isDemoData ? <DemoTag /> : undefined}
+                    age={f.relative(notification.createdAt)}
+                    actions={
+                      href || isUnread ? (
+                        <>
+                          {href && (
+                            <Link
+                              href={href}
+                              onClick={(event) => event.stopPropagation()}
+                              className="btn btn-sm"
+                            >
+                              {t('notif.open')}
+                            </Link>
+                          )}
+                          {isUnread && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              loading={markRead.isPending && markRead.variables === notification.id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                markRead.mutate(notification.id);
+                              }}
+                            >
+                              {t('notif.markRead')}
+                            </Button>
+                          )}
+                        </>
+                      ) : undefined
+                    }
+                  />
                 </li>
               );
             })}
           </ul>
         ) : (
           <Empty
-            title={unreadOnly ? t('notif.noneUnread') : t('notif.none')}
+            icon={filter === 'all' ? undefined : FilterX}
+            title={filter === 'unread' ? t('notif.noneUnread') : filter === 'critical' ? t('notif.v3.noneCritical') : t('notif.none')}
             hint={t('notif.noneHint')}
+            action={
+              filter !== 'all' ? (
+                <Button size="sm" icon={FilterX} onClick={() => setFilter('all')}>
+                  {t('notif.v3.showAll')}
+                </Button>
+              ) : undefined
+            }
           />
         )}
       </Panel>

@@ -1,24 +1,48 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import maplibregl, { type Map as MapLibreMap } from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
-import { useParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-import { api, type Explanation } from '@/lib/api';
 import {
+  Calculator,
+  Clock,
+  History,
+  Map as MapIcon,
+  Package,
+  ScanSearch,
+  Sparkles,
+  Timer,
+  Truck,
+  TriangleAlert,
+} from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
+import { useMemo, type ReactNode } from 'react';
+import { api, type Explanation } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { useFormat, useI18n } from '@/lib/i18n';
+import {
+  AlertRow,
+  Banner,
+  Button,
   Chip,
+  DemoTag,
   Empty,
   ErrorNote,
   Explain,
+  Facts,
+  Kpi,
   Loading,
   Meter,
+  PageHeader,
   Panel,
-  fmt,
-  riskTone,
+  Provenance,
+  Legend,
   statusTone,
+  toSeverity,
 } from '@/components/ui';
-import { useAuth } from '@/lib/auth';
+import { useToast } from '@/components/toast';
+import { EventTimeline, type ShipmentEventRow } from './_components/event-timeline';
+import { humanise, useLabel, useStatusLabel } from './_components/labels';
+import { TrackMap } from './_components/track-map';
 
 interface TrackingPosition {
   latitude: number;
@@ -47,14 +71,7 @@ interface TrackingResponse {
     isDemoData: boolean;
   };
   route: { id: string; name: string; polyline: Array<{ latitude: number; longitude: number }> } | null;
-  events: Array<{
-    id: string;
-    type: string;
-    description: string;
-    fromStatus: string | null;
-    toStatus: string | null;
-    occurredAt: string;
-  }>;
+  events: ShipmentEventRow[];
   anomalies: Array<{
     id: string;
     type: string;
@@ -79,36 +96,31 @@ interface TrackingResponse {
   } | null;
 }
 
-const OSM_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
-    },
-  },
-  layers: [
-    { id: 'bg', type: 'background', paint: { 'background-color': '#0c0e10' } },
-    {
-      id: 'osm',
-      type: 'raster',
-      source: 'osm',
-      paint: { 'raster-opacity': 0.4, 'raster-saturation': -0.85 },
-    },
-  ],
-};
+/** The fields of `GET /shipments/:id` this page adds to the tracking view: who and what. */
+interface ShipmentRecord {
+  vehicleId: string | null;
+  vehicle: { id: string; plateNumber: string; label: string | null } | null;
+  driver: { firstName: string; lastName: string; phone: string | null } | null;
+  carrier: { name: string } | null;
+  cargoValue: string | number | null;
+  currency: string | null;
+  totalWeightKg: string | number | null;
+  items?: unknown[];
+}
+
+/** A last fix older than this is shown with its age, never as live. */
+const STALE_AFTER_MIN = 10;
 
 export default function ShipmentDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const client = useQueryClient();
   const { can } = useAuth();
-
-  const container = useRef<HTMLDivElement | null>(null);
-  const map = useRef<MapLibreMap | null>(null);
-  const [mapReady, setMapReady] = useState(false);
+  const { t } = useI18n();
+  const fmt = useFormat();
+  const toast = useToast();
+  const label = useLabel();
+  const statusLabel = useStatusLabel();
 
   const tracking = useQuery({
     queryKey: ['shipment', id, 'tracking'],
@@ -116,14 +128,32 @@ export default function ShipmentDetailPage() {
     refetchInterval: 20_000,
   });
 
+  // Vehicle, driver, carrier and cargo value are on the shipment record, not the tracking view.
+  const record = useQuery({
+    queryKey: ['shipment', id, 'record'],
+    queryFn: () => api<ShipmentRecord>(`/shipments/${id}`),
+    staleTime: 60_000,
+  });
+
+  const onFailure = (error: unknown) =>
+    toast.show({ tone: 'error', message: error instanceof Error ? error.message : String(error) });
+
   const recomputeEta = useMutation({
     mutationFn: () => api(`/shipments/${id}/recompute-eta`, { method: 'POST' }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['shipment', id] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['shipment', id] });
+      toast.show({ tone: 'success', message: t('ship.detail.toast.eta') });
+    },
+    onError: onFailure,
   });
 
   const predictDelay = useMutation({
     mutationFn: () => api(`/ai/predict-delay/${id}`, { method: 'POST' }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['shipment', id] }),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['shipment', id] });
+      toast.show({ tone: 'success', message: t('ship.detail.toast.predicted') });
+    },
+    onError: onFailure,
   });
 
   const detectAnomalies = useMutation({
@@ -131,292 +161,376 @@ export default function ShipmentDetailPage() {
       api<{ anomalies: unknown[]; explanation: Explanation }>(`/ai/detect-anomaly/${id}`, {
         method: 'POST',
       }),
-    onSuccess: () => client.invalidateQueries({ queryKey: ['shipment', id] }),
+    onSuccess: (result) => {
+      void client.invalidateQueries({ queryKey: ['shipment', id] });
+      toast.show({ tone: 'success', message: t('ship.detail.toast.scanned', { n: result.anomalies.length }) });
+    },
+    onError: onFailure,
   });
 
-  /* ------------------------------------------------------------------ map */
-
-  useEffect(() => {
-    if (!container.current || map.current) return;
-    const instance = new maplibregl.Map({
-      container: container.current,
-      style: OSM_STYLE,
-      center: [-1, 6.4],
-      zoom: 6,
-      attributionControl: { compact: true },
-    });
-    instance.on('load', () => setMapReady(true));
-    map.current = instance;
-    return () => {
-      instance.remove();
-      map.current = null;
-      setMapReady(false);
-    };
-  }, []);
-
-  useEffect(() => {
+  // Stable coordinate arrays: the map effect keys on them and must not re-run every render.
+  const geometry = useMemo(() => {
     const data = tracking.data;
-    if (!mapReady || !map.current || !data) return;
-    const instance = map.current;
+    if (!data) return null;
+    const origin: [number, number] = [data.shipment.origin.longitude, data.shipment.origin.latitude];
+    const destination: [number, number] = [data.shipment.destination.longitude, data.shipment.destination.latitude];
+    const planned =
+      data.route?.polyline?.map((point) => [point.longitude, point.latitude] as [number, number]) ?? [origin, destination];
+    const actual = data.positions.map((position) => [position.longitude, position.latitude] as [number, number]);
+    return { origin, destination, planned, actual };
+  }, [tracking.data]);
 
-    const plannedCoordinates =
-      data.route?.polyline?.map((point) => [point.longitude, point.latitude] as [number, number]) ??
-      [
-        [data.shipment.origin.longitude, data.shipment.origin.latitude],
-        [data.shipment.destination.longitude, data.shipment.destination.latitude],
-      ];
-
-    const actualCoordinates = data.positions.map(
-      (position) => [position.longitude, position.latitude] as [number, number],
+  if (tracking.isLoading) return <Loading label={t('ship.detail.loading')} rows={8} />;
+  if (tracking.isError) return <ErrorNote error={tracking.error} onRetry={() => void tracking.refetch()} />;
+  if (!tracking.data || !geometry) {
+    return (
+      <Empty
+        icon={Package}
+        title={t('ship.detail.notFound')}
+        action={
+          <Link href="/shipments" className="btn btn-sm">
+            {t('ship.detail.backToList')}
+          </Link>
+        }
+      />
     );
+  }
 
-    upsertLine(instance, 'planned', plannedCoordinates, {
-      'line-color': '#4ea8ff',
-      'line-width': 1.5,
-      'line-opacity': 0.5,
-      'line-dasharray': [2, 2],
-    });
-
-    if (actualCoordinates.length > 1) {
-      upsertLine(instance, 'actual', actualCoordinates, {
-        'line-color': '#ffb020',
-        'line-width': 2.4,
-        'line-opacity': 0.95,
-      });
-    }
-
-    const bounds = new maplibregl.LngLatBounds();
-    for (const coordinate of [...plannedCoordinates, ...actualCoordinates]) bounds.extend(coordinate);
-    if (!bounds.isEmpty()) instance.fitBounds(bounds, { padding: 46, duration: 700, maxZoom: 11 });
-  }, [mapReady, tracking.data]);
-
-  if (tracking.isLoading) return <Loading label="Loading shipment" />;
-  if (tracking.isError) return <ErrorNote error={tracking.error} />;
-  if (!tracking.data) return <Empty title="Shipment not found" />;
-
-  const { shipment, events, anomalies, eta, positions, positionsTotal, positionsSampledEvery } =
-    tracking.data;
-
+  const { shipment, events, anomalies, eta, positions, positionsTotal, positionsSampledEvery } = tracking.data;
   const progress =
-    shipment.plannedDistanceKm > 0
-      ? Math.min(1, shipment.travelledDistanceKm / shipment.plannedDistanceKm)
-      : 0;
+    shipment.plannedDistanceKm > 0 ? Math.min(1, shipment.travelledDistanceKm / shipment.plannedDistanceKm) : 0;
+  const lastFix = positions.length > 0 ? positions[positions.length - 1] : null;
+  const simulatedTrack = positions.some((position) => position.isSimulated);
+  const vehicleId = record.data?.vehicleId ?? record.data?.vehicle?.id ?? null;
+
+  /* ------------------------------------------------------------- actions */
+
+  // The single black action: a missing delay prediction is the most useful thing to fill;
+  // otherwise refreshing the ETA is. The other two stay secondary.
+  const canAi = can('ai:create');
+  const canUpdate = can('shipment:update');
+  const primary: 'predict' | 'eta' | null =
+    shipment.delayProbability === null && canAi ? 'predict' : canUpdate ? 'eta' : canAi ? 'predict' : null;
+
+  const buttons: Array<{ id: 'eta' | 'predict' | 'scan'; node: ReactNode }> = [];
+  if (canUpdate) {
+    buttons.push({
+      id: 'eta',
+      node: (
+      <Button
+        key="eta"
+        variant={primary === 'eta' ? 'primary' : 'secondary'}
+        icon={Calculator}
+        loading={recomputeEta.isPending}
+        onClick={() => recomputeEta.mutate()}
+      >
+        {recomputeEta.isPending ? t('ship.detail.action.computing') : t('ship.detail.action.recomputeEta')}
+      </Button>
+      ),
+    });
+  }
+  if (canAi) {
+    buttons.push(
+      {
+        id: 'predict',
+        node: (
+      <Button
+        key="predict"
+        variant={primary === 'predict' ? 'primary' : 'secondary'}
+        icon={Sparkles}
+        loading={predictDelay.isPending}
+        onClick={() => predictDelay.mutate()}
+      >
+        {predictDelay.isPending ? t('ship.detail.action.predicting') : t('ship.detail.action.predictDelay')}
+      </Button>
+        ),
+      },
+      {
+        id: 'scan',
+        node: (
+      <Button
+        key="scan"
+        icon={ScanSearch}
+        loading={detectAnomalies.isPending}
+        onClick={() => detectAnomalies.mutate()}
+      >
+        {detectAnomalies.isPending ? t('ship.detail.action.scanning') : t('ship.detail.action.scanAnomalies')}
+      </Button>
+        ),
+      },
+    );
+  }
+  // Primary first, so the black button leads the row.
+  buttons.sort((a, b) => Number(b.id === primary) - Number(a.id === primary));
+  const actions: ReactNode[] = buttons.map((button) => button.node);
+  if (vehicleId) {
+    actions.push(
+      <Link key="map" href={`/map?vehicle=${encodeURIComponent(vehicleId)}`} className="btn">
+        <MapIcon />
+        {t('ship.detail.action.showOnMap')}
+      </Link>,
+    );
+  }
+
+  /* ---------------------------------------------------------- provenance */
+
+  const fixProvenance = !lastFix ? null : lastFix.isSimulated ? (
+    <Provenance kind="demo" label={t('ship.detail.prov.simulatedGps')} />
+  ) : (Date.now() - Date.parse(lastFix.recordedAt)) / 60_000 > STALE_AFTER_MIN ? (
+    <Provenance kind="stale" label={t('ship.detail.prov.staleSince', { age: fmt.relative(lastFix.recordedAt) })} />
+  ) : (
+    <Provenance kind="poll" seconds={20} />
+  );
+  const gpsSource = lastFix ? t('ship.detail.kpi.gpsSource', { age: fmt.relative(lastFix.recordedAt) }) : undefined;
+
+  const estimateTone = eta?.lateness.certainlyLate ? 'alert' : eta?.lateness.isLate ? 'warn' : 'neutral';
+  const riskTone = shipment.delayRisk === 'HIGH' ? 'alert' : shipment.delayRisk === 'MEDIUM' ? 'warn' : 'neutral';
+
+  const driverName = record.data?.driver ? `${record.data.driver.firstName} ${record.data.driver.lastName}` : null;
+  const cargoValue = record.data?.cargoValue;
 
   return (
-    <div className="space-y-4">
-      {/* ----------------------------------------------------------- header */}
-      <Panel>
-        <div className="flex flex-wrap items-start justify-between gap-4 p-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="font-mono text-xl text-[var(--color-signal)]">
-                {shipment.trackingNumber}
-              </h1>
-              <Chip tone={statusTone(shipment.status)}>{shipment.status}</Chip>
-              {shipment.isDemoData && <Chip tone="neutral">demo</Chip>}
-            </div>
-            <p className="mt-1.5 text-[0.8125rem] text-[var(--color-ink-dim)]">
-              {shipment.origin.name}
-              <span className="mx-2 text-[var(--color-ink-faint)]">→</span>
-              {shipment.destination.name}
-              <span className="mx-2 text-[var(--color-ink-faint)]">·</span>
-              <span className="tnum font-mono">{fmt.num(shipment.plannedDistanceKm, 0)} km</span>
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {can('shipment:update') && (
-              <button
-                className="btn"
-                onClick={() => recomputeEta.mutate()}
-                disabled={recomputeEta.isPending}
-              >
-                {recomputeEta.isPending ? 'computing…' : 'recompute ETA'}
-              </button>
-            )}
-            {can('ai:create') && (
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        kicker={
+          <Link href="/shipments" className="flex items-center gap-1.5 hover:underline">
+            <Package className="h-3.5 w-3.5" />
+            {t('ship.detail.kicker')}
+          </Link>
+        }
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            <span className="t-data text-[28px] font-normal tracking-normal">{shipment.trackingNumber}</span>
+            <Chip tone={statusTone(shipment.status)}>{statusLabel(shipment.status)}</Chip>
+            {shipment.isDemoData && <DemoTag />}
+          </span>
+        }
+        description={
+          <>
+            {shipment.origin.name}
+            <span className="mx-2 text-[var(--color-dim)]">→</span>
+            {shipment.destination.name}
+            <span className="mx-2 text-[var(--color-dim)]">·</span>
+            <span className="t-data">{fmt.num(shipment.plannedDistanceKm, 0)} km</span>
+            {tracking.data.route && (
               <>
-                <button
-                  className="btn"
-                  onClick={() => predictDelay.mutate()}
-                  disabled={predictDelay.isPending}
-                >
-                  {predictDelay.isPending ? 'predicting…' : 'predict delay'}
-                </button>
-                <button
-                  className="btn"
-                  onClick={() => detectAnomalies.mutate()}
-                  disabled={detectAnomalies.isPending}
-                >
-                  {detectAnomalies.isPending ? 'scanning…' : 'scan anomalies'}
-                </button>
+                <span className="mx-2 text-[var(--color-dim)]">·</span>
+                {tracking.data.route.name}
               </>
             )}
-          </div>
-        </div>
+          </>
+        }
+        meta={fixProvenance}
+        actions={actions.length > 0 ? actions : undefined}
+      />
 
-        <div className="grid gap-px border-t border-[var(--color-hairline)] bg-[var(--color-hairline)] sm:grid-cols-2 lg:grid-cols-5">
-          <Cell label="Departed" value={fmt.dateTime(shipment.actualDepartureAt ?? shipment.plannedDepartureAt)} />
-          <Cell label="Promised" value={fmt.dateTime(shipment.plannedArrivalAt)} />
-          <Cell
-            label="Estimated"
-            value={fmt.dateTime(shipment.estimatedArrivalAt)}
-            tone={eta?.lateness.certainlyLate ? 'alert' : eta?.lateness.isLate ? 'warn' : 'ok'}
-          />
-          <Cell
-            label="Delay risk"
-            value={shipment.delayProbability === null ? 'not computed' : fmt.pct(shipment.delayProbability)}
-            tone={
-              shipment.delayRisk === 'HIGH' ? 'alert' : shipment.delayRisk === 'MEDIUM' ? 'warn' : undefined
-            }
-          />
-          <div className="bg-[var(--color-panel)] px-3.5 py-2.5">
-            <div className="font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-              Distance covered
-            </div>
-            <div className="mt-1 flex items-center gap-2">
-              <span className="tnum font-mono text-[0.8125rem]">
-                {fmt.num(shipment.travelledDistanceKm, 0)} / {fmt.num(shipment.plannedDistanceKm, 0)} km
-              </span>
-            </div>
-            <div className="mt-1.5">
-              <Meter value={progress} tone={shipment.status === 'DELAYED' ? 'alert' : 'signal'} />
-            </div>
-          </div>
-        </div>
-      </Panel>
+      {/* ------------------------------------------------------------ KPIs */}
+      <div className="stagger grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Kpi
+          icon={Truck}
+          label={t('ship.detail.kpi.departed')}
+          value={fmt.dateTime(shipment.actualDepartureAt ?? shipment.plannedDepartureAt)}
+          sub={shipment.actualDepartureAt ? t('ship.detail.kpi.actual') : t('ship.detail.kpi.planned')}
+        />
+        <Kpi icon={Clock} label={t('ship.detail.kpi.promised')} value={fmt.dateTime(shipment.plannedArrivalAt)} />
+        <Kpi
+          icon={Timer}
+          label={t('ship.detail.kpi.estimated')}
+          value={fmt.dateTime(shipment.actualArrivalAt ?? shipment.estimatedArrivalAt)}
+          tone={estimateTone}
+          sub={
+            shipment.actualArrivalAt
+              ? t('ship.detail.kpi.arrived')
+              : eta?.lateness.isLate
+                ? t('ship.detail.kpi.lateBy', { min: fmt.num(eta.lateness.minutesLate, 0) })
+                : eta
+                  ? t('ship.detail.kpi.onTime')
+                  : undefined
+          }
+          source={gpsSource}
+        />
+        <Kpi
+          icon={TriangleAlert}
+          label={t('ship.delayRisk')}
+          value={shipment.delayProbability === null ? t('common.notComputed') : fmt.pct(shipment.delayProbability)}
+          tone={riskTone}
+          sub={shipment.delayRisk ? label(`ship.detail.risk.${shipment.delayRisk}`, humanise(shipment.delayRisk)) : undefined}
+          source={t('ship.detail.kpi.modelSource')}
+        />
+        <Kpi
+          icon={MapIcon}
+          label={t('ship.detail.kpi.distance')}
+          value={fmt.num(shipment.travelledDistanceKm, 0)}
+          unit={`/ ${fmt.num(shipment.plannedDistanceKm, 0)} km`}
+          sub={<Meter value={progress} tone={shipment.status === 'DELAYED' ? 'alert' : 'signal'} />}
+          source={t('ship.detail.kpi.progress', { pct: fmt.pct(progress) })}
+        />
+      </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
-        <div className="space-y-4">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* ---------------------------------------------------------- track */}
           <Panel
-            title="Track"
+            icon={MapIcon}
+            title={t('ship.detail.track.title')}
             actions={
-              <span className="flex items-center gap-3">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-px w-4 bg-[var(--color-info)]" /> planned
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-px w-4 bg-[var(--color-signal)]" /> actual
-                </span>
-              </span>
+              <Legend
+                items={[
+                  { label: t('ship.detail.track.planned'), colour: 'var(--color-info)', shape: 'dash' },
+                  { label: t('ship.detail.track.actual'), colour: 'var(--color-ink)', shape: 'line' },
+                ]}
+              />
             }
             className="overflow-hidden"
           >
-            <div ref={container} className="h-[340px] w-full" />
-            <div className="border-t border-[var(--color-hairline)] px-3 py-1.5 font-mono text-[0.5625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)]">
-              {fmt.int(positionsTotal)} fixes recorded
-              {positionsSampledEvery > 1 && ` · drawn every ${positionsSampledEvery}th to keep the map readable`}
-              {positions.some((position) => position.isSimulated) && ' · simulated telemetry'}
+            <div className="mt-3">
+              <TrackMap
+                planned={geometry.planned}
+                actual={geometry.actual}
+                origin={geometry.origin}
+                destination={geometry.destination}
+                label={t('ship.detail.track.title')}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 px-5 py-3 text-[12px] text-[var(--color-muted)]">
+              <span className="t-data">{t('ship.detail.track.fixes', { n: fmt.int(positionsTotal) })}</span>
+              {positionsSampledEvery > 1 && (
+                <span>· {t('ship.detail.track.sampled', { n: positionsSampledEvery })}</span>
+              )}
+              {simulatedTrack && <DemoTag title={t('ship.detail.track.simulated')} />}
             </div>
           </Panel>
 
-          <Panel title="Event log">
-            {events.length === 0 ? (
-              <Empty title="No events yet" />
-            ) : (
-              <ol className="p-3.5">
-                {[...events].reverse().map((event, index) => (
-                  <li key={event.id} className="relative flex gap-3 pb-3.5 last:pb-0">
-                    {index < events.length - 1 && (
-                      <span className="absolute left-[3px] top-3 h-full w-px bg-[var(--color-hairline)]" />
-                    )}
-                    <span
-                      className="relative mt-1.5 h-[7px] w-[7px] shrink-0 rounded-full"
-                      style={{
-                        background:
-                          event.type === 'DELAY_DETECTED' || event.type === 'ANOMALY_DETECTED'
-                            ? 'var(--color-alert)'
-                            : event.type === 'DELIVERED' || event.type === 'ARRIVED'
-                              ? 'var(--color-ok)'
-                              : 'var(--color-hairline-bright)',
-                      }}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-baseline gap-2">
-                        <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-                          {event.type.replace(/_/g, ' ')}
-                        </span>
-                        <span className="tnum font-mono text-[0.625rem] text-[var(--color-ink-faint)]">
-                          {fmt.dateTime(event.occurredAt)}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-[0.8125rem] text-[var(--color-ink-dim)]">
-                        {event.description}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
+          {/* --------------------------------------------------------- events */}
+          <Panel icon={History} title={t('ship.detail.events.title')} meta={<span className="t-data text-[11px] text-[var(--color-dim)]">{events.length}</span>}>
+            <EventTimeline events={events} />
           </Panel>
         </div>
 
-        <div className="space-y-4">
-          <Panel title="ETA engine">
+        <div className="flex min-w-0 flex-col gap-6">
+          {/* ------------------------------------------------------ ETA engine */}
+          <Panel icon={Timer} title={t('ship.detail.eta.title')}>
             {eta ? (
-              <div className="space-y-3 p-3.5">
-                <div>
-                  <div className="tnum font-mono text-2xl text-[var(--color-ink)]">
+              <div className="flex flex-col gap-4 px-5 pb-5 pt-3">
+                <div className="flex flex-col gap-0.5">
+                  <span className="t-kpi text-[40px] leading-none text-[var(--color-ink)]">
                     {fmt.time(eta.estimatedArrival)}
-                  </div>
-                  <div className="text-[0.75rem] text-[var(--color-ink-dim)]">
+                  </span>
+                  <span className="text-[13px] text-[var(--color-muted)]">
                     {fmt.date(eta.estimatedArrival)} · {fmt.relative(eta.estimatedArrival)}
-                  </div>
+                  </span>
                 </div>
 
-                <div className="border-y border-[var(--color-hairline)] py-2.5">
-                  <div className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-                    80% arrival window
-                  </div>
-                  <div className="tnum mt-1 font-mono text-[0.8125rem]">
-                    {fmt.time(eta.arrivalWindow.earliest)} — {fmt.time(eta.arrivalWindow.latest)}
-                  </div>
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="font-mono text-[0.5625rem] uppercase tracking-[0.14em] text-[var(--color-ink-faint)]">
-                      confidence
+                <div className="tile flex flex-col gap-3 p-3.5">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-[12.5px] text-[var(--color-muted)]">{t('ship.detail.eta.window')}</span>
+                    <span className="t-data text-[13px]">
+                      {fmt.time(eta.arrivalWindow.earliest)} — {fmt.time(eta.arrivalWindow.latest)}
                     </span>
-                    <div className="flex-1">
-                      <Meter
-                        value={eta.confidenceScore}
-                        tone={eta.confidenceScore > 0.6 ? 'ok' : eta.confidenceScore > 0.35 ? 'warn' : 'alert'}
-                      />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[12.5px] text-[var(--color-muted)]">{t('common.confidence')}</span>
+                      <span className="t-data text-[13px]">{fmt.pct(eta.confidenceScore)}</span>
                     </div>
-                    <span className="tnum font-mono text-[0.6875rem]">
-                      {fmt.pct(eta.confidenceScore)}
-                    </span>
+                    {/* Grey by default: only a weak estimate earns a colour. */}
+                    <Meter
+                      value={eta.confidenceScore}
+                      tone={eta.confidenceScore > 0.6 ? 'signal' : eta.confidenceScore > 0.35 ? 'warn' : 'alert'}
+                    />
                   </div>
                 </div>
 
                 {eta.lateness.isLate && (
-                  <div
-                    className={`border px-2.5 py-2 text-[0.75rem] ${
+                  <Banner
+                    tone={eta.lateness.certainlyLate ? 'alert' : 'warn'}
+                    icon={TriangleAlert}
+                    title={
                       eta.lateness.certainlyLate
-                        ? 'border-[var(--color-alert-dim)] bg-[color-mix(in_srgb,var(--color-alert)_8%,transparent)] text-[var(--color-alert)]'
-                        : 'border-[var(--color-warn-dim)] bg-[color-mix(in_srgb,var(--color-warn)_8%,transparent)] text-[var(--color-warn)]'
-                    }`}
+                        ? t('ship.detail.eta.certainlyLate', { min: fmt.num(eta.lateness.minutesLate, 0) })
+                        : t('ship.detail.eta.projectedLate', { min: fmt.num(eta.lateness.minutesLate, 0) })
+                    }
                   >
-                    {eta.lateness.certainlyLate
-                      ? `Certainly late — even the optimistic end of the window misses the promise by ${fmt.num(eta.lateness.minutesLate, 0)} min.`
-                      : `Projected ${fmt.num(eta.lateness.minutesLate, 0)} min late, but the window still reaches the promise.`}
-                  </div>
+                    {eta.lateness.certainlyLate ? t('ship.detail.eta.certainlyLateHint') : t('ship.detail.eta.projectedLateHint')}
+                  </Banner>
                 )}
+
+                <Facts
+                  columns={3}
+                  items={[
+                    [t('ship.detail.eta.remaining'), <span key="r" className="t-data">{fmt.num(eta.remainingDistanceKm, 0)} km</span>],
+                    [t('ship.detail.eta.speed'), <span key="s" className="t-data">{fmt.num(eta.effectiveSpeedKmh, 0)} km/h</span>],
+                    [t('ship.detail.eta.samples'), <span key="n" className="t-data">{fmt.int(eta.basedOnSamples)}</span>],
+                  ]}
+                />
 
                 <Explain reasons={eta.reasons} assumptions={eta.assumptions} />
               </div>
             ) : (
-              <Empty
-                title="No live ETA"
-                hint="This shipment is complete, so there is nothing left to estimate."
-              />
+              <Empty icon={Timer} title={t('ship.detail.eta.none')} hint={t('ship.detail.eta.noneHint')} />
             )}
           </Panel>
 
+          {/* ------------------------------------------------------ assignment */}
+          <Panel icon={Truck} title={t('ship.detail.assign.title')}>
+            {record.isError ? (
+              <ErrorNote error={record.error} onRetry={() => void record.refetch()} />
+            ) : record.isLoading ? (
+              <Loading rows={3} />
+            ) : (
+              <div className="px-5 pb-5 pt-3">
+                <Facts
+                  items={[
+                    [
+                      t('ship.vehicle'),
+                      record.data?.vehicle ? (
+                        <span key="v" className="t-data">
+                          {record.data.vehicle.plateNumber}
+                          {record.data.vehicle.label ? ` · ${record.data.vehicle.label}` : ''}
+                        </span>
+                      ) : (
+                        '—'
+                      ),
+                    ],
+                    [t('ship.detail.assign.driver'), driverName ?? '—'],
+                    [t('ship.carrier'), record.data?.carrier?.name ?? '—'],
+                    [
+                      t('ship.detail.assign.cargoValue'),
+                      cargoValue !== null && cargoValue !== undefined && Number(cargoValue) > 0 ? (
+                        <span key="c" className="t-data">{fmt.money(cargoValue, record.data?.currency ?? 'USD')}</span>
+                      ) : (
+                        '—'
+                      ),
+                    ],
+                    [
+                      t('ship.detail.assign.weight'),
+                      record.data?.totalWeightKg !== null && record.data?.totalWeightKg !== undefined ? (
+                        <span key="w" className="t-data">{fmt.num(record.data.totalWeightKg, 0)} kg</span>
+                      ) : (
+                        '—'
+                      ),
+                    ],
+                    [t('ship.detail.assign.lines'), <span key="l" className="t-data">{fmt.int(record.data?.items?.length ?? 0)}</span>],
+                  ]}
+                />
+              </div>
+            )}
+          </Panel>
+
+          {/* ------------------------------------------------------- anomalies */}
           <Panel
-            title="Anomalies"
-            meta={anomalies.length > 0 ? <Chip tone="alert">{anomalies.length}</Chip> : null}
+            icon={TriangleAlert}
+            title={t('ship.detail.anomalies.title')}
+            meta={
+              anomalies.length > 0 ? (
+                <span key={anomalies.length} className="pill-count pop">
+                  {anomalies.length}
+                </span>
+              ) : null
+            }
           >
             {detectAnomalies.data && (
-              <div className="border-b border-[var(--color-hairline)] p-3.5">
+              <div className="fade-in mx-5 mt-3 rounded-[var(--radius-md)] bg-[var(--color-surface-2)] p-3.5">
                 <Explain
                   summary={detectAnomalies.data.explanation.summary}
                   reasons={detectAnomalies.data.explanation.reasons}
@@ -425,23 +539,33 @@ export default function ShipmentDetailPage() {
               </div>
             )}
             {anomalies.length === 0 ? (
-              <Empty title="None open" hint="Run a scan to check the track against every rule." />
+              <Empty
+                title={t('ship.detail.anomalies.none')}
+                hint={t('ship.detail.anomalies.noneHint')}
+                action={
+                  canAi ? (
+                    <Button
+                      size="sm"
+                      icon={ScanSearch}
+                      loading={detectAnomalies.isPending}
+                      onClick={() => detectAnomalies.mutate()}
+                    >
+                      {t('ship.detail.action.scanAnomalies')}
+                    </Button>
+                  ) : undefined
+                }
+              />
             ) : (
-              <ul className="divide-y divide-[var(--color-hairline)]">
+              <ul className="stagger m-0 flex list-none flex-col p-0 py-2" aria-live="polite">
                 {anomalies.map((anomaly) => (
-                  <li key={anomaly.id} className="p-3.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[0.6875rem] uppercase tracking-[0.1em]">
-                        {anomaly.type.replace(/_/g, ' ')}
-                      </span>
-                      <Chip tone={riskTone(anomaly.severity)}>{anomaly.severity}</Chip>
-                    </div>
-                    <p className="mt-1 text-[0.75rem] text-[var(--color-ink-dim)]">
-                      {anomaly.description}
-                    </p>
-                    <div className="mt-1.5 font-mono text-[0.5625rem] uppercase tracking-[0.12em] text-[var(--color-ink-faint)]">
-                      {fmt.dateTime(anomaly.detectedAt)} · severity score {fmt.num(anomaly.score, 2)}
-                    </div>
+                  <li key={anomaly.id}>
+                    <AlertRow
+                      severity={toSeverity(anomaly.severity)}
+                      title={label(`ship.detail.anomaly.${anomaly.type}`, humanise(anomaly.type))}
+                      context={anomaly.description}
+                      source={t('ship.detail.anomalies.score', { score: fmt.num(anomaly.score, 2) })}
+                      age={fmt.relative(anomaly.detectedAt)}
+                    />
                   </li>
                 ))}
               </ul>
@@ -451,57 +575,4 @@ export default function ShipmentDetailPage() {
       </div>
     </div>
   );
-}
-
-function Cell({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone?: 'ok' | 'warn' | 'alert';
-}) {
-  const colour = tone
-    ? { ok: 'var(--color-ok)', warn: 'var(--color-warn)', alert: 'var(--color-alert)' }[tone]
-    : 'var(--color-ink)';
-
-  return (
-    <div className="bg-[var(--color-panel)] px-3.5 py-2.5">
-      <div className="font-mono text-[0.5625rem] uppercase tracking-[0.16em] text-[var(--color-ink-faint)]">
-        {label}
-      </div>
-      <div className="tnum mt-1 font-mono text-[0.8125rem]" style={{ color: colour }}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function upsertLine(
-  map: MapLibreMap,
-  id: string,
-  coordinates: Array<[number, number]>,
-  paint: Record<string, unknown>,
-): void {
-  const geojson: GeoJSON.Feature<GeoJSON.LineString> = {
-    type: 'Feature',
-    properties: {},
-    geometry: { type: 'LineString', coordinates },
-  };
-
-  const source = map.getSource(id) as maplibregl.GeoJSONSource | undefined;
-  if (source) {
-    source.setData(geojson);
-    return;
-  }
-
-  map.addSource(id, { type: 'geojson', data: geojson });
-  map.addLayer({
-    id,
-    type: 'line',
-    source: id,
-    layout: { 'line-join': 'round', 'line-cap': 'round' },
-    paint: paint as never,
-  });
 }

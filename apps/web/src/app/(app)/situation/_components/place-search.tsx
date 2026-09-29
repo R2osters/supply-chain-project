@@ -1,5 +1,6 @@
 'use client';
 
+import { Loader2, MapPin, Search } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { api } from '@/lib/api';
 import type { GeocodeResponse } from '@/lib/intel';
@@ -39,28 +40,43 @@ export function PlaceSearch({ onPick }: { onPick(result: Result): void }) {
   };
 
   return (
-    <div className="relative w-[280px]">
-      <form onSubmit={submit}>
+    <div className="relative w-full">
+      <form onSubmit={submit} role="search" className="relative">
+        {status === 'busy' ? (
+          <Loader2 className="spin pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+        ) : (
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--color-muted)]" />
+        )}
         <input
+          type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            if (status !== 'busy') setStatus('idle');
+          }}
           placeholder={t('sit.search.placeholder')}
           aria-label={t('sit.search.placeholder')}
-          className="w-full border border-[var(--color-hairline-bright)] bg-[color-mix(in_srgb,var(--color-void)_92%,transparent)] px-2.5 py-1.5 font-mono text-[0.6875rem] text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] focus:border-[var(--color-signal)] focus:outline-none"
+          className="field pl-9"
         />
       </form>
-      {(results.length > 0 || status === 'empty' || status === 'error' || status === 'busy') && (
-        <div className="absolute left-0 right-0 top-full z-10 mt-1 border border-[var(--color-hairline-bright)] bg-[var(--color-panel)]">
-          {status === 'busy' && <Message text={t('sit.loading')} />}
+      {(results.length > 0 || status === 'empty' || status === 'error') && (
+        <div
+          role="listbox"
+          className="map-card fade-in absolute left-0 right-0 top-full z-10 mt-1.5 overflow-hidden py-1"
+        >
           {status === 'empty' && <Message text={t('sit.search.none')} />}
           {status === 'error' && <Message text={t('sit.unavailable')} />}
           {results.map((result) => (
             <button
               key={`${result.latitude},${result.longitude},${result.label}`}
+              type="button"
+              role="option"
+              aria-selected={false}
               onClick={() => pick(result)}
-              className="block w-full truncate px-2.5 py-1.5 text-left text-[0.75rem] text-[var(--color-ink-dim)] hover:bg-[color-mix(in_srgb,var(--color-signal)_8%,transparent)] hover:text-[var(--color-ink)]"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] text-[var(--color-ink)] transition-colors duration-100 hover:bg-[var(--color-surface)]"
             >
-              {result.label}
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-[var(--color-muted)]" />
+              <span className="truncate">{result.label}</span>
             </button>
           ))}
         </div>
@@ -70,5 +86,5 @@ export function PlaceSearch({ onPick }: { onPick(result: Result): void }) {
 }
 
 function Message({ text }: { text: string }) {
-  return <div className="px-2.5 py-1.5 font-mono text-[0.625rem] text-[var(--color-ink-faint)]">{text}</div>;
+  return <div className="px-3 py-2 text-[12px] text-[var(--color-muted)]">{text}</div>;
 }

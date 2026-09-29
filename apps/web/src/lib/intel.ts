@@ -252,12 +252,24 @@ export function safeExternalUrl(value: string | null | undefined): string | null
   }
 }
 
-export const HAZARD_COLOUR: Record<HazardKind, string> = {
-  CYCLONE: '#c77dff',
-  EARTHQUAKE: '#ffa53d',
-  FIRE: '#ff5f56',
-  SEVERE_WEATHER: '#4ea8ff',
+/**
+ * Charte §03: colour is reserved for exceptions. A hazard's colour therefore comes from its
+ * severity (crit for high, warn for medium, grey for low) and the *kind* is told apart by its
+ * icon, never by hue. Values are palette token names so the map and the DOM follow the theme.
+ */
+export type HazardTone = 'crit' | 'warn' | 'muted';
+
+export const HAZARD_TONE: Record<HazardSeverity, HazardTone> = {
+  CRITICAL: 'crit',
+  HIGH: 'crit',
+  MEDIUM: 'warn',
+  LOW: 'muted',
 };
+
+/** The CSS variable for a hazard's tone, for DOM elements (which follow the theme on their own). */
+export function hazardToneVar(severity: HazardSeverity): string {
+  return `var(--color-${HAZARD_TONE[severity]})`;
+}
 
 /**
  * The phrase to search news for. USGS titles read "M 5.1 - 12 km SSW of Somewhere, Country";
