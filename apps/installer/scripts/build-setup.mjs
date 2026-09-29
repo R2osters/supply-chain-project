@@ -74,6 +74,11 @@ exec('cargo', ['build', '--release', '--bin', 'payload-pack'], { cwd: INSTALLER_
 const packer = join(INSTALLER_TAURI, 'target', 'release', 'payload-pack.exe');
 
 const payload = join(DIST_DIR, 'payload.tar.zst');
+// --reuse-payload: installer-only changes (UI, engine) do not need the 5-minute repack; requires a
+// payload kept by an earlier --keep-payload run.
+if (flag('--reuse-payload') && existsSync(payload)) {
+  console.log('[setup] reusing dist/payload.tar.zst');
+} else {
 console.log('[setup] packing the payload (zstd level 19 takes a few minutes)');
 exec(packer, [
   'pack',
@@ -83,6 +88,7 @@ exec(packer, [
   `scip-desktop.exe=${appExe}`,
   `resources=${resources}`,
 ]);
+}
 
 console.log('[setup] building the installer');
 if (!existsSync(join(INSTALLER_DIR, 'ui', 'index.html'))) {
@@ -101,5 +107,5 @@ const stub = join(INSTALLER_TAURI, 'target', 'release', 'scip-installer.exe');
 
 const setup = join(DIST_DIR, `SCIP-Setup-${version}.exe`);
 exec(packer, ['bundle', '--stub', stub, '--payload', payload, '--out', setup]);
-if (!flag('--keep-payload')) rmSync(payload, { force: true });
+if (!flag('--keep-payload') && !flag('--reuse-payload')) rmSync(payload, { force: true });
 console.log(`[setup] ${setup} (${mb(setup)})`);

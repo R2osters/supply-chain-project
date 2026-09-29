@@ -41,6 +41,8 @@ a { color: var(--info); text-decoration: none; }
 a:hover { text-decoration: underline; }
 :focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* The hidden attribute must win over component display rules (.mock, .card-foot…). */
+[hidden] { display: none !important; }
 .ic { flex: none; display: block; }
 .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-weight: 500; }
 

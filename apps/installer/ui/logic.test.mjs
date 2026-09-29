@@ -188,3 +188,12 @@ test("buildPlan: upgrade sends neutral defaults only", () => {
   const s = L.initialState("upgrade");
   assert.deepEqual(L.buildPlan(s), { kind: "production", database: { mode: "embedded" }, sources: { vehicles: "live" }, desktopShortcut: true });
 });
+
+test("the rail leaves out steps that do not apply and renumbers the rest", () => {
+  const upgrade = { ...L.initialState("upgrade"), mode: "upgrade" };
+  assert.deepEqual(L.visibleRail(upgrade), L.RAIL.filter((id) => !["type", "database", "organisation", "sources", "admin"].includes(id)));
+  assert.equal(L.stepNumber("summary", upgrade), 4);
+  const demo = { ...L.initialState("install"), kind: "demo" };
+  assert.equal(L.visibleRail(demo).length, L.RAIL.length - 2);
+  assert.equal(L.stepNumber("sources", demo), 6);
+});

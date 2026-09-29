@@ -52,9 +52,18 @@
     return Object.keys(SCREENS).find((id) => SCREENS[id].code === code) || null;
   }
 
-  /** 1-based position of a screen's rail step ("ÉTAPE 3 SUR 11"). */
-  function stepNumber(screen) {
-    return RAIL.indexOf(SCREENS[screen].rail) + 1;
+  /**
+   * 1-based position of a screen's rail step ("ÉTAPE 3 SUR 8"). With a state, steps that do not
+   * apply (update, demo) are left out, so the count matches the list the user sees.
+   */
+  function stepNumber(screen, state) {
+    const rail = state ? visibleRail(state) : RAIL;
+    return rail.indexOf(SCREENS[screen].rail) + 1;
+  }
+
+  /** The rail without the steps that do not apply to this install. */
+  function visibleRail(state) {
+    return RAIL.filter((id) => !isSkipped(id, state));
   }
 
   /**
@@ -366,6 +375,7 @@
     PASSWORD_MIN,
     screenFromParam,
     stepNumber,
+    visibleRail,
     isSkipped,
     isScreenSkipped,
     nextScreen,

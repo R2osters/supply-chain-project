@@ -342,7 +342,7 @@
 
   function defaultKicker() {
     if (isUninstall()) return t("kicker.uninstall");
-    const k = t("kicker.step", { n: L.stepNumber(screen), total: L.RAIL.length });
+    const k = t("kicker.step", { n: L.stepNumber(screen, S), total: L.visibleRail(S).length });
     return isUpgrade() ? `${k} · ${t("kicker.upgrade")}` : k;
   }
 
@@ -860,12 +860,13 @@
         state: i < cur ? "done" : i > cur ? "pending" : screen === "un-error" ? "failed" : "current",
       }));
     }
-    const curRail = L.SCREENS[screen].rail;
-    const cur = L.RAIL.indexOf(curRail);
-    return L.RAIL.map((id, i) => {
+    // Steps that do not apply (update: 04–08, demo: 06 and 08) are left out rather than listed
+    // as skipped: a column of "sauté" read as unfinished work.
+    const rail = L.visibleRail(S);
+    const cur = rail.indexOf(L.SCREENS[screen].rail);
+    return rail.map((id, i) => {
       let state = "pending";
-      if (L.isSkipped(id, S)) state = "skipped";
-      else if (i === cur) state = screen === "install-error" ? "failed" : "current";
+      if (i === cur) state = screen === "install-error" ? "failed" : "current";
       else if (i < cur) state = "done";
       return { label: t("step." + id), state };
     });
