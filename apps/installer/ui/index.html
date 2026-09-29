@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Installation de SCIP</title>
+  <link rel="stylesheet" href="installer.css">
+  <!-- Classic scripts in order (no bundler, no network). installer.js boots on DOMContentLoaded. -->
+  <script src="icons.js" defer></script>
+  <script src="i18n.js" defer></script>
+  <script src="logic.js" defer></script>
+  <script src="installer.js" defer></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="rail">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true" focusable="false"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg>
+        <b>SCIP</b>
+      </div>
+      <nav id="rail-nav" aria-label="Étapes de l'installation">
+        <ol class="steps" id="steps"></ol>
+      </nav>
+      <div class="rail-foot" id="version"></div>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <span class="mock" id="mock-banner" hidden></span>
+        <div class="toggles">
+          <button type="button" class="pill-toggle" id="lang-toggle">FR</button>
+          <button type="button" class="pill-toggle round" id="theme-toggle"></button>
+        </div>
+      </div>
+      <section class="card" aria-labelledby="screen-title">
+        <div class="card-body" id="body"></div>
+        <footer class="card-foot" id="foot"></footer>
+      </section>
+      <!-- Announces step changes and install progress milestones to screen readers. -->
+      <div class="sr-only" id="announcer" aria-live="polite" aria-atomic="true"></div>
+    </main>
+  </div>
+</body>
+</html>
