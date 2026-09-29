@@ -37,7 +37,7 @@ distributing outside a test group, buy a code-signing certificate (OV or EV) and
 ## What the installed app does
 
 - **Install:** per user, no admin rights needed. Program files go under
-  `%LOCALAPPDATA%\SCIP`; data is kept apart from them so an upgrade never touches it.
+  `%LOCALAPPDATA%\Programs\SCIP`; data is kept apart from them so an upgrade never touches it.
 - **Data:** everything lives in `%LOCALAPPDATA%\com.scip.desktop`: `pgdata`, `files` (proof of delivery), `models`,
   `logs`, `config.json` (generated secrets). Uninstalling keeps this folder unless the user ticks
   the uninstaller's "delete application data" box.
@@ -47,6 +47,21 @@ distributing outside a test group, buy a code-signing certificate (OV or EV) and
   the OPTIMIZE screens are degraded.
 - **Shut-down:** closing the window stops PostgreSQL cleanly. A Windows Job Object ensures a
   killed app does not leave orphan processes behind.
+
+## Accounts and passwords
+
+- **Colleagues and drivers:** an administrator adds them in **Utilisateurs** (account menu). SCIP
+  shows a temporary password once; the person replaces it at their first sign-in, and until then
+  the API refuses everything else, live tracking included. The same screen changes a role, links
+  a driver profile, deactivates an account or issues a new temporary password.
+- **Landing page:** each role opens on a page it may see: drivers on Livraisons, suppliers on
+  Commandes, customers on Expéditions, office roles on the control dashboard.
+- **Forgotten password, no e-mail needed:** "Mot de passe oublié ?" on the sign-in screen. In
+  SCIP's own window on this PC, an administrator gets a temporary password, to change at sign-in.
+  The request carries a token only the desktop shell knows (`localRecoveryToken` in
+  `config.json`) and the API listens on 127.0.0.1 by default, so it grants nothing that access to
+  this PC's files did not already give. Anywhere else (a phone on the Wi-Fi), an administrator
+  resets the password from Utilisateurs.
 
 ## Network
 
