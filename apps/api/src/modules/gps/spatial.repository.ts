@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import type { FleetRow } from './fleet-view';
 
 /**
  * The raw PostGIS layer.
@@ -228,32 +229,15 @@ export class SpatialRepository {
     return Number(rows[0]?.km ?? 0);
   }
 
-  /** Live map payload: one row per vehicle that has reported recently. */
+  /**
+   * Live map payload: one row per vehicle that has reported recently, plus every vehicle on an
+   * active shipment even if its GPS went quiet, since those are the ones whose position gets
+   * estimated. Route geometry and timings come along for that estimate.
+   */
   async fleetSnapshot(companyId: string, staleAfterMinutes = 60) {
     const cutoff = new Date(Date.now() - staleAfterMinutes * 60_000);
 
-    return this.prisma.$queryRaw<
-      Array<{
-        vehicleId: string;
-        plateNumber: string;
-        label: string | null;
-        type: string;
-        status: string;
-        latitude: number;
-        longitude: number;
-        speedKmh: number | null;
-        headingDegrees: number | null;
-        lastPositionAt: Date;
-        shipmentId: string | null;
-        trackingNumber: string | null;
-        shipmentStatus: string | null;
-        destinationName: string | null;
-        estimatedArrivalAt: Date | null;
-        delayProbability: number | null;
-        driverName: string | null;
-        isDemoData: boolean;
-      }>
-    >`
+    return this.prisma.$queryRaw<FleetRow[]>`
       SELECT v.id                   AS "vehicleId",
              v."plateNumber",
              v.label,
@@ -272,7 +256,15 @@ export class SpatialRepository {
              s."delayProbability",
              CASE WHEN d.id IS NULL THEN NULL
                   ELSE d."firstName" || ' ' || d."lastName" END AS "driverName",
-             v."isDemoData"
+             v."isDemoData",
+             v."nominalSpeedKmh",
+             s."originLatitude",
+             s."originLongitude",
+             s."destinationLatitude",
+             s."destinationLongitude",
+             COALESCE(s."actualDepartureAt", s."plannedDepartureAt") AS "departedAt",
+             r.polyline             AS "routePolyline",
+             r."durationMinutes"    AS "routeDurationMinutes"
         FROM "vehicles" v
         LEFT JOIN LATERAL (
                SELECT *
@@ -283,9 +275,12 @@ export class SpatialRepository {
                 LIMIT 1
              ) s ON TRUE
         LEFT JOIN "drivers" d ON d.id = s."driverId"
+        LEFT JOIN "routes" r ON r.id = s."routeId"
        WHERE v."companyId" = ${companyId}
-         AND v."lastPositionAt" IS NOT NULL
-         AND v."lastPositionAt" >= ${cutoff}
+         AND (
+               (v."lastPositionAt" IS NOT NULL AND v."lastPositionAt" >= ${cutoff})
+            OR (s.id IS NOT NULL AND s.status IN ('DEPARTED', 'IN_TRANSIT', 'DELAYED'))
+         )
        ORDER BY v."plateNumber"
     `;
   }

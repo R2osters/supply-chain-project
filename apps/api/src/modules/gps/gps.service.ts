@@ -5,6 +5,7 @@ import { companyFilter, requireCompanyId } from '../../common/tenancy/tenant-sco
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { ShipmentsService } from '../shipments/shipments.service';
 import type { GpsFixDto, IngestGpsDto, NearbyQueryDto } from './gps.dto';
+import { type FleetVehicle, toFleetVehicle } from './fleet-view';
 import { SpatialRepository } from './spatial.repository';
 import { TrackingGateway } from './tracking.gateway';
 
@@ -265,7 +266,13 @@ export class GpsService {
     return this.spatial.vehiclesNearWarehouses(requireCompanyId(user), radiusKm);
   }
 
-  fleet(user: AuthenticatedUser) {
-    return this.spatial.fleetSnapshot(requireCompanyId(user));
+  /**
+   * The live fleet. A vehicle on the road whose GPS has been silent for a few minutes also gets
+   * an `estimated` position along its planned route (see dead-reckoning.ts); one that never
+   * reported at all is placed at that estimate rather than left off the map.
+   */
+  async fleet(user: AuthenticatedUser, now: Date = new Date()): Promise<FleetVehicle[]> {
+    const rows = await this.spatial.fleetSnapshot(requireCompanyId(user));
+    return rows.map((row) => toFleetVehicle(row, now)).filter((v): v is FleetVehicle => v !== null);
   }
 }
