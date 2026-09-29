@@ -84,7 +84,7 @@ test("screen param parsing", () => {
   assert.equal(L.screenFromParam("12"), null);
   assert.equal(L.screenFromParam(null), null);
   assert.equal(L.stepNumber("database-external"), 5);
-  assert.equal(L.stepNumber("install-error"), 10);
+  assert.equal(L.stepNumber("install-error"), 9);
 });
 
 test("step skipping: demo skips 06 and 08, upgrade skips 04–08", () => {
@@ -92,9 +92,9 @@ test("step skipping: demo skips 06 and 08, upgrade skips 04–08", () => {
   s.kind = "demo";
   assert.ok(L.isSkipped("organisation", s));
   assert.ok(L.isSkipped("admin", s));
-  assert.ok(!L.isSkipped("sources", s));
+  assert.ok(!L.isSkipped("database", s));
   const u = L.initialState("upgrade");
-  for (const step of ["type", "database", "organisation", "sources", "admin"]) assert.ok(L.isSkipped(step, u), step);
+  for (const step of ["type", "database", "organisation", "admin"]) assert.ok(L.isSkipped(step, u), step);
   assert.ok(!L.isSkipped("summary", u));
 });
 
@@ -102,13 +102,11 @@ test("navigation follows skips and the external database sub-screen", () => {
   const s = L.initialState("install");
   s.kind = "demo";
   s.dbMode = "embedded";
-  assert.equal(L.nextScreen("database", s), "sources");
-  assert.equal(L.nextScreen("sources", s), "summary");
-  assert.equal(L.prevScreen("summary", s), "sources");
-  assert.equal(L.prevScreen("sources", s), "database");
+  assert.equal(L.nextScreen("database", s), "summary");
+  assert.equal(L.prevScreen("summary", s), "database");
   s.dbMode = "external";
   assert.equal(L.nextScreen("database", s), "database-external");
-  assert.equal(L.prevScreen("sources", s), "database-external");
+  assert.equal(L.prevScreen("summary", s), "database-external");
   const u = L.initialState("upgrade");
   assert.equal(L.nextScreen("system", u), "summary");
   assert.equal(L.prevScreen("summary", u), "system");
@@ -161,19 +159,18 @@ test("buildPlan: production, embedded, optional keys omitted", () => {
   });
 });
 
-test("buildPlan: demo + external database + keys, no organisation/admin", () => {
+test("buildPlan: demo + external database, no organisation/admin, simulated vehicles", () => {
   const s = validProduction();
   s.kind = "demo";
   s.dbMode = "external";
   s.db = { host: " db.local ", port: "5433", database: "scip", user: "scip", password: "p w", ssl: true };
-  s.sources = { vehicles: "simulation", aisStreamKey: " abc ", openskyClientId: "", openskyClientSecret: "  ", tomtomKey: "tt" };
   s.org.sites.push({ name: "", city: "", lat: "", lon: "" });
   s.desktopShortcut = false;
   const plan = L.buildPlan(s);
   assert.deepEqual(plan, {
     kind: "demo",
     database: { mode: "external", host: "db.local", port: 5433, database: "scip", user: "scip", password: "p w", ssl: true },
-    sources: { vehicles: "simulation", aisStreamKey: "abc", tomtomKey: "tt" },
+    sources: { vehicles: "simulation" },
     desktopShortcut: false,
   });
 });
@@ -191,9 +188,10 @@ test("buildPlan: upgrade sends neutral defaults only", () => {
 
 test("the rail leaves out steps that do not apply and renumbers the rest", () => {
   const upgrade = { ...L.initialState("upgrade"), mode: "upgrade" };
-  assert.deepEqual(L.visibleRail(upgrade), L.RAIL.filter((id) => !["type", "database", "organisation", "sources", "admin"].includes(id)));
+  assert.deepEqual(L.visibleRail(upgrade), L.RAIL.filter((id) => !["type", "database", "organisation", "admin"].includes(id)));
   assert.equal(L.stepNumber("summary", upgrade), 4);
+  assert.equal(L.visibleRail(L.initialState("install")).length, 10);
   const demo = { ...L.initialState("install"), kind: "demo" };
   assert.equal(L.visibleRail(demo).length, L.RAIL.length - 2);
-  assert.equal(L.stepNumber("sources", demo), 6);
+  assert.equal(L.stepNumber("summary", demo), 6);
 });

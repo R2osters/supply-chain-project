@@ -19,7 +19,7 @@
   // ---------------------------------------------------------------------------------------------
 
   /** The 11 steps shown in the left rail, in order. */
-  const RAIL = ["welcome", "license", "system", "type", "database", "organisation", "sources", "admin", "summary", "install", "done"];
+  const RAIL = ["welcome", "license", "system", "type", "database", "organisation", "admin", "summary", "install", "done"];
 
   /** Every screen of the install flow. Sub-screens map to the rail step they belong to. */
   const SCREENS = {
@@ -30,7 +30,6 @@
     database: { rail: "database", code: "05" },
     "database-external": { rail: "database", code: "05b" },
     organisation: { rail: "organisation", code: "06" },
-    sources: { rail: "sources", code: "07" },
     admin: { rail: "admin", code: "08" },
     summary: { rail: "summary", code: "09" },
     install: { rail: "install", code: "10" },
@@ -39,7 +38,7 @@
   };
 
   /** Screens that collect the plan, in order (everything before the summary). */
-  const INPUT_SCREENS = ["welcome", "license", "system", "type", "database", "database-external", "organisation", "sources", "admin"];
+  const INPUT_SCREENS = ["welcome", "license", "system", "type", "database", "database-external", "organisation", "admin"];
 
   /** Maps a ?step= value ("3", "03", "5b", "05b", "10b" or a screen id) to a screen id. */
   function screenFromParam(param) {
@@ -72,7 +71,7 @@
    * Demo: the demo data brings its own organisation and accounts, so 06 and 08 are skipped.
    */
   function isSkipped(railStep, state) {
-    if (state.mode === "upgrade" && ["type", "database", "organisation", "sources", "admin"].includes(railStep)) return true;
+    if (state.mode === "upgrade" && ["type", "database", "organisation", "admin"].includes(railStep)) return true;
     if (state.mode !== "upgrade" && state.kind === "demo" && ["organisation", "admin"].includes(railStep)) return true;
     return false;
   }
@@ -83,7 +82,7 @@
   }
 
   /** Linear order used for Next/Back; error and done screens are reached by events only. */
-  const FLOW = ["welcome", "license", "system", "type", "database", "database-external", "organisation", "sources", "admin", "summary", "install"];
+  const FLOW = ["welcome", "license", "system", "type", "database", "database-external", "organisation", "admin", "summary", "install"];
 
   function nextScreen(screen, state) {
     const i = FLOW.indexOf(screen);
@@ -266,8 +265,6 @@
         return dbFormValid(state.db) && !!state.dbTest && state.dbTest.key === dbTestKey(state.db) && dbTestPasses(state.dbTest.result);
       case "organisation":
         return orgValid(state.org);
-      case "sources":
-        return state.sources.vehicles === "live" || state.sources.vehicles === "simulation";
       case "admin":
         return adminValid(state.admin);
       default:
@@ -332,12 +329,10 @@
       };
     }
 
-    const src = state.sources;
-    plan.sources = { vehicles: upgrade ? "live" : src.vehicles };
-    if (!upgrade) {
-      const keys = { aisStreamKey: src.aisStreamKey, openskyClientId: src.openskyClientId, openskyClientSecret: src.openskyClientSecret, tomtomKey: src.tomtomKey };
-      for (const [k, v] of Object.entries(keys)) if (optional(v)) plan.sources[k] = optional(v);
-    }
+    // Sources are not asked for: SCIP ships ready (keyless feeds, plus any keys bundled in the
+    // build). Vehicles follow the install type: a demo drives its fleet with the simulator, a real
+    // install waits for its own trackers and drivers' phones. Both can be changed in Settings.
+    plan.sources = { vehicles: !upgrade && kind === "demo" ? "simulation" : "live" };
 
     if (!upgrade && kind === "production") {
       const a = state.admin;
@@ -359,7 +354,6 @@
       db: { host: "localhost", port: "5432", database: "scip", user: "postgres", password: "", ssl: false },
       dbTest: null,
       org: { name: "", country: "", currency: "", timezone: "", sites: [{ name: "", city: "", lat: "", lon: "" }] },
-      sources: { vehicles: "live", aisStreamKey: "", openskyClientId: "", openskyClientSecret: "", tomtomKey: "" },
       admin: { firstName: "", lastName: "", email: "", password: "", confirm: "" },
       desktopShortcut: true,
     };

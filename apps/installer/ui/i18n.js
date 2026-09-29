@@ -187,6 +187,10 @@
       "sum.sites": "{n} site(s)",
       "sum.noSites": "Aucun site",
       "sum.keys": "Clés",
+      "sum.sources": "Sources de données",
+      "sum.sourcesReady": "Prêtes : navires en direct (mer Baltique, ou le monde avec une clé intégrée), avions OpenSky, catastrophes GDACS et NASA, météo, caméras publiques.",
+      "sum.vehiclesSim": "Véhicules : simulation de démonstration.",
+      "sum.vehiclesLive": "Véhicules : vos balises GPS et les téléphones des chauffeurs.",
       "sum.anonymous": "OpenSky anonyme",
       "sum.adminLine": "{first} {last} · {email}",
 
@@ -436,6 +440,10 @@
       "sum.sites": "{n} site(s)",
       "sum.noSites": "No sites",
       "sum.keys": "Keys",
+      "sum.sources": "Data sources",
+      "sum.sourcesReady": "Ready: live ships (Baltic Sea, or worldwide with a bundled key), OpenSky aircraft, GDACS and NASA disasters, weather, public cameras.",
+      "sum.vehiclesSim": "Vehicles: demo simulation.",
+      "sum.vehiclesLive": "Vehicles: your GPS trackers and drivers' phones.",
       "sum.anonymous": "OpenSky anonymous",
       "sum.adminLine": "{first} {last} · {email}",
 

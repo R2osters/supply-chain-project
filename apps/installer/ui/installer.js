@@ -623,43 +623,6 @@
       },
     },
 
-    sources: {
-      render() {
-        const v = S.sources.vehicles;
-        return `${head("src.title", esc(t("src.lead")))}
-          <div class="section">
-            <h2>${esc(t("src.vehicles"))}</h2>
-            ${radioGroup({
-              id: "veh",
-              bind: "sources.vehicles",
-              labelKey: "src.vehicles",
-              kind: "pill",
-              options: [
-                { value: "live", icon: "radio", title: t("src.live") },
-                { value: "simulation", icon: "monitor-play", title: t("src.simulation") },
-              ],
-            })}
-            <span class="help">${esc(t(v === "live" ? "src.liveDesc" : "src.simulationDesc"))}</span>
-          </div>
-          <div class="section">
-            <h2>${esc(t("src.ships"))}</h2>
-            ${field("src-ais", "sources.aisStreamKey", "src.aisKey", { type: "password", optional: true, help: esc(t("src.aisHint")).replace("aisstream.io", '<a href="https://aisstream.io" data-external>aisstream.io</a>') })}
-          </div>
-          <div class="section">
-            <h2>${esc(t("src.planes"))}</h2>
-            <div class="grid two">
-              ${field("src-os-id", "sources.openskyClientId", "src.openskyId", { optional: true })}
-              ${field("src-os-secret", "sources.openskyClientSecret", "src.openskySecret", { type: "password", optional: true })}
-            </div>
-            <span class="help">${esc(t("src.openskyHint"))}</span>
-          </div>
-          <div class="section">
-            <h2>${esc(t("src.traffic"))}</h2>
-            ${field("src-tomtom", "sources.tomtomKey", "src.tomtomKey", { type: "password", optional: true, help: esc(t("src.tomtomHint")) })}
-          </div>`;
-      },
-    },
-
     admin: {
       render() {
         return `${head("admin.title", esc(t("admin.lead")))}
@@ -715,14 +678,12 @@
               )
             );
           }
-          const src = S.sources;
-          const keys = [src.aisStreamKey.trim() && "AISStream", src.openskyClientId.trim() && "OpenSky", src.tomtomKey.trim() && "TomTom"].filter(Boolean);
+          // No step for sources: they come ready. Say so, so nobody wonders where they went.
           blocks.push(
             block(
-              t("step.sources"),
-              `<span>${esc(t(src.vehicles === "live" ? "src.live" : "src.simulation"))}</span>
-               <span class="sub">${esc(t("sum.keys") + colon())}${esc(keys.length ? keys.join(", ") : t("common.none"))}${src.openskyClientId.trim() ? "" : " · " + esc(t("sum.anonymous"))}</span>`,
-              "sources"
+              t("sum.sources"),
+              `<span>${esc(t("sum.sourcesReady"))}</span>
+               <span class="sub">${esc(t(S.kind === "demo" ? "sum.vehiclesSim" : "sum.vehiclesLive"))}</span>`
             )
           );
           if (S.kind === "production") {
@@ -1163,9 +1124,6 @@
       const value = el.dataset.value;
       if (getPath(S, bind) === value) return;
       setPath(S, bind, value);
-      // A new installation type implies the matching vehicle source, unless the user already chose one.
-      if (bind === "sources.vehicles") ui.vehiclesChosen = true;
-      if (bind === "kind" && !ui.vehiclesChosen) S.sources.vehicles = value === "demo" ? "simulation" : "live";
       rerender();
     },
     "set-lang": (el) => setLang(el.dataset.value),
