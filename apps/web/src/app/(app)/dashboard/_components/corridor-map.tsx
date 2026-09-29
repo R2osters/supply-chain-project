@@ -117,7 +117,8 @@ export function CorridorMap({
   };
 
   const applyFix = (vehicle: FleetVehicle, marker: Marker): void => {
-    const fixTime = Date.parse(vehicle.lastPositionAt);
+    // An estimated position has no fix time; "now" lets it move to each new estimate.
+    const fixTime = vehicle.lastPositionAt ? Date.parse(vehicle.lastPositionAt) : Date.now();
     const previous = motions.current.get(vehicle.vehicleId);
     if (previous && previous.fixTime === fixTime) return;
     const reduced =

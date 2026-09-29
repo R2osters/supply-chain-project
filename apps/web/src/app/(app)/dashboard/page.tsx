@@ -255,7 +255,7 @@ export default function DashboardPage() {
 
   const vehicles = fleet.data;
   const latestFix = useMemo(
-    () => (vehicles ?? []).reduce<number>((max, vehicle) => Math.max(max, Date.parse(vehicle.lastPositionAt) || 0), 0),
+    () => (vehicles ?? []).reduce<number>((max, vehicle) => Math.max(max, Date.parse(vehicle.lastPositionAt ?? '') || 0), 0),
     [vehicles],
   );
   const fixIsStale = latestFix > 0 && Date.now() - latestFix > STALE_FIX_MS;

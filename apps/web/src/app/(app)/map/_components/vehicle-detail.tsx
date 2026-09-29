@@ -4,12 +4,13 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Cctv, CloudSun, Package, X } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
-import { api, type FleetVehicle } from '@/lib/api';
+import { api, type FleetVehicle, type VehicleEstimate } from '@/lib/api';
 import type { Camera, CamerasResponse, PointWeather } from '@/lib/intel';
 import { useFormat, useI18n } from '@/lib/i18n';
 import { Button, Chip, DemoTag, Facts, Provenance, SeverityIcon, statusTone } from '@/components/ui';
 import { CameraViewer } from '@/components/intel/camera-viewer';
 import { useStatusLabel } from '../../shipments/detail/_components/labels';
+import { describeEstimate } from './estimates';
 import { vehicleState } from './vehicle-marker';
 import { shipmentHref } from '@/lib/routes';
 
@@ -21,9 +22,10 @@ export function fixAgeMinutes(iso: string): number {
 }
 
 /** Charte provenance for one vehicle's last fix: stale beats live, live beats polling. */
-export function FixProvenance({ at, live }: { at: string; live: boolean }) {
+export function FixProvenance({ at, live }: { at: string | null; live: boolean }) {
   const { t } = useI18n();
   const fmt = useFormat();
+  if (at === null) return <Provenance kind="stale" label={t('map.est.neverReported')} />;
   if (fixAgeMinutes(at) > STALE_AFTER_MIN) {
     return <Provenance kind="stale" label={t('map.v3.staleSince', { age: fmt.relative(at) })} />;
   }
@@ -91,6 +93,8 @@ export function VehicleDetail({
 
       <FixProvenance at={vehicle.lastPositionAt} live={live} />
 
+      {vehicle.estimated && <EstimateNote vehicle={vehicle} estimate={vehicle.estimated} />}
+
       <Facts
         items={[
           [t('map.v3.driver'), vehicle.driverName ?? '—'],
@@ -101,7 +105,12 @@ export function VehicleDetail({
               {vehicle.headingDegrees === null ? '—' : `${fmt.num(vehicle.headingDegrees, 0)}°`}
             </span>,
           ],
-          [t('map.v3.lastFix'), <span key="l" className="t-data">{fmt.relative(vehicle.lastPositionAt)}</span>],
+          [
+            t('map.v3.lastFix'),
+            <span key="l" className="t-data">
+              {vehicle.lastPositionAt ? fmt.relative(vehicle.lastPositionAt) : t('map.est.never')}
+            </span>,
+          ],
           [
             t('map.v3.position'),
             <span key="p" className="t-data">
@@ -210,6 +219,32 @@ export function VehicleDetail({
           {t('map.v3.simulatedNote')}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * The dead-reckoning estimate in words: how long the GPS has been quiet, where the vehicle
+ * probably is, and how sure that is. Deliberately plain: it is a guess and must read as one.
+ */
+function EstimateNote({ vehicle, estimate }: { vehicle: FleetVehicle; estimate: VehicleEstimate }) {
+  const { t } = useI18n();
+  const { radius, progress } = describeEstimate(estimate);
+  const silence =
+    vehicle.gpsSilentMinutes === null || vehicle.gpsSilentMinutes === undefined
+      ? t('map.est.neverReported')
+      : t('map.est.silentFor', { minutes: String(vehicle.gpsSilentMinutes) });
+  return (
+    <div className="flex flex-col gap-1 rounded-[var(--radius-md)] border border-dashed border-[var(--color-line)] px-3 py-2.5">
+      <span className="t-label">{t('map.est.title')}</span>
+      <span className="text-[12.5px] text-[var(--color-ink)]">
+        {estimate.atDestination
+          ? t('map.est.atDestination')
+          : t('map.est.summary', { radius, progress })}
+      </span>
+      <span className="text-[12px] text-[var(--color-muted)]">
+        {silence} · {t('map.est.assumption', { speed: String(Math.round(estimate.assumedSpeedKmh)) })}
+      </span>
     </div>
   );
 }

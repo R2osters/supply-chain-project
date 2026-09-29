@@ -212,7 +212,8 @@ export interface FleetVehicle {
   longitude: number;
   speedKmh: number | null;
   headingDegrees: number | null;
-  lastPositionAt: string;
+  /** Null for a vehicle on the road that never reported: it is placed at its estimate. */
+  lastPositionAt: string | null;
   shipmentId: string | null;
   trackingNumber: string | null;
   shipmentStatus: string | null;
@@ -221,6 +222,24 @@ export interface FleetVehicle {
   delayProbability: number | null;
   driverName: string | null;
   isDemoData: boolean;
+  /** `estimated` when latitude/longitude are the estimate rather than a GPS fix. */
+  positionSource?: 'gps' | 'estimated';
+  /** Minutes since the last fix; null if the vehicle never reported. */
+  gpsSilentMinutes?: number | null;
+  /** Probable position along the planned route while the GPS is silent (5 min or more). */
+  estimated?: VehicleEstimate | null;
+}
+
+export interface VehicleEstimate {
+  latitude: number;
+  longitude: number;
+  radiusKm: number;
+  /** Share of the planned route covered, 0 to 1. */
+  progress: number;
+  basis: 'last-fix' | 'departure';
+  minutesSinceBasis: number;
+  assumedSpeedKmh: number;
+  atDestination: boolean;
 }
 
 export interface ShipmentRow {

@@ -8,6 +8,15 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { api, apiUrl, getAccessToken, isApiUrl, type FleetVehicle } from '@/lib/api';
+import {
+  ESTIMATE_AREA,
+  ESTIMATE_LINK,
+  ESTIMATE_OUTLINE,
+  ESTIMATE_POINT,
+  ESTIMATE_SOURCE,
+  describeEstimate,
+  estimatesGeoJson,
+} from './_components/estimates';
 import type { TrafficStatus } from '@/lib/intel';
 import { useFormat, useI18n, type TranslationKey } from '@/lib/i18n';
 import { basemapStyle, useBasemapTheme } from '@/lib/map-style';
@@ -227,6 +236,43 @@ function LiveMap() {
       });
 
       const colours = paletteRef.current;
+      // Where silent vehicles probably are (dead reckoning along the planned route): dashed,
+      // translucent and hollow, so a guess never passes for a GPS fix.
+      instance.addSource(ESTIMATE_SOURCE, { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+      instance.addLayer({
+        id: ESTIMATE_AREA,
+        type: 'fill',
+        source: ESTIMATE_SOURCE,
+        filter: ['==', ['get', 'part'], 'area'],
+        paint: { 'fill-color': colours.ink, 'fill-opacity': ['case', ['get', 'selected'], 0.12, 0.06] },
+      });
+      instance.addLayer({
+        id: ESTIMATE_OUTLINE,
+        type: 'line',
+        source: ESTIMATE_SOURCE,
+        filter: ['==', ['get', 'part'], 'area'],
+        paint: { 'line-color': colours.muted, 'line-width': 1.2, 'line-dasharray': [2, 2] },
+      });
+      instance.addLayer({
+        id: ESTIMATE_LINK,
+        type: 'line',
+        source: ESTIMATE_SOURCE,
+        filter: ['==', ['get', 'part'], 'link'],
+        paint: { 'line-color': colours.muted, 'line-width': 1.4, 'line-dasharray': [1, 2] },
+      });
+      instance.addLayer({
+        id: ESTIMATE_POINT,
+        type: 'circle',
+        source: ESTIMATE_SOURCE,
+        filter: ['==', ['get', 'part'], 'point'],
+        paint: {
+          'circle-radius': 5,
+          'circle-color': colours.surface2,
+          'circle-stroke-color': colours.ink,
+          'circle-stroke-width': 1.5,
+        },
+      });
+
       instance.addSource(REPLAY_TRACK, { type: 'geojson', data: emptyLine() });
       instance.addLayer({
         id: REPLAY_TRACK,
@@ -401,7 +447,7 @@ function LiveMap() {
           .addTo(instance);
         markers.current.set(vehicle.vehicleId, marker);
       }
-      applyFix(vehicle.vehicleId, { ...vehicle, recordedAt: vehicle.lastPositionAt });
+      applyFix(vehicle.vehicleId, { ...vehicle, recordedAt: vehicle.lastPositionAt ?? new Date().toISOString() });
     }
 
     // Drop markers for vehicles that stopped reporting, or the map slowly fills with ghosts.
@@ -416,6 +462,13 @@ function LiveMap() {
     // applyFix only touches refs; listing it would re-run this effect on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, fleet.data]);
+
+  // Estimated positions of silent vehicles, redrawn with each fleet poll and on selection.
+  useEffect(() => {
+    if (!ready || !map.current) return;
+    const source = map.current.getSource(ESTIMATE_SOURCE) as maplibregl.GeoJSONSource | undefined;
+    source?.setData(estimatesGeoJson(fleet.data ?? [], selectedId));
+  }, [ready, fleet.data, selectedId]);
 
   // State colour, selection ring and filter visibility — cheap for a fleet of dozens.
   useEffect(() => {
@@ -756,6 +809,11 @@ function FleetList({
                       {vehicle.destinationName ?? t('map.v3.idle')}
                     </span>
                     <FixProvenance at={vehicle.lastPositionAt} live={live} />
+                    {vehicle.estimated && (
+                      <span className="text-[11.5px] text-[var(--color-muted)]">
+                        {t('map.est.short', { radius: describeEstimate(vehicle.estimated).radius })}
+                      </span>
+                    )}
                   </span>
                   <span className="t-data shrink-0 text-[12px] text-[var(--color-muted)]">
                     {fmt.num(vehicle.speedKmh, 0)} km/h
