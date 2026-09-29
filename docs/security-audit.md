@@ -333,4 +333,23 @@ Ces points ne sont pas des bugs mais des conséquences de l'architecture « tout
 | Dép. | Faible | `nodemailer`/`starlette`/`protobuf` (exécution limitée) | Monter les versions ; mail off par défaut, IA en localhost |
 | F-08 | Info | Installeur non signé | Certificat de signature de code avant diffusion |
 
+## 8. Suivi des correctifs (29 septembre 2026)
+
+| ID | Statut | Ce qui a été fait | Vérification |
+|---|---|---|---|
+| F-01 | **Corrigé** | API et passerelle GT06 liées à `127.0.0.1` par défaut. L'accès au réseau local s'active dans Réglages → Réseau local (effectif au redémarrage) ; tant que les comptes démo gardent le mot de passe public, l'activation exige une confirmation explicite (sinon 409). L'API temporaire de l'installeur n'est jamais exposée. | `netstat` : écoute sur `127.0.0.1:3101` et `127.0.0.1:15023` ; `PUT /settings/network {lanAccess:true}` en démo → 409 ; tests unitaires API et Rust |
+| F-02 | **Corrigé (opt-in)** | Voir F-01 : plus d'exposition par défaut. HTTPS local reste à faire quand le réseau est activé. | idem |
+| F-03 | Accepté | Limite du protocole GT06 ; la passerelle n'écoute plus le réseau tant que l'accès local n'est pas activé. | — |
+| F-04 | **Corrigé** | Corps limité à 2 Mo (70 Mo sur `/deliveries` pour les photos) ; corps trop grand → 413, JSON invalide et entrée refusée par PostgreSQL → 400. | `probe.mjs` : octet nul → pas de 500 ; 2 Mo → 413 ; tests du filtre |
+| F-05 | **Corrigé** | Vérification des jetons limitée à `HS256` (HTTP et socket de suivi). | JWT falsifiés → 401 (probe) |
+| F-06 | Accepté | Choix documenté (jeton d'accès en mémoire, jeton de rafraîchissement révocable). | — |
+| Dép. maplibre-gl | Reporté | Correctif uniquement en v6 (rupture d'API sur 8 composants de carte). Faille non atteignable : SCIP ne passe jamais de HTML à MapLibre. Migration notée dans `ROADMAP-presentation.md`. | revue du code : aucun `Popup`/`setHTML` |
+| Dép. nodemailer | **Corrigé** | 6.10.1 → 10.0.12. | suite API verte |
+| Dép. starlette/protobuf | Reporté | Service IA en `127.0.0.1` avec jeton ; montée de version à faire avec le reste des dépendances IA. | — |
+| F-08 | Accepté pour la présentation | Certificat de signature de code avant toute diffusion publique. | — |
+
+Nouvelle passe de `scripts/security/probe.mjs` après correctifs : **12 contrôles réussis, 0 échec**
+(88 routes protégées, JWT falsifiés, CORS, force brute, `/files`, injections, corps trop grand,
+en-têtes, inscription fermée, démo refusée, socket sans jeton, chauffeur sur routes admin).
+
 *Fin de l'audit.*

@@ -35,7 +35,7 @@ pied, décompresse en flux vers le dossier d'installation en rapportant la progr
 | 05 | Base de données | **Intégrée** (recommandé : PostgreSQL 16 + PostGIS installés avec SCIP) · **Existante** | un choix |
 | 05b | Base existante | hôte, port, base, utilisateur, mot de passe, SSL ; « Tester la connexion » : connexion, version ≥ 14, extension PostGIS disponible, droits de création | test réussi |
 | 06 | Organisation | nom, pays, devise (déduite du pays, modifiable), fuseau, sites (entrepôts : nom, ville, latitude/longitude facultatives) | nom + pays (sauté en démo) |
-| 07 | Sources | positions des véhicules : **Boîtiers et téléphones (live)** / **Simulation (démo)** ; navires : clé AISStream (facultative) ; avions : OpenSky anonyme ou identifiants ; trafic : clé TomTom (facultative) | — |
+| ~~07~~ | ~~Sources~~ | **Retiré** : SCIP est livré avec ses sources prêtes (navires en mer Baltique, avions, catastrophes, météo, caméras sans clé ; clés éventuelles intégrées au build via `keys.local.json`). Les véhicules suivent le type : simulation pour une démo, balises et téléphones sinon. Le récapitulatif le rappelle. | — |
 | 08 | Administrateur | prénom, nom, e-mail, mot de passe (règles cochées en direct : 12 caractères, 3 types parmi minuscules/majuscules/chiffres/symboles), confirmation | valide (sauté en démo) |
 | 09 | Récapitulatif | un bloc par étape avec « Modifier » | — |
 | 10 | Installation | barre de progression, étapes, journal dépliable | — |
@@ -68,7 +68,7 @@ interface InstallPlan {
   kind: 'production' | 'demo';
   database: { mode: 'embedded' } | { mode: 'external'; host; port; database; user; password; ssl };
   organisation?: { name; country; currency; timezone; sites: Array<{ name; city; latitude?; longitude? }> };
-  sources: { vehicles: 'live' | 'simulation'; aisStreamKey?; openskyClientId?; openskyClientSecret?; tomtomKey? };
+  sources: { vehicles: 'live' | 'simulation' }; // les clés restent acceptées par --provision, l'écran ne les demande plus
   admin?: { firstName; lastName; email; password };
   desktopShortcut: boolean;
 }

@@ -28,8 +28,12 @@ PostGIS, API and AI engine, and stores its data in `%LOCALAPPDATA%\com.scip.desk
 On first launch, create your company and administrator account, or choose
 **Explore with demo data** (demo accounts: `admin@demo-scip.com` / `DemoPassw0rd!2026`).
 
-Drivers' phones on the same network open `http://<this PC>:3001/drive`. GPS trackers (GT06)
-point at this PC on TCP port 5023. See [DEPLOYMENT.md](DEPLOYMENT.md) for the network,
+Live ships (Baltic Sea), aircraft, disasters, weather and public cameras work with no key; the
+optional keys (worldwide ships, road traffic, satellite fires) go in Réglages → Sources de données,
+or into your own build via `apps/desktop/keys.local.json`.
+
+SCIP answers this PC only by default. To connect drivers' phones (`http://<this PC>:3001/drive`)
+or GT06 GPS trackers (TCP port 5023), enable Réglages → Réseau local and restart SCIP. See [DEPLOYMENT.md](DEPLOYMENT.md) for the network,
 backup and build details, and [docs/desktop-architecture.md](docs/desktop-architecture.md)
 for how the pieces fit.
 

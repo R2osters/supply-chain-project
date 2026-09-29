@@ -52,13 +52,18 @@ distributing outside a test group, buy a code-signing certificate (OV or EV) and
 
 | Port | Who uses it | Bound to |
 |---|---|---|
-| 3001 (random if taken) | the app, and drivers' phones at `http://<PC>:3001/drive` | all interfaces |
-| 5023/TCP | GT06 GPS trackers | all interfaces |
+| 3001 (random if taken) | the app, and drivers' phones at `http://<PC>:3001/drive` | 127.0.0.1; all interfaces once local network access is enabled |
+| 5023/TCP | GT06 GPS trackers | same as the API |
 | random | PostgreSQL, AI engine | 127.0.0.1 only |
 
-On first launch Windows asks whether "Node.js JavaScript Runtime" may accept connections (it
-is the API process). Allow it on private networks so phones and trackers can connect; decline
-it to keep SCIP reachable from this PC only.
+**Local network access is off by default**: a fresh install is reachable from this PC only. An
+administrator enables it in **Réglages → Réseau local** (drivers' phones, GPS trackers); it
+applies after SCIP restarts, and the panel lists this PC's addresses to give the phones and the
+trackers. While the demo accounts keep their published password, enabling it requires an explicit
+confirmation: anyone on the same Wi-Fi could otherwise sign in as the demo administrator.
+
+When it is enabled, Windows asks on the next start whether "Node.js JavaScript Runtime" may accept
+connections (it is the API process); allow it on private networks.
 
 - **Trackers outside the office network:** forward TCP 5023 on the router to this PC.
 - **PC turned off:** positions sent by trackers are lost.
