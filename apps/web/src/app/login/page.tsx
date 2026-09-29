@@ -39,9 +39,11 @@ export default function LoginPage() {
   const { theme, toggleTheme } = useTheme();
 
   const setup = useSetupStatus();
-  // Without the status (server build, older API) keep the historical behaviour: demo accounts on.
   const needsSetup = setup.data?.needsSetup === true;
-  const showDemo = setup.data ? setup.data.demoAccounts : true;
+  // Off until the status answers: assuming "on" while it loads pre-filled a real install's form
+  // with demo credentials that do not exist there. Without the endpoint (server build, older API)
+  // the request fails and the historical behaviour applies: demo accounts on.
+  const showDemo = setup.data ? setup.data.demoAccounts : setup.isError;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -158,7 +160,9 @@ export default function LoginPage() {
           <>
           <header className="flex flex-col gap-1">
             <h2 className="t-h2 m-0">{t('login.signIn')}</h2>
-            <p className="m-0 text-[13px] text-[var(--color-muted)]">{t('login.v3.subtitle')}</p>
+            <p className="m-0 text-[13px] text-[var(--color-muted)]">
+              {t(showDemo ? 'login.v3.subtitle' : 'login.v3.subtitleNoDemo')}
+            </p>
           </header>
 
           <form onSubmit={submit} className="flex flex-col gap-4">

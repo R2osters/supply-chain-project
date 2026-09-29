@@ -729,6 +729,7 @@ const en = {
   'login.v3.toDark': 'Switch to dark theme',
   'login.v3.kicker': 'Track · Optimise · Network',
   'login.v3.subtitle': 'Use your operator account, or pick a demo role below.',
+  'login.v3.subtitleNoDemo': 'Use the account created at installation or given by your administrator.',
   /* @@v3:dashboard — keys added by the v3 redesign of this page go below */
   'dash.v3.kicker': 'TRACK · Control',
   'dash.v3.titleLoading': 'Reading the network…',
@@ -2508,6 +2509,7 @@ const fr: Record<TranslationKey, string> = {
   'login.v3.toDark': 'Passer au thème sombre',
   'login.v3.kicker': 'Track · Optimise · Réseau',
   'login.v3.subtitle': 'Utilisez votre compte opérateur, ou choisissez un rôle de démonstration ci-dessous.',
+  'login.v3.subtitleNoDemo': 'Utilisez le compte créé à l’installation ou fourni par votre administrateur.',
   /* @@v3:dashboard — keys added by the v3 redesign of this page go below */
   'dash.v3.kicker': 'TRACK · Control',
   'dash.v3.titleLoading': 'Lecture du réseau…',
