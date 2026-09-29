@@ -1,9 +1,12 @@
-# SCIP full stack.
-#   docker compose up -d postgres redis minio mailhog   -> infra only (recommended for dev)
-#   docker compose --profile full up -d --build          -> infra + api + ai + web
+# Development database only.
+#   docker compose up -d postgres
 #
-# Host ports are deliberately non-default (5433 / 6380) so this stack does not
-# collide with a Postgres or Redis already running on the machine.
+# SCIP ships as a Windows desktop app that bundles its own PostgreSQL/PostGIS (see
+# docs/desktop-architecture.md). This container exists so `npm run dev:api` and the e2e tests
+# have the same database engine without building the desktop app.
+#
+# Host port 5433 is deliberately non-default so it does not collide with a Postgres already
+# running on the machine.
 
 services:
   postgres:
@@ -24,110 +27,5 @@ services:
       timeout: 5s
       retries: 20
 
-  redis:
-    image: redis:7-alpine
-    container_name: scip-redis
-    restart: unless-stopped
-    command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      - "${REDIS_PORT:-6380}:6379"
-    volumes:
-      - scip_redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  minio:
-    image: minio/minio:latest
-    container_name: scip-minio
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-scipminio}
-      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-scipminio_dev_password}
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - scip_miniodata:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: scip-mailhog
-    restart: unless-stopped
-    ports:
-      - "1025:1025"
-      - "8025:8025"
-
-  ai:
-    profiles: ["full"]
-    build:
-      context: ./services/ai
-    container_name: scip-ai
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-scip}:${POSTGRES_PASSWORD:-scip_dev_password_change_me}@postgres:5432/${POSTGRES_DB:-scip}
-      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:-dev_only_ai_shared_token_replace_me}
-      MODELS_STORE: /app/models_store
-    ports:
-      - "8000:8000"
-    volumes:
-      - scip_models:/app/models_store
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  api:
-    profiles: ["full"]
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    container_name: scip-api
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-scip}:${POSTGRES_PASSWORD:-scip_dev_password_change_me}@postgres:5432/${POSTGRES_DB:-scip}?schema=public
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      AI_SERVICE_URL: http://ai:8000
-      S3_ENDPOINT: http://minio:9000
-      SMTP_HOST: mailhog
-      SMTP_PORT: 1025
-      API_PORT: 3001
-    env_file:
-      - .env
-    ports:
-      - "3001:3001"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  web:
-    profiles: ["full"]
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
-        NEXT_PUBLIC_WS_URL: http://localhost:3001
-    container_name: scip-web
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
-    depends_on:
-      - api
-
 volumes:
   scip_pgdata:
-  scip_redisdata:
-  scip_miniodata:
-  scip_models:

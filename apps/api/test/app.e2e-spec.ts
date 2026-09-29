@@ -6,7 +6,7 @@
  * state machine, concurrent stock decrements — are properties of the *system*, and every one of
  * them would pass trivially against a mock.
  *
- *   docker compose up -d postgres redis
+ *   docker compose up -d postgres
  *   npm run db:migrate:deploy --workspace @scip/api
  *   npm run db:seed --workspace @scip/api
  *   npm run test:e2e --workspace @scip/api

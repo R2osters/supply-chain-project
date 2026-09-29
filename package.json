@@ -2,7 +2,7 @@
   "name": "scip",
   "version": "0.1.0",
   "private": true,
-  "description": "SCIP — Supply Chain Intelligence Platform (tracking + optimization)",
+  "description": "SCIP — Supply Chain Intelligence Platform, Windows desktop app (tracking + optimization)",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -15,10 +15,12 @@
     "test:e2e": "npm run test:e2e --workspace @scip/api",
     "db:migrate": "npm run db:migrate --workspace @scip/api",
     "db:seed": "npm run db:seed --workspace @scip/api",
-    "infra:up": "docker compose up -d postgres redis minio mailhog",
-    "infra:down": "docker compose down",
-    "stack:up": "docker compose up -d --build",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "desktop:stage": "npm run stage --workspace @scip/desktop",
+    "desktop:build": "npm run build --workspace @scip/desktop",
+    "desktop:test": "npm run test --workspace @scip/desktop"
   },
   "engines": {
     "node": ">=20"
