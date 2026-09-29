@@ -48,23 +48,32 @@ apps/
 services/ai/  FastAPI, plus un spec PyInstaller
 ```
 
-## Lots de travail (une PR par lot)
+## Lots de travail
 
-1. `apps/web` : export statique et URL d'API définie à l'exécution. Démarre après la fin du design.
-2. `apps/api` : adaptateurs stockage/mail et suppression de Redis.
-3. `apps/desktop` : squelette Tauri, WebView avec l'export statique.
-4. Superviseur : Postgres portable, migrations, sidecar API.
-5. Sidecar IA (PyInstaller) et mesure de sa taille.
-6. Assistant de premier lancement, sauvegarde/restauration.
-7. Installeur NSIS, signature, auto-update, CI GitHub Actions qui produit le `.exe`.
-8. Nettoyage : suppression de Docker, Redis et MinIO, puis mise à jour du README et de `DEPLOYMENT.md`.
+| Lot | Contenu | État |
+|---|---|---|
+| 1 | `apps/web` : export statique, `shipments/detail?id=`, URL d'API à l'exécution | fait |
+| 2 | `apps/api` : stockage fichiers local (liens signés), SMTP facultatif, Redis retiré | fait |
+| 3 | `apps/desktop` : Tauri 2, splash à la charte v1.0, passage de relais vers l'interface | fait |
+| 4 | Superviseur : Postgres portable, migrations, API ; politique de relance ; Job Object | fait |
+| 5 | Sidecar IA PyInstaller (~535 Mo), facultatif au démarrage | fait |
+| 6 | Premier lancement : créer l'entreprise ou charger la démo ; inscription fermée ensuite | fait |
+| 7 | Installeur NSIS, CI GitHub Actions | fait ; signature et mise à jour automatique à faire |
+| 8 | Docker réduit au Postgres de développement, README et `DEPLOYMENT.md` | fait |
+
+Reste à faire : certificat de signature de code, mise à jour automatique (plugin updater Tauri +
+hébergement des versions), HTTPS sur le réseau local pour le GPS de la PWA chauffeur, sauvegarde
+et restauration depuis l'interface.
 
 ## Tests
 
-- Unitaires Rust : choix des ports, séquence de démarrage (processus simulés), politique de relance.
-- Unitaires API : adaptateur de stockage fichiers.
-- Intégration : l'API démarre sur un Postgres portable et les migrations passent.
-- E2E (WebDriver Tauri) : installation, premier lancement, connexion, création d'une expédition.
+- Unitaires Rust (`npm run desktop:test`) : ports, secrets, chemins, spécifications des services,
+  séquence de démarrage avec processus simulés, politique de relance, service facultatif dégradé.
+- Unitaires API : liens signés du stockage, service de premier lancement.
+- Unitaires web : résolution de l'URL d'API à l'exécution.
+- Vérifié à la main sur l'exécutable : premier lancement (initdb, PostGIS, migrations), chargement
+  de la démo, connexion, détail d'expédition, prédiction IA, second lancement, arrêt propre.
+- Pas encore automatisé : E2E sur l'exécutable (WebDriver Tauri).
 
 ## Réseau (GPS et app chauffeur)
 
