@@ -1,0 +1,44 @@
+<!doctype html>
+<!-- Installer sidebar (welcome and finish pages), rendered to sidebar.bmp by scripts/render-installer-art.mjs.
+     Drawn at 2x (328x628) of MUI's 164x314 so it stays sharp on 150-200 % displays.
+     SCIP charter v1.0: ink panel, one live-green mark, IBM Plex, no gradient. -->
+<html>
+<head>
+<meta charset="utf-8" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;600&display=block" rel="stylesheet" />
+<style>
+  html, body { margin: 0; width: 328px; height: 628px; overflow: hidden; background: #141516; }
+  body { font-family: 'IBM Plex Sans', sans-serif; color: #ececec; position: relative; }
+  .route { position: absolute; inset: 0; }
+  .brand { position: absolute; left: 32px; top: 40px; display: flex; align-items: center; gap: 14px; }
+  .brand span { font-weight: 600; font-size: 34px; letter-spacing: 0.08em; }
+  .kicker { position: absolute; left: 32px; top: 118px; font-family: 'IBM Plex Mono', monospace; font-weight: 500;
+            font-size: 13px; letter-spacing: 0.14em; color: #80858a; }
+  .tagline { position: absolute; left: 32px; right: 28px; bottom: 76px; font-size: 25px; line-height: 1.18;
+             letter-spacing: -0.01em; }
+  .foot { position: absolute; left: 32px; bottom: 36px; font-family: 'IBM Plex Mono', monospace; font-weight: 500;
+          font-size: 12px; letter-spacing: 0.12em; color: #80858a; }
+</style>
+</head>
+<body>
+  <!-- A planned corridor with three fixes and one estimated leg: what the product does, drawn quietly. -->
+  <svg class="route" viewBox="0 0 328 628" aria-hidden="true">
+    <path d="M44 420 C 110 380, 120 300, 190 286 S 280 230, 292 176" fill="none" stroke="#2c2e31" stroke-width="3" stroke-linecap="round" />
+    <path d="M292 176 L 300 150" fill="none" stroke="#2c2e31" stroke-width="3" stroke-dasharray="2 7" stroke-linecap="round" />
+    <circle cx="44" cy="420" r="6" fill="#141516" stroke="#5c6166" stroke-width="3" />
+    <circle cx="190" cy="286" r="6" fill="#141516" stroke="#5c6166" stroke-width="3" />
+    <circle cx="292" cy="176" r="7" fill="#2f8a55" />
+  </svg>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" width="44" height="44" aria-hidden="true">
+      <path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="#ececec" fill-rule="evenodd" />
+      <path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="#2f8a55" />
+    </svg>
+    <span>SCIP</span>
+  </div>
+  <div class="kicker">TRACK · OPTIMISE · RÉSEAU</div>
+  <div class="tagline">Supply Chain Intelligence Platform</div>
+  <div class="foot">VERSION __VERSION__</div>
+</body>
+</html>

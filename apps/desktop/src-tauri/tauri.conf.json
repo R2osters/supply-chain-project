@@ -47,8 +47,17 @@
         "languages": [
           "French",
           "English"
-        ]
+        ],
+        "template": "../installer/installer.nsi",
+        "installerIcon": "icons/icon.ico",
+        "headerImage": "../installer/header.bmp",
+        "sidebarImage": "../installer/sidebar.bmp",
+        "uninstallerIcon": "icons/icon.ico",
+        "uninstallerHeaderImage": "../installer/header.bmp"
       }
-    }
+    },
+    "publisher": "SCIP",
+    "copyright": "SCIP · Supply Chain Intelligence Platform",
+    "shortDescription": "Supply Chain Intelligence Platform"
   }
 }
