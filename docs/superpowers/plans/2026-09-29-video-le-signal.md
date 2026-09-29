@@ -610,8 +610,8 @@ describe('dampedSpring', () => {
 });
 describe('format', () => {
   it('uses French typography', () => {
-    expect(frInt(3000)).toBe('3 000');
-    expect(frInt(20000)).toBe('20 000');
+    expect(frInt(3000)).toBe('3 000');
+    expect(frInt(20000)).toBe('20 000');
     expect(frDecimal(24.13, 2)).toBe('24,13');
     expect(frPercent(68)).toBe('68 %');
   });
@@ -719,8 +719,8 @@ export const dampedSpring = (frame: number, {from, to, damping, stiffness, mass 
 ```
 
 ```ts
-// src/lib/format.ts — narrow no-break space for thousands, no-break space before %.
-export const frInt = (n: number): string => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+// src/lib/format.ts — no-break space (U+00A0) for thousands and before %. Not U+202F: the pinned IBM Plex faces have no U+202F glyph, so it would fall back to a system font. src/lib/format.glyphs.test.ts checks this against the cmap tables.
+export const frInt = (n: number): string => Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 export const frDecimal = (n: number, digits: number): string => n.toFixed(digits).replace('.', ',');
 export const frPercent = (n: number): string => `${frInt(n)} %`;
 ```

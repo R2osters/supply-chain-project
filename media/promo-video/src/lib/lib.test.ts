@@ -22,8 +22,8 @@ describe('dampedSpring', () => {
 });
 describe('format', () => {
   it('uses French typography', () => {
-    expect(frInt(3000)).toBe('3\u202f000');
-    expect(frInt(20000)).toBe('20\u202f000');
+    expect(frInt(3000)).toBe('3\u00a0000');
+    expect(frInt(20000)).toBe('20\u00a0000');
     expect(frDecimal(24.13, 2)).toBe('24,13');
     expect(frPercent(68)).toBe('68\u00a0%');
   });
