@@ -22,6 +22,12 @@ venv/
 services/ai/models_store/*
 !services/ai/models_store/.gitkeep
 
+# Desktop sidecar build (services/ai/build-desktop.ps1). build/ and dist/ are already ignored
+# globally; listed here too so the AI outputs stay ignored if those global rules change.
+services/ai/.venv-build/
+services/ai/build/
+services/ai/dist/
+
 docker/volumes/
 *.log
 .DS_Store
