@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import type { FeedSettingsService } from '../settings/feed-settings.service';
 import type { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration';
 import type { PrismaService } from '../../prisma/prisma.service';
@@ -58,7 +59,8 @@ function makeService(firmsMapKey: string | null = null, prisma: Partial<Record<s
   const config = {
     get: () => ({ firmsMapKey, hazardExposureRadiusKm: 100 }),
   } as unknown as ConfigService<AppConfig, true>;
-  return new HazardsService(prisma as unknown as PrismaService, config);
+  const feeds = { get: () => firmsMapKey } as unknown as FeedSettingsService;
+  return new HazardsService(prisma as unknown as PrismaService, config, feeds);
 }
 
 const originalFetch = global.fetch;

@@ -51,6 +51,18 @@ export interface AppConfig {
     /** Compiled demo seed shipped with the desktop build; absent elsewhere. */
     demoSeedScript: string | null;
   };
+  /** Values entered in the app's settings screen, which override the environment. */
+  settings: { file: string };
+  /**
+   * Live aircraft. OpenSky Network first (as in God's Eye View), adsb.lol when OpenSky is rate
+   * limited or down. OpenSky works anonymously; client credentials raise its daily quota. Its
+   * terms allow non-commercial use only, which is what SCIP is (a personal, school project).
+   */
+  aircraft: {
+    enabled: boolean;
+    openskyClientId: string | null;
+    openskyClientSecret: string | null;
+  };
   database: { url: string };
   auth: {
     accessSecret: string;
@@ -166,6 +178,14 @@ export default (): AppConfig => {
     runtime: process.env.SCIP_RUNTIME === 'desktop' ? 'desktop' : 'server',
     setup: {
       demoSeedScript: process.env.DEMO_SEED_SCRIPT || resolve(process.cwd(), 'seed.js'),
+    },
+    settings: {
+      file: process.env.SETTINGS_FILE || resolve(process.cwd(), 'settings.local.json'),
+    },
+    aircraft: {
+      enabled: bool(process.env.AIRCRAFT_ENABLED, true),
+      openskyClientId: process.env.OPENSKY_CLIENT_ID || null,
+      openskyClientSecret: process.env.OPENSKY_CLIENT_SECRET || null,
     },
 
     database: {

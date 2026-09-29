@@ -57,7 +57,7 @@ const TILE_MAX_BYTES = 1024 * 1024;
 @Injectable()
 export class TrafficService {
   private readonly logger = new Logger(TrafficService.name);
-  private readonly apiKey: string | null;
+  private readonly fixedApiKey: string | null;
   private readonly budget: DailyTileBudget;
   private readonly tiles = new TtlCache<Buffer>({
     ttlMs: TILE_TTL_MS,
@@ -65,10 +65,22 @@ export class TrafficService {
     maxEntries: TILE_CACHE_ENTRIES,
   });
 
-  constructor(config?: ConfigService<AppConfig, true>, settings?: TrafficSettings) {
+  /**
+   * `keySource`, when given, is asked on every use: the key can be entered in the app's settings
+   * screen while the API runs, and traffic should switch on without a restart.
+   */
+  constructor(
+    config?: ConfigService<AppConfig, true>,
+    settings?: TrafficSettings,
+    private readonly keySource?: () => string | null,
+  ) {
     const intel = config?.get('intel', { infer: true });
-    this.apiKey = settings?.apiKey ?? intel?.tomtomApiKey ?? null;
+    this.fixedApiKey = settings?.apiKey ?? intel?.tomtomApiKey ?? null;
     this.budget = new DailyTileBudget(settings?.dailyBudget ?? intel?.tomtomDailyTileBudget ?? 6000);
+  }
+
+  private get apiKey(): string | null {
+    return this.keySource ? this.keySource() : this.fixedApiKey;
   }
 
   get enabled(): boolean {
@@ -83,7 +95,7 @@ export class TrafficService {
         tilesUsedToday: 0,
         dailyBudget: this.budget.dailyLimit,
         attribution: null,
-        note: 'Live traffic is off: set TOMTOM_API_KEY on the API to enable the TomTom flow overlay.',
+        note: 'Live traffic is off: add a free TomTom key in Settings → Data sources (or set TOMTOM_API_KEY).',
       };
     }
     return {

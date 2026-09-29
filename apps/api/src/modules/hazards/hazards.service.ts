@@ -5,6 +5,7 @@ import { requireCompanyId } from '../../common/tenancy/tenant-scope';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import type { AppConfig } from '../../config/configuration';
 import { PrismaService } from '../../prisma/prisma.service';
+import { FeedSettingsService } from '../settings/feed-settings.service';
 import {
   computeExposures,
   shipmentAssetPoints,
@@ -107,16 +108,20 @@ export class HazardsService {
   /** GDELT throttles clients that ask more than about once per five seconds. */
   private readonly gdeltGate = new RequestGate({ minIntervalMs: 5_000, maxQueue: 4 });
 
-  private readonly firmsMapKey: string | null;
   private readonly exposureRadiusKm: number;
 
   constructor(
     private readonly prisma: PrismaService,
     config: ConfigService<AppConfig, true>,
+    private readonly feeds: FeedSettingsService,
   ) {
     const intel = config.get('intel', { infer: true });
-    this.firmsMapKey = intel.firmsMapKey;
     this.exposureRadiusKm = intel.hazardExposureRadiusKm;
+  }
+
+  /** Read on each use: a key entered in the settings screen applies without a restart. */
+  private get firmsMapKey(): string | null {
+    return this.feeds.get('firmsMapKey');
   }
 
   /* ================================================================== hazards */

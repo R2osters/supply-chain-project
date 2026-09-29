@@ -35,6 +35,8 @@ import { GeocodingModule } from './modules/geocoding/geocoding.module';
 import { SatellitesModule } from './modules/satellites/satellites.module';
 import { RadioModule } from './modules/radio/radio.module';
 import { SetupModule } from './modules/setup/setup.module';
+import { SettingsModule } from './modules/settings/settings.module';
+import { AircraftModule } from './modules/aircraft/aircraft.module';
 
 @Module({
   imports: [
@@ -64,6 +66,8 @@ import { SetupModule } from './modules/setup/setup.module';
     MailModule,
     AuthModule,
     SetupModule,
+    SettingsModule,
+    AircraftModule,
     HealthModule,
     MasterDataModule,
     SuppliersModule,

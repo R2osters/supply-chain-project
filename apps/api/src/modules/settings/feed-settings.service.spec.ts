@@ -1,0 +1,61 @@
+import type { ConfigService } from '@nestjs/config';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { AppConfig } from '../../config/configuration';
+import { FeedSettingsService } from './feed-settings.service';
+
+function makeService(file: string, env: { ais?: string; tomtom?: string } = {}) {
+  const sections: Record<string, unknown> = {
+    settings: { file },
+    maritime: { aisStreamApiKey: env.ais ?? null, marineTrafficApiKey: null },
+    aircraft: { openskyClientId: null, openskyClientSecret: null },
+    intel: { tomtomApiKey: env.tomtom ?? null, firmsMapKey: null },
+  };
+  const config = { get: (name: string) => sections[name] } as unknown as ConfigService<AppConfig, true>;
+  return new FeedSettingsService(config);
+}
+
+const tempFile = () => join(mkdtempSync(join(tmpdir(), 'scip-settings-')), 'settings.json');
+
+describe('FeedSettingsService', () => {
+  it('lets a key entered in the app override the environment, and persists it', () => {
+    const file = tempFile();
+    const service = makeService(file, { ais: 'env-key-0000' });
+    expect(service.get('aisStreamApiKey')).toBe('env-key-0000');
+
+    service.update({ aisStreamApiKey: '  typed-key-1234 ' });
+    expect(service.get('aisStreamApiKey')).toBe('typed-key-1234');
+    expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ aisStreamApiKey: 'typed-key-1234' });
+    // A fresh instance (next launch) reads it back.
+    expect(makeService(file).get('aisStreamApiKey')).toBe('typed-key-1234');
+  });
+
+  it('never exposes values, only where they come from and a four-character hint', () => {
+    const service = makeService(tempFile(), { tomtom: 'tomtom-secret-9f3a' });
+    expect(service.describe().tomtomApiKey).toEqual({ configured: true, from: 'environment', hint: '••••9f3a' });
+    expect(service.describe().aisStreamApiKey).toEqual({ configured: false, from: null, hint: null });
+  });
+
+  it('clears a key with null or blank and falls back to the environment', () => {
+    const service = makeService(tempFile(), { ais: 'env-key-0000' });
+    service.update({ aisStreamApiKey: 'typed' });
+    service.update({ aisStreamApiKey: '' });
+    expect(service.get('aisStreamApiKey')).toBe('env-key-0000');
+  });
+
+  it('notifies feeds of changed keys only', () => {
+    const service = makeService(tempFile());
+    const seen: string[][] = [];
+    service.onChange((changed) => seen.push(changed));
+    service.update({ openskyClientId: 'id', openskyClientSecret: 'secret' });
+    service.update({ openskyClientId: 'id' });
+    expect(seen).toEqual([['openskyClientId', 'openskyClientSecret']]);
+  });
+
+  it('survives a corrupt settings file', () => {
+    const file = tempFile();
+    writeFileSync(file, '{not json');
+    expect(makeService(file).get('aisStreamApiKey')).toBeNull();
+  });
+});

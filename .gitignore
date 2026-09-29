@@ -32,3 +32,6 @@ docker/volumes/
 *.log
 .DS_Store
 Thumbs.db
+
+# Keys entered in the app settings screen during development
+apps/api/settings.local.json
