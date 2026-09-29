@@ -19,6 +19,7 @@ import {
 import { MarineTrafficProvider } from './marinetraffic.provider';
 import { FeedSettingsService } from '../settings/feed-settings.service';
 import { type LiveBox, LiveVesselIndex } from './live-vessels';
+import { DIGITRAFFIC_ATTRIBUTION, DigitrafficAmbientFeed } from './digitraffic-feed';
 
 /**
  * Simulator tick. Fixed because `@Interval` needs a compile-time constant; how far a vessel moves
@@ -54,6 +55,8 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
   private readonly maritimeMultiplier: number;
   /** Every ship heard on the feed, tracked or not, for the live map layer. */
   private readonly live = new LiveVesselIndex();
+  /** Keyless Baltic AIS, so the ship layer shows real traffic with no key at all. */
+  private ambient: DigitrafficAmbientFeed | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -68,6 +71,11 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit(): void {
     this.startProvider();
+    // Strictly `true`: unit tests build this service from partial config and must not go online.
+    if (this.config.get('maritime', { infer: true }).ambientFeed === true) {
+      this.ambient = new DigitrafficAmbientFeed((fix) => this.live.record(fix));
+      this.ambient.start();
+    }
     // A key typed into the settings screen switches the feed over without a restart.
     this.feeds.onChange((changed) => {
       if (!changed.includes('aisStreamApiKey') && !changed.includes('marineTrafficApiKey')) return;
@@ -132,6 +140,7 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.stopProvider();
+    this.ambient?.stop();
   }
 
   private stopProvider(): void {
@@ -140,18 +149,28 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
     this.ais = null;
     this.marineTraffic = null;
     this.provider = new SimulatedVesselProvider();
-    this.live.clear();
+    // The index is not cleared: keyless fixes stay valid across a key change, and stale entries
+    // expire on their own after half an hour.
   }
 
   /** Ships heard on the live feed inside a map view. Empty while positions are simulated. */
   liveInView(box: LiveBox) {
-    const isLive = this.provider.isLive;
+    const providerLive = this.provider.isLive;
+    const ambientLive = this.ambient?.active ?? false;
+    const sources = [providerLive ? this.provider.name : null, ambientLive ? 'Digitraffic' : null].filter(
+      (name): name is string => name !== null,
+    );
     return {
-      source: this.provider.name,
-      isLive,
-      howToGoLive: isLive ? null : 'Add a free AISStream key in Settings → Data sources for live ships.',
+      source: sources.length > 0 ? sources.join(' + ') : this.provider.name,
+      isLive: providerLive || ambientLive,
+      howToGoLive: providerLive
+        ? null
+        : ambientLive
+          ? 'Live without a key in the Baltic Sea (Digitraffic). Add a free AISStream key in Settings → Data sources for the rest of the world.'
+          : 'Add a free AISStream key in Settings → Data sources for live ships.',
+      attribution: ambientLive ? DIGITRAFFIC_ATTRIBUTION : null,
       fetchedAt: new Date().toISOString(),
-      vessels: isLive ? this.live.inBox(box) : [],
+      vessels: providerLive || ambientLive ? this.live.inBox(box) : [],
     };
   }
 
@@ -198,6 +217,12 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
        */
       fixesForUntrackedVessels: this.fixesUnmatched,
       uptimeMinutes,
+      ambient: {
+        source: 'Digitraffic',
+        coverage: 'Baltic Sea (Finnish receivers)',
+        state: this.ambient?.describe() ?? 'disabled',
+        attribution: DIGITRAFFIC_ATTRIBUTION,
+      },
       howToGoLive: this.provider.isLive
         ? null
         : 'Add a free AISStream key (aisstream.io) in Settings → Data sources for live terrestrial ' +

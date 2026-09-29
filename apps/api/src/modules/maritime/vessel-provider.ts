@@ -39,7 +39,8 @@ export interface VesselFix {
   navStatus: string | null;
   destination?: string | null;
   recordedAt: Date;
-  source: 'AIS_STREAM' | 'MARINE_TRAFFIC' | 'SIMULATOR' | 'MANUAL';
+  /** DIGITRAFFIC fixes feed the live map layer only; they are never stored on a voyage. */
+  source: 'AIS_STREAM' | 'MARINE_TRAFFIC' | 'SIMULATOR' | 'MANUAL' | 'DIGITRAFFIC';
 }
 
 export interface VesselProvider {

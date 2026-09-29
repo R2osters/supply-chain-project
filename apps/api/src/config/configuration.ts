@@ -52,7 +52,14 @@ export interface AppConfig {
     demoSeedScript: string | null;
   };
   /** Values entered in the app's settings screen, which override the environment. */
-  settings: { file: string };
+  settings: {
+    file: string;
+    /**
+     * Keys shipped inside this build (resources/defaults/feeds.json), so an install works with no
+     * setup. Lowest precedence: the settings screen and the environment both override them.
+     */
+    bundledFile: string | null;
+  };
   /**
    * Live aircraft. OpenSky Network first (as in God's Eye View), adsb.lol when OpenSky is rate
    * limited or down. OpenSky works anonymously; client credentials raise its daily quota. Its
@@ -118,6 +125,8 @@ export interface AppConfig {
      * default. Deep links carry no such question and are always on.
      */
     marineTrafficEmbedEnabled: boolean;
+    /** Keyless Baltic AIS (Digitraffic) for the live map layer. */
+    ambientFeed: boolean;
   };
   /**
    * Public situational feeds: hazards, cameras, radio, satellites, traffic, geocoding.
@@ -181,6 +190,7 @@ export default (): AppConfig => {
     },
     settings: {
       file: process.env.SETTINGS_FILE || resolve(process.cwd(), 'settings.local.json'),
+      bundledFile: process.env.BUNDLED_FEEDS_FILE || null,
     },
     aircraft: {
       enabled: bool(process.env.AIRCRAFT_ENABLED, true),
@@ -271,6 +281,7 @@ export default (): AppConfig => {
       // 18 knots covers 1.5 nautical miles in five minutes — nothing a planner needs sooner.
       marineTrafficPollSeconds: int(process.env.MARINETRAFFIC_POLL_SECONDS, 300),
       marineTrafficEmbedEnabled: bool(process.env.MARINETRAFFIC_EMBED_ENABLED, false),
+      ambientFeed: bool(process.env.MARITIME_AMBIENT_FEED, true),
     },
 
     intel: {
