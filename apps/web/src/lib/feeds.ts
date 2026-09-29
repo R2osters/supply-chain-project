@@ -80,10 +80,13 @@ export interface AircraftStatus {
 }
 
 export interface MaritimeFeedStatus {
+  /** Feed of the vessels this install tracks (AISStream, MarineTraffic or the simulator). */
   source: string;
   isLive: boolean;
   detail: string;
   howToGoLive: string | null;
+  /** Keyless Baltic AIS feeding the live map layer, whatever the tracked-vessel feed is. */
+  ambient?: { active: boolean; source: string; coverage: string; state: string; attribution: string };
 }
 
 /** An OpenSky cool-down still in force at `now`; a past date means the feed is back. */

@@ -331,7 +331,10 @@ function FeedStatus() {
               {t('settings.status.vessels')}
             </span>
             {sea && (
-              <Provenance kind={sea.isLive ? 'live' : 'offline'} label={sea.isLive ? undefined : t('settings.status.notLive')} />
+              <Provenance
+                kind={sea.isLive || sea.ambient?.active ? 'live' : 'offline'}
+                label={sea.isLive || sea.ambient?.active ? undefined : t('settings.status.notLive')}
+              />
             )}
           </span>
           {maritime.isError ? (
@@ -340,7 +343,12 @@ function FeedStatus() {
             <Loading rows={2} />
           ) : (
             <>
-              <span className="t-data text-[12px] text-[var(--color-ink)]">{sea.source}</span>
+              {sea.ambient?.active && (
+                <p className="m-0 text-[12px] leading-relaxed text-[var(--color-ink)]">{t('settings.status.ambientLive')}</p>
+              )}
+              <span className="t-data text-[12px] text-[var(--color-ink)]">
+                {t('settings.status.trackedFeed')} {sea.source}
+              </span>
               {sea.detail && <p className="m-0 text-[12px] leading-relaxed text-[var(--color-muted)]">{sea.detail}</p>}
               {sea.howToGoLive && (
                 <p className="m-0 text-[12px] leading-relaxed text-[var(--color-dim)]">{sea.howToGoLive}</p>

@@ -218,6 +218,7 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
       fixesForUntrackedVessels: this.fixesUnmatched,
       uptimeMinutes,
       ambient: {
+        active: this.ambient?.active ?? false,
         source: 'Digitraffic',
         coverage: 'Baltic Sea (Finnish receivers)',
         state: this.ambient?.describe() ?? 'disabled',
