@@ -1,7 +1,7 @@
 // Stages the NestJS API as a self-contained folder: resources/api/{dist,prisma,node_modules}.
 // It is a regular `npm install --omit=dev` of the built API rather than a bundle, because Nest
 // relies on decorator metadata that bundlers strip, and Prisma loads its engine from disk.
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO_DIR, RESOURCES_DIR, run, isMain } from './lib/fetch.mjs';
 
@@ -48,6 +48,13 @@ export async function stageApi() {
   run('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--no-package-lock'], {
     cwd: target,
   });
+  // npm links `file:` directories. The installer does not carry links, so the API would start
+  // without @scip/shared: swap the link for a real copy.
+  const sharedInstall = join(target, 'node_modules', '@scip', 'shared');
+  if (lstatSync(sharedInstall).isSymbolicLink()) {
+    rmSync(sharedInstall, { force: true });
+    cpSync(vendoredShared, sharedInstall, { recursive: true });
+  }
   run('npx', ['prisma', 'generate', '--schema', 'prisma/schema.prisma'], { cwd: target });
 
   // The demo seed is TypeScript run through ts-node in development. Bundle it into one JS file
