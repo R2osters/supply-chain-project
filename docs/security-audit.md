@@ -347,6 +347,8 @@ Ces points ne sont pas des bugs mais des conséquences de l'architecture « tout
 | Dép. nodemailer | **Corrigé** | 6.10.1 → 10.0.12. | suite API verte |
 | Dép. starlette/protobuf | Reporté | Service IA en `127.0.0.1` avec jeton ; montée de version à faire avec le reste des dépendances IA. | — |
 | F-08 | Accepté pour la présentation | Certificat de signature de code avant toute diffusion publique. | — |
+| F-09 | **Corrigé** | Socket de suivi `/tracking` : la signature du jeton ne suffisait pas. Le compte est maintenant relu en base (existant, actif, non verrouillé, pas de mot de passe temporaire en attente de changement) et c'est le rôle stocké, pas celui du jeton, qui compte. | `tracking.gateway.spec.ts` (15 tests) |
+| F-10 | **Corrigé** | Un compte client ou fournisseur recevait sur le socket toutes les positions de la flotte, que `GET /gps/fleet` lui refuse. Seuls les rôles ayant `gps:read` rejoignent la salle de l'entreprise ; `subscribe:shipment` vérifie que l'envoi appartient à l'entreprise du socket. | idem |
 
 Nouvelle passe de `scripts/security/probe.mjs` après correctifs : **12 contrôles réussis, 0 échec**
 (88 routes protégées, JWT falsifiés, CORS, force brute, `/files`, injections, corps trop grand,
