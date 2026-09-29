@@ -78,7 +78,7 @@
     {"id": "S06.drop", "scene": "S06", "at": {"bar": 25}, "color": "crit", "sound": "critStab", "params": {"crash": true}},
     {"id": "S06.dbWrite", "scene": "S06", "at": {"word": "base", "quantize": "16th"}, "sound": "dbBlip"},
     {"id": "S06.needle", "scene": "S06", "at": {"word": "soixante-huit", "quantize": "beat"}},
-    {"id": "S06.warn60", "scene": "S06", "at": {"after": "S06.needle", "frames": 6}, "color": "warn", "sound": "warnRim"},
+    {"id": "S06.warn60", "scene": "S06", "at": {"after": "S06.needle", "frames": 8}, "color": "warn", "sound": "warnRim"},
     {"id": "S06.risk", "scene": "S06", "at": {"after": "S06.needle", "frames": 15}, "color": "crit", "sound": "critStab"},
 
     {"id": "S07.push", "scene": "S07", "at": {"bar": 30}, "sound": "whoosh"},
