@@ -19,6 +19,7 @@ import {
 import { useFormat, useI18n, type TranslationKey } from '@/lib/i18n';
 import { Button, Empty, ErrorNote, Facts, Loading, PageHeader, Panel, Provenance } from '@/components/ui';
 import { useToast } from '@/components/toast';
+import { BackupPanel } from './_components/backup-panel';
 import { NetworkPanel } from './_components/network-panel';
 import { TrafficBudgetField } from './_components/traffic-budget';
 
@@ -50,6 +51,7 @@ export default function SettingsPage() {
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="flex flex-col gap-6">
           <NetworkPanel />
+          <BackupPanel />
           <FeedsForm />
         </div>
         {can('gps:read') && <FeedStatus />}
