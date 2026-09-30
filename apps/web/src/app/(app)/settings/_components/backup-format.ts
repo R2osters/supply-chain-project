@@ -31,13 +31,7 @@ export interface BackupsView {
   lastRestore: RestoreResult | null;
 }
 
-type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
-
-/** The desktop shell's command bridge, when this page runs inside SCIP's own window. */
-export function desktopInvoke(): Invoke | null {
-  if (typeof window === 'undefined') return null;
-  return (window as unknown as { __TAURI__?: { core?: { invoke?: Invoke } } }).__TAURI__?.core?.invoke ?? null;
-}
+export { desktopInvoke } from '@/lib/desktop';
 
 const UNITS = { fr: ['o', 'ko', 'Mo', 'Go'], en: ['B', 'kB', 'MB', 'GB'] } as const;
 

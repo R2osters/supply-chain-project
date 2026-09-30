@@ -22,6 +22,7 @@ import { useToast } from '@/components/toast';
 import { BackupPanel } from './_components/backup-panel';
 import { DemoPanel } from './_components/demo-panel';
 import { NetworkPanel } from './_components/network-panel';
+import { UpdatePanel } from './_components/update-panel';
 import { TrafficBudgetField } from './_components/traffic-budget';
 
 const LABEL: Record<FeedField, TranslationKey> = {
@@ -54,6 +55,7 @@ export default function SettingsPage() {
           <DemoPanel />
           <NetworkPanel />
           <BackupPanel />
+          <UpdatePanel />
           <FeedsForm />
         </div>
         {can('gps:read') && <FeedStatus />}

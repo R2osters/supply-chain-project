@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ForcedPasswordChange } from '@/components/account/password-change';
 import { CommandPalette } from '@/components/shell/command-palette';
+import { UpdateToast } from '@/components/shell/update-toast';
 import { Banner, Logo, Provenance } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -301,6 +302,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
       {helpOpen && <ShortcutsDialog onClose={() => setHelpOpen(false)} />}
+      <UpdateToast />
     </div>
   );
 }

@@ -6,9 +6,8 @@ import { useState } from 'react';
 import { useFormat, useI18n } from '@/lib/i18n';
 import { Banner, Button, ErrorNote, Loading, Panel } from '@/components/ui';
 import { useToast } from '@/components/toast';
+import { errorText } from '@/lib/desktop';
 import { desktopInvoke, formatBytes, type BackupInfo, type BackupsView } from './backup-format';
-
-const errorText = (error: unknown): string => (typeof error === 'string' ? error : error instanceof Error ? error.message : String(error));
 
 /**
  * Réglages → Sauvegarde. Backups are taken and restored by the desktop shell, which owns the
