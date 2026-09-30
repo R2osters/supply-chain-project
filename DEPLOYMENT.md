@@ -11,7 +11,7 @@ On Windows, with Node 20+, Rust (stable, MSVC), Python 3.12 and PyInstaller:
 ```bash
 npm install
 npm run desktop:stage
-npm run desktop:build
+npm run build --workspace @scip/installer
 ```
 
 `desktop:stage` fills `apps/desktop/src-tauri/resources/`. A subset can be rebuilt with
@@ -26,7 +26,8 @@ npm run desktop:build
 | `web/` + `web-dist/` | static export of `apps/web` | lockfile |
 
 Downloads are cached in `apps/desktop/.cache/`. The installer lands in
-`apps/desktop/src-tauri/target/release/bundle/nsis/`.
+`apps/installer/dist/SCIP-Setup-<version>.exe` ([docs/installer.md](docs/installer.md)); run
+`node apps/installer/scripts/build-setup.mjs --level 3` for a quicker test build.
 
 ### Signing
 
@@ -116,6 +117,46 @@ success. `SCIP_BACKUP_DIR` overrides the backup folder.
 Only the embedded database is backed up this way; an external PostgreSQL server is backed up with
 that server's own tools. Copying `%LOCALAPPDATA%\com.scip.desktop` with SCIP closed also works as a
 raw copy (the PostgreSQL port changes at every launch; only the password is in `config.json`).
+
+## Updates
+
+An installed SCIP updates itself from this repository's GitHub releases. It reads
+`releases/latest/download/latest.json` a couple of minutes after starting, then every 6 hours,
+downloads the installer it names in the background and installs nothing that fails these checks:
+a newer version than its own, a URL under this repository's releases, the size and SHA-256 of
+the file, and an **Ed25519 signature** of `scip-update-v1\n{version}\n{sha256}\n{size}` made with
+the publisher's private key. The matching public key is compiled in
+(`apps/desktop/src-tauri/update-key.pub`); a build without one never checks.
+
+Once an update is ready, Settings → Mises à jour offers "Installer maintenant" (administrators also
+get a toast): SCIP backs the data up (`…-avant-mise-a-jour.scip-backup`), closes, the installer
+replaces the program files (data untouched) and reopens SCIP a minute or two later. Otherwise the
+update installs when SCIP is closed. Without the window, with SCIP closed:
+
+```
+scip-desktop.exe --update --check   # look and download only
+scip-desktop.exe --update           # also back up, then start the installer (log in updates\)
+```
+
+**Publishing** happens on the publisher's PC, never in CI:
+
+```bash
+npm run release:keygen                                  # once; back up the .pem it prints
+npm run release -- 0.3.0 --notes "What changed" --dry-run
+npm run release -- 0.3.0 --notes "What changed"
+```
+
+`release:keygen` writes the private key to `%USERPROFILE%\.scip\update-signing-key.pem` (never
+commit it; it refuses to overwrite one) and the public key to `update-key.pub` (commit it).
+`release` refuses a version that is not greater, a dirty tree, a branch other than master, a key
+that does not match `update-key.pub`; it bumps the six version files, builds SCIP-Setup, signs
+it, writes `apps/installer/dist/latest.json`, then commits `release: v<version>`, tags, pushes
+and runs `gh release create` with both files. `--dry-run` stops before committing and puts the
+version files back. A pre-release (`0.3.0-beta.1`) is published as such and never offered.
+
+Losing the private key means the SCIPs already installed can no longer update on their own:
+publish a build with a new key (`release:keygen --rotate`) and reinstall it by hand once.
+`SCIP_UPDATE_FEED` and `SCIP_UPDATE_PUBLIC_KEY` override the feed and the key for tests.
 
 ## Environment (development)
 

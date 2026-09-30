@@ -45,6 +45,13 @@ pied, décompresse en flux vers le dossier d'installation en rapportant la progr
 Mise à jour : si une installation existe, 04 à 08 sont sautés (les données existent) et 10 remplace
 les fichiers puis relance les migrations.
 
+Mise à jour automatique (`--update`, lancé par SCIP, [DEPLOYMENT.md](../DEPLOYMENT.md#updates)) :
+l'écran de progression s'ouvre directement, sans clic ni raccourci Bureau ; l'installeur attend
+jusqu'à 60 s que SCIP se ferme, arrête ce qui reste dans son dossier, puis relance SCIP (sauf
+`--no-launch`, quand SCIP s'installe à sa fermeture). `--silent --update` fait la même chose sans
+fenêtre (lignes JSON sur la sortie standard). Sans installation existante, `--silent --update`
+échoue (`not_installed`) et `--update` ouvre le parcours d'installation normal.
+
 Désinstallation (`--uninstall`) : un écran de confirmation avec la case « Supprimer aussi mes
 données » (décochée par défaut), puis progression.
 

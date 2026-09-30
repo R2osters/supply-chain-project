@@ -36,7 +36,7 @@ sources sans clé et l'audit de sécurité ([security-audit.md](security-audit.m
 | 9 | Import CSV (produits, fournisseurs, stocks) pour démarrer vite avec de vraies données | 1 j |
 | 10 | Double authentification (application TOTP + codes de secours), comme dans le prototype | 1 j |
 | 11 | Nouvel écran de connexion du prototype | 0,5 j |
-| 12 | Mises à jour automatiques (Tauri updater + versions publiées) | 1 j |
+| 12 | ~~Mises à jour automatiques~~ **Fait** : SCIP vérifie les versions publiées sur GitHub, télécharge et vérifie l'installeur (signature Ed25519), l'installe en un clic (sauvegarde avant) ou à la fermeture ; publication par `npm run release` | — |
 | 13 | HTTPS sur le réseau local pour que le téléphone du chauffeur donne sa position GPS | 1 j |
 | 14 | Routage routier réel (OSRM) au lieu de la distance à vol d'oiseau × 1,25 | 0,5 j |
 
