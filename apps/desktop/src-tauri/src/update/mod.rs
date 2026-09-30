@@ -21,9 +21,13 @@ pub const FEED_URL: &str =
     "https://github.com/R2osters/supply-chain-project/releases/latest/download/latest.json";
 /// Installers are only ever downloaded from the releases of this repository.
 pub const ALLOWED_PREFIX: &str = "https://github.com/R2osters/supply-chain-project/releases/download/";
-/// Test overrides: a local feed, and the public key its installers are signed with.
+/// A local feed for tests. Harmless in production: whatever it serves must still be signed with
+/// the publisher's key and come from the feed's own origin.
 pub const FEED_ENV: &str = "SCIP_UPDATE_FEED";
+/// Another public key: debug builds and builds with the `update-test` feature only, so that no
+/// environment variable can make a released SCIP trust someone else's installers.
 pub const PUBLIC_KEY_ENV: &str = "SCIP_UPDATE_PUBLIC_KEY";
+const KEY_OVERRIDE_ALLOWED: bool = cfg!(any(debug_assertions, feature = "update-test"));
 
 /// Written by `npm run release:keygen`; empty in a build made before the key existed.
 const EMBEDDED_PUBLIC_KEY: &str = include_str!("../../update-key.pub");
@@ -51,7 +55,9 @@ pub struct UpdateConfig {
 impl UpdateConfig {
     /// `None` when no public key is compiled in nor given: a development build never updates.
     pub fn from_env() -> Option<Self> {
-        Self::resolve(std::env::var(FEED_ENV).ok(), std::env::var(PUBLIC_KEY_ENV).ok(), EMBEDDED_PUBLIC_KEY)
+        let key_override: Option<String> =
+            if KEY_OVERRIDE_ALLOWED { std::env::var(PUBLIC_KEY_ENV).ok() } else { None };
+        Self::resolve(std::env::var(FEED_ENV).ok(), key_override, EMBEDDED_PUBLIC_KEY)
     }
 
     fn resolve(feed: Option<String>, key: Option<String>, embedded: &str) -> Option<Self> {

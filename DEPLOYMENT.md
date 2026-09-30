@@ -156,7 +156,9 @@ version files back. A pre-release (`0.3.0-beta.1`) is published as such and neve
 
 Losing the private key means the SCIPs already installed can no longer update on their own:
 publish a build with a new key (`release:keygen --rotate`) and reinstall it by hand once.
-`SCIP_UPDATE_FEED` and `SCIP_UPDATE_PUBLIC_KEY` override the feed and the key for tests.
+`SCIP_UPDATE_FEED` points SCIP at another feed (tests; whatever it serves must still carry the
+publisher's signature). `SCIP_UPDATE_PUBLIC_KEY` replaces the key only in debug builds or builds
+made with `--features update-test`: a released SCIP trusts `update-key.pub` and nothing else.
 
 ## Environment (development)
 

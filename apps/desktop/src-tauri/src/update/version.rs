@@ -1,4 +1,6 @@
 //! `MAJOR.MINOR.PATCH` versions; a pre-release suffix (`-beta.1`) sorts before the release.
+//! Versions name the files of the updates folder: a pre-release holds only `[0-9A-Za-z-]`
+//! identifiers separated by dots, so no version can carry a path separator or `..`.
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -16,7 +18,7 @@ impl Version {
     pub fn parse(text: &str) -> Option<Self> {
         let text: &str = text.trim().strip_prefix('v').unwrap_or(text.trim());
         let (core, pre_release) = match text.split_once('-') {
-            Some((core, pre)) if !pre.is_empty() => (core, Some(pre.to_owned())),
+            Some((core, pre)) if valid_pre_release(pre) => (core, Some(pre.to_owned())),
             Some(_) => return None,
             None => (text, None),
         };
@@ -31,6 +33,41 @@ impl Version {
     }
 }
 
+/// SemVer's rule: dot-separated, non-empty identifiers of ASCII letters, digits and hyphens.
+fn valid_pre_release(pre: &str) -> bool {
+    pre.len() <= 64
+        && pre
+            .split('.')
+            .all(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+}
+
+/// SemVer precedence: identifier by identifier, numbers numerically and before words, and a
+/// shorter list first when all shared identifiers are equal (`beta.9 < beta.10 < beta.10.1`).
+fn compare_pre_release(a: &str, b: &str) -> Ordering {
+    let numeric =
+        |id: &str| -> Option<u64> { id.bytes().all(|b| b.is_ascii_digit()).then(|| id.parse().ok())? };
+    let mut left = a.split('.');
+    let mut right = b.split('.');
+    loop {
+        match (left.next(), right.next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(x), Some(y)) => {
+                let order = match (numeric(x), numeric(y)) {
+                    (Some(m), Some(n)) => m.cmp(&n),
+                    (Some(_), None) => Ordering::Less,
+                    (None, Some(_)) => Ordering::Greater,
+                    (None, None) => x.cmp(y),
+                };
+                if order != Ordering::Equal {
+                    return order;
+                }
+            }
+        }
+    }
+}
+
 impl Ord for Version {
     fn cmp(&self, other: &Self) -> Ordering {
         (self.major, self.minor, self.patch).cmp(&(other.major, other.minor, other.patch)).then_with(
@@ -38,7 +75,7 @@ impl Ord for Version {
                 (None, None) => Ordering::Equal,
                 (None, Some(_)) => Ordering::Greater,
                 (Some(_), None) => Ordering::Less,
-                (Some(a), Some(b)) => a.cmp(b),
+                (Some(a), Some(b)) => compare_pre_release(a, b),
             },
         )
     }
@@ -81,6 +118,32 @@ mod tests {
         assert!(v("0.3.0") > v("0.3.0-beta.2"));
         assert!(v("0.3.0-beta.2") > v("0.2.9"));
         assert!(v("0.3.0-beta.2") > v("0.3.0-beta.1"));
+    }
+
+    #[test]
+    fn pre_releases_follow_semver_precedence() {
+        assert!(v("0.3.0-beta.10") > v("0.3.0-beta.9"));
+        assert!(v("0.3.0-beta.10.1") > v("0.3.0-beta.10"));
+        assert!(v("0.3.0-rc.1") > v("0.3.0-beta.10"));
+        assert!(v("0.3.0-beta") > v("0.3.0-2"), "a word comes after a number");
+        assert_eq!(v("0.3.0-beta.1").cmp(&v("0.3.0-beta.1")), Ordering::Equal);
+    }
+
+    #[test]
+    fn a_pre_release_cannot_carry_a_path() {
+        for bad in [
+            "0.3.0-a/../x",
+            r"0.3.0-a\b",
+            "0.3.0-a:b",
+            "0.3.0-a b",
+            "0.3.0-a..b",
+            "0.3.0-.a",
+            "0.3.0-a.",
+            "0.3.0-é",
+        ] {
+            assert_eq!(Version::parse(bad), None, "{bad}");
+        }
+        assert!(Version::parse("0.3.0-rc-1.2").is_some());
     }
 
     #[test]

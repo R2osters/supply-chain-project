@@ -26,7 +26,8 @@ serde_json = "1"
 thiserror = "2"
 base64 = "0.22"
 getrandom = "0.3"
-ureq = { version = "3", default-features = false, features = ["json"] }
+# rustls: the update feed and installers come from GitHub over HTTPS (webpki roots built in).
+ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
 # Backups: a plain tar, the Documents folder, and local time for the file names.
 tar = "0.4"
 dirs = "7"
@@ -34,6 +35,11 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 # Updates: SHA-256 of the downloaded installer and the Ed25519 signature of the publisher.
 sha2 = "0.10"
 ed25519-dalek = "2"
+
+[features]
+# Test builds only: lets SCIP_UPDATE_PUBLIC_KEY replace the publisher's key (update e2e).
+# Debug builds allow it anyway; a release build without this feature trusts only update-key.pub.
+update-test = []
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

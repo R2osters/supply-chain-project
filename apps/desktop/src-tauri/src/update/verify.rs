@@ -3,7 +3,7 @@
 //! the public key is the base64 of its 32 raw bytes.
 
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use base64::engine::general_purpose::STANDARD;
@@ -44,9 +44,13 @@ pub fn verify_signature(
 
 /// SHA-256 (lowercase hex) and size of a file, read in chunks: an installer is ~330 MB.
 pub fn sha256_file(path: &Path) -> Result<(String, u64), UpdateError> {
-    let file: File =
+    let mut file: File =
         File::open(path).map_err(|e| UpdateError::Io(format!("lecture de {} : {e}", path.display())))?;
-    let mut reader = BufReader::with_capacity(1 << 20, file);
+    sha256_reader(&mut file)
+}
+
+fn sha256_reader(source: &mut impl Read) -> Result<(String, u64), UpdateError> {
+    let mut reader = BufReader::with_capacity(1 << 20, source);
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1 << 20];
     let mut size: u64 = 0;
@@ -68,7 +72,41 @@ pub fn verify_download(
     manifest: &UpdateManifest,
     public_key_b64: &str,
 ) -> Result<(), UpdateError> {
-    let (sha256, size) = sha256_file(path)?;
+    let digest = sha256_file(path)?;
+    check(digest, manifest, public_key_b64)
+}
+
+/// Same checks, read through a handle the caller keeps open: on Windows, `open_locked` makes
+/// the file impossible to replace between this check and the start of the installer.
+pub fn verify_open(
+    file: &mut File,
+    manifest: &UpdateManifest,
+    public_key_b64: &str,
+) -> Result<(), UpdateError> {
+    file.seek(SeekFrom::Start(0)).map_err(|e| UpdateError::Io(format!("lecture : {e}")))?;
+    let digest = sha256_reader(file)?;
+    check(digest, manifest, public_key_b64)
+}
+
+/// Opens the installer for reading and, on Windows, shares it for reading only: nobody can
+/// write, rename or delete it while the handle lives. Running it (CreateProcess) still works.
+pub fn open_locked(path: &Path) -> Result<File, UpdateError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 0x0000_0001;
+        options.share_mode(FILE_SHARE_READ);
+    }
+    options.open(path).map_err(|e| UpdateError::Io(format!("ouverture de {} : {e}", path.display())))
+}
+
+fn check(
+    (sha256, size): (String, u64),
+    manifest: &UpdateManifest,
+    public_key_b64: &str,
+) -> Result<(), UpdateError> {
     if size != manifest.size {
         return Err(UpdateError::Verification(format!(
             "taille inattendue ({size} octets au lieu de {})",
@@ -115,6 +153,37 @@ pub mod tests {
             signature: sign(&test_key(), version, &sha256, size),
         };
         (path, manifest)
+    }
+
+    /// The launch path: while the checked installer is held open, it cannot be replaced, and it
+    /// can still be run.
+    #[cfg(windows)]
+    #[test]
+    fn a_locked_installer_cannot_be_swapped_but_still_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("SCIP-Setup-0.3.0.exe");
+        let system = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into());
+        std::fs::copy(Path::new(&system).join("System32").join("whoami.exe"), &exe).unwrap();
+        let (sha256, size) = sha256_file(&exe).unwrap();
+        let manifest = UpdateManifest {
+            version: "0.3.0".into(),
+            pub_date: None,
+            notes: None,
+            url: "https://x/SCIP-Setup-0.3.0.exe".into(),
+            size,
+            sha256: sha256.clone(),
+            signature: sign(&test_key(), "0.3.0", &sha256, size),
+        };
+
+        let mut lock = open_locked(&exe).unwrap();
+        verify_open(&mut lock, &manifest, &public_b64(&test_key())).unwrap();
+        assert!(std::fs::OpenOptions::new().write(true).open(&exe).is_err(), "no writer");
+        assert!(std::fs::rename(&exe, dir.path().join("moved.exe")).is_err(), "no rename");
+        assert!(std::fs::remove_file(&exe).is_err(), "no delete");
+        let ran = std::process::Command::new(&exe).output().unwrap();
+        assert!(ran.status.success(), "the locked installer still starts");
+        drop(lock);
+        assert!(std::fs::remove_file(&exe).is_ok(), "released once the lock is dropped");
     }
 
     #[test]

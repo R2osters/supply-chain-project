@@ -57,24 +57,24 @@ fn execute(command: UpdateCommand) -> Result<Value, String> {
     );
     updater.restore();
     let status = updater.check_now();
-    match &status.state {
-        UpdateState::Ready { .. } => {}
-        UpdateState::Error { message } => return Err(message.clone()),
-        _ => return Ok(json!({ "status": status })),
+    if let UpdateState::Error { message } = &status.state {
+        return Err(message.clone());
     }
-    if command.check_only {
+    if command.check_only || !updater.has_ready() {
         return Ok(json!({ "status": status }));
     }
 
-    let (installer, version): (PathBuf, Version) = updater.ready_installer().map_err(|e| e.to_string())?;
+    // Backup first (seconds of pg_dump), then check and start the installer under one lock.
     let backup = with_own_database(&ctx, |_, _| {
         create_backup(&ctx, &backups_dir(), BackupKind::BeforeUpdate)
             .map_err(|e| format!("la sauvegarde avant mise à jour a échoué, mise à jour annulée : {e}"))
     })?;
+    let ready = updater.ready_installer().map_err(|e| e.to_string())?;
+    let version: &Version = &ready.version;
     line(json!({ "log": format!("Sauvegarde {} créée, installation de {version}", backup.name) }));
 
-    let log = ctx.dirs.root.join("updates").join(format!("install-{version}.log"));
-    spawn_silent_installer(&installer, &log)
+    let log: PathBuf = ctx.dirs.root.join("updates").join(format!("install-{version}.log"));
+    spawn_silent_installer(&ready.path, &log)
         .map_err(|e| format!("l'installeur de {version} n'a pas pu démarrer : {e}"))?;
     Ok(json!({ "installing": version.to_string(), "backup": backup.name, "log": log }))
 }

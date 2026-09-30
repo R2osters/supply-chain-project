@@ -32,7 +32,7 @@ const CURRENT_FROM = 'apps/desktop/src-tauri/tauri.conf.json';
 
 /** Same rules as SCIP (apps/desktop/src-tauri/src/update/version.rs). */
 export function parseVersion(text) {
-  const match = /^(\d{1,9})\.(\d{1,9})\.(\d{1,9})(?:-([0-9A-Za-z.-]+))?$/.exec(text);
+  const match = /^(\d{1,9})\.(\d{1,9})\.(\d{1,9})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/.exec(text);
   if (!match) return null;
   return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]), pre: match[4] ?? null };
 }
@@ -44,7 +44,19 @@ export function compareVersions(a, b) {
   if (a.pre === b.pre) return 0;
   if (a.pre === null) return 1;
   if (b.pre === null) return -1;
-  return a.pre < b.pre ? -1 : 1;
+  // SemVer: identifier by identifier, numbers numerically and before words, shorter first.
+  const left = a.pre.split('.');
+  const right = b.pre.split('.');
+  for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+    if (left[i] === undefined) return -1;
+    if (right[i] === undefined) return 1;
+    const [x, y] = [left[i], right[i]];
+    const [nx, ny] = [/^\d+$/.test(x), /^\d+$/.test(y)];
+    if (nx && ny && Number(x) !== Number(y)) return Number(x) < Number(y) ? -1 : 1;
+    if (nx !== ny) return nx ? -1 : 1;
+    if (!nx && x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
 }
 
 export function bumpText(text, pattern, from, to) {

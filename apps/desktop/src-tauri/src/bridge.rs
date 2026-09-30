@@ -196,20 +196,25 @@ async fn install_update(app: AppHandle, state: tauri::State<'_, Arc<AppState>>) 
     .map_err(|_| "La mise à jour n'a pas pu être lancée.".to_owned())?
 }
 
-/// Verified installer + backup of the data, then the detached installer.
+/// Backup of the data, then the installer verified through a locked handle and started while
+/// the lock holds: nothing can swap the file between the check and the launch.
 fn start_installer(
     updater: &Updater,
     ctx: &RuntimeContext,
     state: &AppState,
     relaunch: bool,
 ) -> Result<(), String> {
-    let (installer, version) = updater.ready_installer().map_err(|e| e.to_string())?;
+    if !updater.has_ready() {
+        return Err("Aucune mise à jour prête.".into());
+    }
     backup_run::create_backup(ctx, &backups_dir(), BackupKind::BeforeUpdate)
         .map_err(|e| format!("La sauvegarde avant mise à jour a échoué, mise à jour annulée : {e}"))?;
-    launch::spawn_installer(&installer, relaunch)
-        .map_err(|e| format!("L'installeur de la version {version} n'a pas pu démarrer : {e}"))?;
+    let ready = updater.ready_installer().map_err(|e| e.to_string())?;
+    launch::spawn_installer(&ready.path, relaunch)
+        .map_err(|e| format!("L'installeur de la version {} n'a pas pu démarrer : {e}", ready.version))?;
+    drop(ready.lock);
     state.installer_launched.store(true, Ordering::SeqCst);
-    log::info!("installer of {version} started (relaunch: {relaunch})");
+    log::info!("installer of {} started (relaunch: {relaunch})", ready.version);
     Ok(())
 }
 
@@ -259,7 +264,8 @@ fn install_on_exit(state: &AppState) {
     let updater = state.updater.lock().unwrap().clone();
     let ctx = state.context.lock().unwrap().clone();
     let (Some(updater), Some(ctx)) = (updater, ctx) else { return };
-    if !matches!(updater.status().state, crate::update::updater::UpdateState::Ready { .. }) {
+    // Not the displayed state: a periodic check may be running while SCIP closes.
+    if !updater.has_ready() {
         return;
     }
     if let Err(e) = start_installer(&updater, &ctx, state, false) {

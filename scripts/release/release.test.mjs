@@ -55,6 +55,11 @@ test('versions compare like SCIP compares them', () => {
   assert.ok(compareVersions(v('0.2.1'), v('0.2.0')) > 0);
   assert.ok(compareVersions(v('0.10.0'), v('0.9.9')) > 0);
   assert.ok(compareVersions(v('0.3.0-beta.1'), v('0.3.0')) < 0);
+  assert.ok(compareVersions(v('0.3.0-beta.10'), v('0.3.0-beta.9')) > 0);
+  assert.ok(compareVersions(v('0.3.0-beta.10.1'), v('0.3.0-beta.10')) > 0);
+  assert.ok(compareVersions(v('0.3.0-beta'), v('0.3.0-2')) > 0);
+  assert.equal(compareVersions(v('0.3.0-rc.1'), v('0.3.0-rc.1')), 0);
+  for (const bad of ['0.3.0-a/../x', '0.3.0-a..b', '0.3.0-.a', '0.3.0-a.', '0.3.0-a b']) assert.equal(parseVersion(bad), null, bad);
   assert.equal(parseVersion('v0.3.0'), null);
   assert.equal(parseVersion('0.3'), null);
 });

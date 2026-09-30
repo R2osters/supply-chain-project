@@ -1,16 +1,17 @@
 //! The update cycle: check the feed, download a newer installer, verify it, keep it ready.
 //!
 //! Network access goes through `Fetcher` so the cycle is tested without a network. Nothing here
-//! installs anything: `ready_installer` hands a freshly re-verified file to the caller, which
-//! backs the data up and starts the installer.
+//! installs anything: `ready_installer` hands a freshly re-verified, locked file to the caller,
+//! which starts the installer while the lock holds.
 
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use serde::Serialize;
 
 use super::manifest::UpdateManifest;
-use super::verify::verify_download;
+use super::verify::{open_locked, verify_download, verify_open};
 use super::{UpdateConfig, UpdateError, Version};
 
 pub trait Fetcher: Send + Sync {
@@ -65,9 +66,19 @@ pub struct UpdateStatus {
 
 struct Inner {
     state: UpdateState,
+    /// The verified installer on disk, whatever the state shows (a later check may be running).
+    ready: Option<Version>,
     last_check: Option<String>,
     offline: bool,
     busy: bool,
+}
+
+/// An installer checked through `lock`, which nobody can replace until it is dropped: keep it
+/// until the installer has started.
+pub struct ReadyInstaller {
+    pub path: PathBuf,
+    pub version: Version,
+    pub lock: File,
 }
 
 pub struct Updater {
@@ -97,7 +108,7 @@ impl Updater {
             current,
             dir,
             fetcher,
-            inner: Mutex::new(Inner { state, last_check: None, offline: false, busy: false }),
+            inner: Mutex::new(Inner { state, ready: None, last_check: None, offline: false, busy: false }),
             on_change,
         }
     }
@@ -121,12 +132,42 @@ impl Updater {
         (self.on_change)(&self.status());
     }
 
+    /// A version holds only `[0-9A-Za-z.-]` (version.rs), so these names never leave `dir`.
     fn installer_path(&self, version: &Version) -> PathBuf {
         self.dir.join(format!("SCIP-Setup-{version}.exe"))
     }
 
     fn manifest_path(&self, version: &Version) -> PathBuf {
         self.dir.join(format!("SCIP-Setup-{version}.json"))
+    }
+
+    /// The manifest saved next to an installer, valid for this feed and for this very version:
+    /// a genuine old release renamed to a higher version is refused.
+    fn saved_manifest(
+        &self,
+        config: &UpdateConfig,
+        version: &Version,
+    ) -> Result<UpdateManifest, UpdateError> {
+        let body = std::fs::read_to_string(self.manifest_path(version))
+            .map_err(|e| UpdateError::Io(e.to_string()))?;
+        let manifest = UpdateManifest::parse(&body)?;
+        if manifest.validate(&config.allowed_prefix)? != *version {
+            return Err(UpdateError::Verification(format!(
+                "le manifeste enregistré annonce {} et non {version}",
+                manifest.version
+            )));
+        }
+        Ok(manifest)
+    }
+
+    /// Whether a verified installer is waiting (the state may show a check in progress).
+    pub fn has_ready(&self) -> bool {
+        self.inner.lock().unwrap().ready.is_some()
+    }
+
+    fn set_ready(&self, version: &Version, manifest: &UpdateManifest) {
+        self.inner.lock().unwrap().ready = Some(version.clone());
+        self.set(ready_state(version, manifest));
     }
 
     /// At startup: drops installers that are not newer than this SCIP, and offers a newer one
@@ -147,8 +188,7 @@ impl Updater {
                 }
                 continue;
             };
-            let manifest =
-                std::fs::read_to_string(entry.path()).ok().and_then(|body| UpdateManifest::parse(&body).ok());
+            let manifest: Option<UpdateManifest> = self.saved_manifest(config, &version).ok();
             let usable = version > self.current
                 && manifest.as_ref().is_some_and(|m| {
                     verify_download(&self.installer_path(&version), m, &config.public_key).is_ok()
@@ -163,13 +203,17 @@ impl Updater {
             }
         }
         if let Some((version, manifest)) = best {
-            self.set(ready_state(&version, &manifest));
+            self.set_ready(&version, &manifest);
         }
     }
 
     fn discard(&self, version: &Version) {
         let _ = std::fs::remove_file(self.installer_path(version));
         let _ = std::fs::remove_file(self.manifest_path(version));
+        let mut inner = self.inner.lock().unwrap();
+        if inner.ready.as_ref() == Some(version) {
+            inner.ready = None;
+        }
     }
 
     /// One full check: feed, comparison, download and verification. Blocking; returns the new
@@ -189,7 +233,10 @@ impl Updater {
             inner.busy = true;
         }
         let previous: UpdateState = self.status().state;
-        self.set(UpdateState::Checking);
+        // A ready update stays on screen (and installable) while the next check runs.
+        if !matches!(previous, UpdateState::Ready { .. }) {
+            self.set(UpdateState::Checking);
+        }
         let outcome: Result<UpdateState, UpdateError> = self.run_check(&config);
         {
             let mut inner = self.inner.lock().unwrap();
@@ -198,6 +245,8 @@ impl Updater {
             inner.offline = matches!(outcome, Err(UpdateError::Network(_)));
         }
         let state = match outcome {
+            // Nothing newer than what is ready: keep offering it.
+            Ok(UpdateState::UpToDate) if matches!(previous, UpdateState::Ready { .. }) => previous,
             Ok(state) => state,
             // Offline or no release yet: keep what we had (a ready update stays ready).
             Err(UpdateError::Network(e)) => {
@@ -251,30 +300,33 @@ impl Updater {
         }
         let saved = serde_json::to_string_pretty(&manifest).map_err(|e| UpdateError::Io(e.to_string()))?;
         std::fs::write(self.manifest_path(&version), saved).map_err(|e| UpdateError::Io(e.to_string()))?;
+        self.inner.lock().unwrap().ready = Some(version.clone());
         Ok(ready_state(&version, &manifest))
     }
 
-    /// The ready installer, verified once more right before it is run.
-    pub fn ready_installer(&self) -> Result<(PathBuf, Version), UpdateError> {
+    /// The ready installer, verified once more through a handle that locks it: the caller keeps
+    /// `lock` until the installer has started, so the file checked is the file run.
+    pub fn ready_installer(&self) -> Result<ReadyInstaller, UpdateError> {
         let config = self
             .config
             .as_ref()
             .ok_or_else(|| UpdateError::Verification("mises à jour désactivées".into()))?;
-        let UpdateState::Ready { version, .. } = self.status().state else {
-            return Err(UpdateError::Verification("aucune mise à jour prête".into()));
-        };
-        let version =
-            Version::parse(&version).ok_or_else(|| UpdateError::Verification("version illisible".into()))?;
-        let body = std::fs::read_to_string(self.manifest_path(&version))
-            .map_err(|e| UpdateError::Io(e.to_string()))?;
-        let manifest = UpdateManifest::parse(&body)?;
+        let ready: Option<Version> = self.inner.lock().unwrap().ready.clone();
+        let version: Version =
+            ready.ok_or_else(|| UpdateError::Verification("aucune mise à jour prête".into()))?;
         let path = self.installer_path(&version);
-        if let Err(e) = verify_download(&path, &manifest, &config.public_key) {
-            self.discard(&version);
-            self.set(UpdateState::Error { message: e.to_string() });
-            return Err(e);
+        let verified = self.saved_manifest(config, &version).and_then(|manifest| {
+            let mut lock = open_locked(&path)?;
+            verify_open(&mut lock, &manifest, &config.public_key).map(|()| lock)
+        });
+        match verified {
+            Ok(lock) => Ok(ReadyInstaller { path, version, lock }),
+            Err(e) => {
+                self.discard(&version);
+                self.set(UpdateState::Error { message: e.to_string() });
+                Err(e)
+            }
         }
-        Ok((path, version))
     }
 }
 
@@ -450,7 +502,7 @@ mod tests {
         );
         assert!(dir.path().join("SCIP-Setup-0.3.0.exe").is_file());
         assert!(dir.path().join("SCIP-Setup-0.3.0.json").is_file());
-        assert_eq!(u.ready_installer().unwrap().1.to_string(), "0.3.0");
+        assert_eq!(u.ready_installer().unwrap().version.to_string(), "0.3.0");
 
         // A second check reuses the verified file.
         u.check_now();
@@ -521,6 +573,72 @@ mod tests {
     }
 
     #[test]
+    fn a_genuine_old_release_renamed_higher_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        // A real, correctly signed 0.1.0, renamed as if it were 0.9.9.
+        std::fs::write(dir.path().join("SCIP-Setup-0.9.9.exe"), b"old").unwrap();
+        std::fs::write(dir.path().join("SCIP-Setup-0.9.9.json"), manifest_for(b"old", "0.1.0", b"old"))
+            .unwrap();
+        let (u, _) = updater(dir.path(), Err(UpdateError::Network("offline".into())), b"");
+        u.restore();
+        assert!(!matches!(u.status().state, UpdateState::Ready { .. }));
+        assert!(!u.has_ready());
+        assert!(u.ready_installer().is_err());
+        assert!(!dir.path().join("SCIP-Setup-0.9.9.exe").exists(), "discarded");
+    }
+
+    #[test]
+    fn a_version_cannot_write_outside_the_updates_folder() {
+        let root = tempfile::tempdir().unwrap();
+        let dir = root.path().join("updates");
+        std::fs::create_dir(&dir).unwrap();
+        let mut manifest: UpdateManifest =
+            serde_json::from_str(&manifest_for(b"setup", "0.3.0", b"setup")).unwrap();
+        manifest.version = "0.3.0-a/../../x".into();
+        let (u, fetcher) = updater(&dir, Ok(serde_json::to_string(&manifest).unwrap()), b"setup");
+        assert!(matches!(u.check_now().state, UpdateState::Error { .. }));
+        assert_eq!(fetcher.downloads.load(Ordering::SeqCst), 0, "refused before any download");
+        assert!(!root.path().join("x.exe.part").exists());
+    }
+
+    #[test]
+    fn a_ready_update_stays_ready_while_the_next_check_runs() {
+        let dir = tempfile::tempdir().unwrap();
+        let seen: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+        let fetcher = Arc::new(FakeFetcher {
+            feed: Mutex::new(Ok(manifest_for(b"setup", "0.3.0", b"setup"))),
+            body: b"setup".to_vec(),
+            downloads: AtomicUsize::new(0),
+        });
+        let config = UpdateConfig {
+            feed: format!("{PREFIX}latest.json"),
+            allowed_prefix: PREFIX.into(),
+            public_key: public_b64(&test_key()),
+        };
+        let log = Arc::clone(&seen);
+        let u = Updater::new(
+            Some(config),
+            Version::parse("0.2.0").unwrap(),
+            dir.path().to_path_buf(),
+            fetcher.clone(),
+            Box::new(move |status: &UpdateStatus| {
+                let name = serde_json::to_value(status).unwrap()["state"].as_str().unwrap().to_owned();
+                log.lock().unwrap().push(name);
+            }),
+        );
+        u.check_now();
+        assert!(u.has_ready());
+        seen.lock().unwrap().clear();
+
+        u.check_now();
+        *fetcher.feed.lock().unwrap() = Err(UpdateError::Network("offline".into()));
+        u.check_now();
+        assert!(!seen.lock().unwrap().iter().any(|s| s == "checking"), "{:?}", seen.lock().unwrap());
+        assert!(matches!(u.status().state, UpdateState::Ready { .. }));
+        assert_eq!(u.ready_installer().unwrap().version.to_string(), "0.3.0");
+    }
+
+    #[test]
     fn without_key_nothing_happens() {
         let dir = tempfile::tempdir().unwrap();
         let fetcher = Arc::new(FakeFetcher {
@@ -537,5 +655,19 @@ mod tests {
         );
         assert_eq!(u.check_now().state, UpdateState::Disabled);
         assert!(!u.enabled());
+    }
+
+    /// Needs the internet: `cargo test -- --ignored the_real_feed`. Proves the HTTPS stack
+    /// reaches GitHub; any HTTP answer (a release, or 404 before the first one) is a pass.
+    #[test]
+    #[ignore]
+    fn the_real_feed_is_reachable_over_https() {
+        match HttpFetcher.text(crate::update::FEED_URL) {
+            Ok(body) => assert!(UpdateManifest::parse(&body).is_ok(), "{body}"),
+            Err(UpdateError::Network(message)) => {
+                assert!(message.starts_with("GitHub a répondu"), "no HTTP answer: {message}")
+            }
+            Err(other) => panic!("{other}"),
+        }
     }
 }
