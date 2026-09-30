@@ -5,18 +5,21 @@ import {barToFrame, FRAMES_PER_BEAT} from '../lib/beat';
 import {cue, cueLocal, sceneFrames, sceneStart, seriesLocal} from '../lib/timeline';
 import {coversFrame, toScreen} from './mapView';
 import {
-  CHECK_ROWS, DEADZONE, DROP_FRAMES, FAILING_ROW, FIXES, GHOSTS, ISLET, MOVE_FROM, P_ZONE, REJECT, REJECTED, ZONE,
-  fixDot, fixLanding, liveDots, routeAt, rowState, truckProgress, viewAt,
+  CHECK_ROWS, CHECKS_AT, CHECKS_BOX, DEADZONE, DROP_FRAMES, FAILING_ROW, FIXES, GHOSTS, ISLET, MOVE_FROM, PARALLELS, P_ZONE, REJECT,
+  REJECTED, ZONE, fixDot, fixLanding, liveDots, routeAt, rowState, truckProgress, viewAt,
 } from './S09Route';
 import {
-  BALTIC_CENTER_WORLD, CUT, ECHO_GAP, ECHOES, PINGS, PLANE_CUES, RING_FRAMES, SHIPS, WORLD_RECUL_FRAMES, WORLD_REST, balticView,
-  pingRings, viewFrame, visiblePlanes, worldView,
+  AVIONS_AT, BALTIC_AT, BALTIC_CENTER_WORLD, CUT, ECHO_GAP, ECHOES, LENS, PINGS, PLANE_CUES, RING_FRAMES, SHIPS, WORLD_CHIP_AT,
+  WORLD_CHIP_OUT, WORLD_RECUL_FRAMES, WORLD_REST, balticView, pingRings, viewFrame, visiblePlanes, worldView,
 } from './S10MerAir';
+import {palette} from '../theme/tokens';
 import {WORLD, project} from './crops';
 import {CUT as S11_CUT, KEY_FLASH_STEP, STAMP, STAMP_FROM, STRIPS, keyFlash, stampState, stripState} from './S11Console';
 import {FADER_UP} from '../components/Console';
 
 const dist = (a: {x: number; y: number}, b: {x: number; y: number}): number => Math.hypot(a.x - b.x, a.y - b.y);
+/** Mean of the three channels of a #rrggbb colour, 0-255. */
+const grey = (hex: string): number => [1, 3, 5].reduce((a, i) => a + parseInt(hex.slice(i, i + 2), 16), 0) / 3;
 const range = (from: number, to: number): number[] => Array.from({length: to - from}, (_, i) => from + i);
 
 describe('S09 route: fixes', () => {
@@ -68,6 +71,14 @@ describe('S09 route: fixes', () => {
     expect(rowState(REJECT + FRAMES_PER_BEAT - 1, FAILING_ROW)).toBe('fail');
     expect(rowState(REJECT + FRAMES_PER_BEAT, FAILING_ROW)).toBe('pass');
     CHECK_ROWS.forEach((_, r) => r !== FAILING_ROW && expect(rowState(REJECT, r)).toBe('pass'));
+  });
+
+  it('keeps the 6°N graticule line clear of the CONTRÔLES card edges, so the card does not look cut off', () => {
+    for (const f of range(CHECKS_AT, sceneFrames('S09') + 15)) {
+      const y = toScreen({x: 0, y: PARALLELS[0].y}, viewAt(f)).y;
+      expect(Math.abs(y - CHECKS_BOX.bottom)).toBeGreaterThanOrEqual(16);
+      expect(Math.abs(y - CHECKS_BOX.top)).toBeGreaterThanOrEqual(16);
+    }
   });
 });
 
@@ -141,7 +152,28 @@ describe('S10 sea: the Baltic', () => {
   });
 });
 
+describe('S10 chips', () => {
+  it('shows the paler world chip one beat after the Baltic one, long enough to read, and hands it over to the planes', () => {
+    expect(WORLD_CHIP_AT).toBe(BALTIC_AT + FRAMES_PER_BEAT);
+    expect(WORLD_CHIP_AT).toBeLessThan(CUT);
+    // Held (before its fade-out starts) for well over the ~29 frames it had when it came in on « sans ».
+    expect(WORLD_CHIP_OUT - WORLD_CHIP_AT).toBeGreaterThanOrEqual(50);
+    // It stays across the cut to the world and leaves as « AVIONS · … » comes in.
+    expect(WORLD_CHIP_OUT).toBeGreaterThan(CUT);
+    expect(WORLD_CHIP_OUT).toBe(AVIONS_AT);
+  });
+});
+
 describe('S10 air: the view frame and the planes', () => {
+  it('draws the map inside the frame as a lens: land darker and sea lighter than outside, the land far from the sea', () => {
+    const pal = palette('light');
+    expect(pal.map).toBe('#dcdee1');
+    expect(grey(LENS.land)).toBeLessThan(grey(pal.map));
+    expect(grey(LENS.sea)).toBeGreaterThan(grey(pal.bg));
+    expect(grey(LENS.sea) - grey(LENS.land)).toBeGreaterThanOrEqual(30);
+    expect(grey(LENS.coast)).toBeLessThan(grey(LENS.land) - 60);
+  });
+
   it('cuts to the world on the beat of « Et les avions », one beat before the first planes', () => {
     expect(CUT % FRAMES_PER_BEAT).toBe(0);
     expect(PLANE_CUES).toEqual(seriesLocal('S10', 'S10.planes'));

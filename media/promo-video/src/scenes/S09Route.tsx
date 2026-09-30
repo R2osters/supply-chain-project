@@ -114,7 +114,7 @@ export const ISLET: Point = {x: MERIDIAN_0, y: 817};
 
 /** The graticule shown under the signpost: meridians 2° W to 0°, the 6th parallel (map pixels). */
 const MERIDIANS = [-2, -1, 0].map((lon) => ({lon, x: project(GHANA, [lon, 6]).x}));
-const PARALLELS = [6].map((lat) => ({lat, y: project(GHANA, [0, lat]).y}));
+export const PARALLELS = [6].map((lat) => ({lat, y: project(GHANA, [0, lat]).y}));
 const GRATICULE_TOP = 282;
 
 // ── Fixes ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -206,6 +206,9 @@ const Tracker: React.FC<{led: boolean}> = ({led}) => (
 /** A small island that is not there: dashed outline (Null Island is fictional). */
 const ISLET_PATH = 'M-26 2C-24 -8 -12 -13 -2 -11C8 -14 20 -10 25 -3C29 4 20 11 8 10C-2 13 -14 12 -21 8C-25 6 -27 5 -26 2Z';
 
+/** Padding of the estimate label's knockout (px): it must stay under the 10 px gap left for the leader line's end. */
+const LABEL_KNOCKOUT = {x: 8, y: 8};
+
 const TITLE_SIZE = 128;
 const titleStyle: React.CSSProperties = {
   fontFamily: CONDENSED, fontWeight: 600, fontSize: TITLE_SIZE, lineHeight: 1, letterSpacing: '-0.02em', color: pal.ink,
@@ -220,7 +223,13 @@ const CARD_H = 212;
 const CHECKS_Y = 400;
 const ROW_Y0 = 86;
 const ROW_STEP = 52;
-const CHECKS_H = ROW_Y0 + ROW_STEP * CHECK_ROWS.length - 6;
+/** Height of a check row (its 32 px box). */
+const ROW_H = 32;
+/** Space under the last row: the same as above « CONTRÔLES » (about 30 px of air), so the card does not look cut off. */
+const CHECKS_PAD = 30;
+export const CHECKS_H = ROW_Y0 + ROW_STEP * (CHECK_ROWS.length - 1) + ROW_H + CHECKS_PAD;
+/** Screen y of the CONTRÔLES card's two edges (tested against the 6°N graticule line, which must pass clearly under it). */
+export const CHECKS_BOX = {top: CHECKS_Y, bottom: CHECKS_Y + CHECKS_H};
 
 // ── The scene ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const S09Route: React.FC = () => {
@@ -437,10 +446,13 @@ export const S09Route: React.FC = () => {
         </div>
       )}
       {labelIn > 0 && (
+        // A knockout in the land colour (a cartographer's halo): the dotted 0° meridian breaks around the label instead of
+        // running through « ESTIMÉE ». The padding is taken back from left/top, so the text stays where the leader points.
         <div
           style={{
-            ...LABEL, position: 'absolute', left: label.x, top: label.y, display: 'flex', alignItems: 'baseline', gap: 10, color: pal.ink,
-            opacity: labelIn, transform: `translateY(${10 * (1 - labelIn)}px)`,
+            ...LABEL, position: 'absolute', left: label.x - LABEL_KNOCKOUT.x, top: label.y - LABEL_KNOCKOUT.y, display: 'flex',
+            alignItems: 'baseline', gap: 10, color: pal.ink, background: pal.map, padding: `${LABEL_KNOCKOUT.y}px ${LABEL_KNOCKOUT.x}px`,
+            borderRadius: 4, opacity: labelIn, transform: `translateY(${10 * (1 - labelIn)}px)`,
           }}
         >
           <span>SIGNAL MUET</span>

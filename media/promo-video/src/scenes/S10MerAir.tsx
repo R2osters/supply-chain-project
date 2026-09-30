@@ -3,12 +3,13 @@
 // drift; never below 1, the crop has no overscan). Twelve ship chevrons sail the three ferry lanes (Helsinki-Tallinn,
 // Stockholm-Turku, Gdańsk-Karlskrona) under the React Bits Radar drawn in ink at 12 %. On each of the ten quarter notes
 // of S10.ping three ships send an AIS ping: three info rings, the sonar's three echoes, gone within the beat. On
-// « Baltique » the chip « NAVIRES · AIS · MER BALTIQUE · DIGITRAFFIC · SANS CLÉ » pops; on « sans » the paler one
-// « MONDE ENTIER (CÔTES) : AISSTREAM · CLÉ GRATUITE » joins it.
+// « Baltique » the chip « NAVIRES · AIS · MER BALTIQUE · DIGITRAFFIC · SANS CLÉ » pops; one beat later the paler one
+// « MONDE ENTIER (CÔTES) : AISSTREAM · CLÉ GRATUITE » joins it and stays across the cut until the planes' chip.
 // Air: on the beat of « Et les avions » a hard cut to the world map (Equal Earth, geo.world), which pulls back from the
 // Baltic (scale 4) to the North Atlantic world (scale 1.4: the Americas, Europe, Africa) in 18 frames; the view frame (an
-// ink window with corners) marks the Baltic view we just left, its twelve ships as dots fading out, then opens over
-// Europe and ratchets west, one move per beat, across the Atlantic to North America. Planes (8 px chevrons with
+// ink window with corners, a lens: inside it the map is drawn with more contrast, as the loaded view) marks the Baltic
+// view we just left, its twelve ships as dots fading out, then opens over Europe and ratchets west, one move per beat,
+// across the Atlantic to North America. Planes (8 px chevrons with
 // short trails, on a canvas redrawn every frame) exist everywhere but are drawn only inside the frame: they are loaded
 // for the view on screen, in four bursts on the chirps of S10.planes. Chip « AVIONS · OPENSKY / ADSB.LOL · SANS CLÉ ».
 import {useLayoutEffect, useRef} from 'react';
@@ -38,12 +39,19 @@ const wordAt = (screen: string, n = 1): number => quantize(wordLocal(ID, screen,
 // ── Timing ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 const ZOOM = cueLocal(ID, 'S10.zoom');
 export const PINGS = seriesLocal(ID, 'S10.ping');
-const BALTIC_AT = cueLocal(ID, 'S10.baltic');
-const WORLD_CHIP_AT = wordAt('sans');
+export const BALTIC_AT = cueLocal(ID, 'S10.baltic');
 /** The cut to the world: the beat nearest « Et » (« Et les avions »). */
 export const CUT = quantize(wordLocal(ID, 'Et').start, 'beat');
 export const PLANE_CUES = seriesLocal(ID, 'S10.planes');
-const AVIONS_AT = wordAt('avions');
+export const AVIONS_AT = wordAt('avions');
+/**
+ * The paler chip « MONDE ENTIER (CÔTES) : AISSTREAM · CLÉ GRATUITE »: one beat after the Baltic chip (on « direct »),
+ * so it is read for about two seconds. It stays where it is across the cut to the world (the « monde entier » it names)
+ * and hands over to the planes' chip: it fades out as « AVIONS · … » comes in.
+ */
+export const WORLD_CHIP_AT = BALTIC_AT + FRAMES_PER_BEAT;
+export const WORLD_CHIP_OUT = AVIONS_AT;
+const CHIP_FADE = 8;
 
 // ── Sea: camera on the Baltic crop ────────────────────────────────────────────────────────────────────────────────────
 const RECUL_FRAMES = 20;
@@ -276,6 +284,38 @@ const RADAR = 1700;
 /** A ship seen from above: a chevron, bow on +x. */
 const SHIP_PATH = 'M12 0L-8 -6.5L-3.5 0L-8 6.5Z';
 
+/**
+ * The map inside the view frame. Outside, the world keeps the charter's land #dcdee1 on the background (a difference of
+ * about 7/255: the part of the world that is not loaded). Inside, the sea takes the surface of the S09/S10 crops and the
+ * land the projector grey #c9ccd0 (spec § 3.1) with a 1 px coastline in `dim`: about 40/255 between land and sea, plus
+ * the line, so the lens still reads on a projector.
+ */
+export const LENS = {sea: pal.surface, land: '#c9ccd0', coast: pal.dim, border: pal.line} as const;
+
+/** Top-left chips: the Baltic one, and the paler world one under it (44 px chips, 12 px apart). */
+const CHIP_X = 96;
+const CHIP_Y = 132;
+const CHIP_H = 44;
+const CHIP_GAP = 12;
+
+/** « MONDE ENTIER (CÔTES) : AISSTREAM · CLÉ GRATUITE »: paler than the Baltic chip (muted text, dashed border, no fill),
+ * under it; the same place on both sides of the cut. */
+const WorldChip: React.FC<{f: number}> = ({f}) => {
+  if (f < WORLD_CHIP_AT || f >= WORLD_CHIP_OUT + CHIP_FADE) return null;
+  const k = ramp(f, WORLD_CHIP_AT, 10);
+  return (
+    <Chip
+      theme={THEME}
+      style={{
+        position: 'absolute', left: CHIP_X, top: CHIP_Y + CHIP_H + CHIP_GAP, color: pal.muted, background: 'transparent', borderStyle: 'dashed',
+        opacity: 0.85 * k * (1 - ramp(f, WORLD_CHIP_OUT, CHIP_FADE)), transform: `translateY(${12 * (1 - k)}px)`,
+      }}
+    >
+      MONDE ENTIER (CÔTES) : AISSTREAM · CLÉ GRATUITE
+    </Chip>
+  );
+};
+
 /** The view frame: an ink window with heavier corners, like a map viewport. */
 const ViewFrame: React.FC<{a: Point; b: Point; opacity: number}> = ({a, b, opacity}) => {
   const arm = Math.min(24, (b.x - a.x) / 3, (b.y - a.y) / 3);
@@ -356,21 +396,18 @@ export const S10MerAir: React.FC = () => {
           })}
         </svg>
         {/* Chips */}
-        <div style={{position: 'absolute', left: 96, top: 132, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12}}>
-          {f >= BALTIC_AT && (
-            <Chip theme={THEME} style={{opacity: ramp(f, BALTIC_AT, 8), transform: `translateY(${12 * (1 - ramp(f, BALTIC_AT, 8))}px) scale(${pop(f, BALTIC_AT, 1.06)})`, transformOrigin: 'left center'}}>
-              NAVIRES · AIS · MER BALTIQUE · DIGITRAFFIC · SANS CLÉ
-            </Chip>
-          )}
-          {f >= WORLD_CHIP_AT && (
-            <Chip
-              theme={THEME}
-              style={{color: pal.muted, background: 'transparent', borderStyle: 'dashed', opacity: 0.85 * ramp(f, WORLD_CHIP_AT, 10), transform: `translateY(${12 * (1 - ramp(f, WORLD_CHIP_AT, 10))}px)`}}
-            >
-              MONDE ENTIER (CÔTES) : AISSTREAM · CLÉ GRATUITE
-            </Chip>
-          )}
-        </div>
+        {f >= BALTIC_AT && (
+          <Chip
+            theme={THEME}
+            style={{
+              position: 'absolute', left: CHIP_X, top: CHIP_Y, opacity: ramp(f, BALTIC_AT, 8),
+              transform: `translateY(${12 * (1 - ramp(f, BALTIC_AT, 8))}px) scale(${pop(f, BALTIC_AT, 1.06)})`, transformOrigin: 'left center',
+            }}
+          >
+            NAVIRES · AIS · MER BALTIQUE · DIGITRAFFIC · SANS CLÉ
+          </Chip>
+        )}
+        <WorldChip f={f} />
       </AbsoluteFill>
     );
   }
@@ -383,9 +420,21 @@ export const S10MerAir: React.FC = () => {
   return (
     <AbsoluteFill style={{background: pal.bg}}>
       <WorldMap theme={THEME} layers={['land', 'borders']} view={v} />
+      {/* The window is a lens, not a card: inside it the map is drawn as the loaded view, the sea lit and the land
+          darker with its coastline, so Europe, the Atlantic and America read under the planes. */}
       <svg width={1920} height={1080} style={{position: 'absolute', inset: 0}}>
-        {/* Inside the window the map is lit, like a map on screen. */}
-        <rect x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} fill={pal.surface2} opacity={0.45} />
+        <defs>
+          <clipPath id="s10-lens">
+            <rect x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} />
+          </clipPath>
+        </defs>
+        <g clipPath="url(#s10-lens)">
+          <rect x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} fill={LENS.sea} />
+          <g transform={viewTransform(v)}>
+            <path d={geo.world.land} fill={LENS.land} stroke={LENS.coast} strokeWidth={1} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+            <path d={geo.world.borders} fill="none" stroke={LENS.border} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+          </g>
+        </g>
       </svg>
       <PlaneCanvas f={f} view={v} frame={frame} />
       <svg width={1920} height={1080} style={{position: 'absolute', inset: 0}}>
@@ -396,6 +445,7 @@ export const S10MerAir: React.FC = () => {
           })}
         <ViewFrame a={a} b={b} opacity={1} />
       </svg>
+      <WorldChip f={f} />
       {f >= AVIONS_AT && (
         <Chip theme={THEME} style={{position: 'absolute', left: 96, top: 884, opacity: chipIn, transform: `translateY(${12 * (1 - chipIn)}px)`}}>
           AVIONS · OPENSKY / ADSB.LOL · SANS CLÉ
