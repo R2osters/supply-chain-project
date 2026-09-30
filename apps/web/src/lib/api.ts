@@ -159,11 +159,11 @@ async function send(path: string, options: RequestOptions): Promise<Response> {
 
     accessToken = null;
     onUnauthenticated?.();
-    throw new ApiError('Your session has expired. Please sign in again.', 401);
+    throw new ApiError('Votre session a expiré. Reconnectez-vous.', 401);
   }
 
   if (!response.ok) {
-    let message = `Request failed with status ${response.status}`;
+    let message = `La requête a échoué (statut ${response.status})`;
     let detail: unknown;
     try {
       const payload = await response.json();

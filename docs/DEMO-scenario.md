@@ -85,14 +85,11 @@ on relance.
 ### 3:00 — Alertes
 
 1. Cliquer la cloche en haut (« Alertes »), ou le panneau « File d'alertes » de Control.
-2. Montrer la notification de retard de SHP-DEMO-0054 → « ouvrir → ».
+2. Montrer la notification « L’expédition SHP-DEMO-0054 est en retard » → « ouvrir → ».
 3. La chronologie de la fiche d'expédition montre le départ, puis la détection du retard avec
    l'ETA projetée face à la promesse.
 4. À dire : « Les responsables logistique, supply chain et la direction sont prévenus. Personne
    n'a eu à regarder la carte au bon moment. »
-
-Note : le texte de cette notification est en anglais (« Shipment … is running late »), car il
-est généré par le serveur.
 
 ### 4:00 — Stocks
 
@@ -110,8 +107,8 @@ est généré par le serveur.
 2. Appuyer sur **W** (« Pourquoi ? ») : l'explication donne le résumé, les raisons et les
    hypothèses. Montrer qu'aucune recommandation n'est une boîte noire.
 3. Appuyer sur **A**, ou cliquer « accepter et exécuter ». SCIP crée un bon de commande
-   **brouillon** chez le fournisseur retenu. Le toast (en anglais, généré par le serveur)
-   donne le numéro du BC → « Ouvrir les commandes ».
+   **brouillon** chez le fournisseur retenu. Toast : « Bon de commande brouillon … créé
+   auprès de … Vérifiez-le et confirmez-le. » → « Ouvrir les commandes ».
 4. Si la liste est vide : cliquer « régénérer les recommandations » et attendre « Analyse
    terminée ».
 
@@ -182,7 +179,8 @@ un budget journalier réglable pour rester dans son quota gratuit.
 Le dire franchement (« les flux externes ont besoin du réseau, le cœur de SCIP non »), puis
 enchaîner.
 
-**Moteur IA arrêté** (pastille « IA hors ligne », « régénérer » renvoie une erreur en anglais) :
+**Moteur IA arrêté** (pastille « IA hors ligne », « régénérer » répond que le service IA ne
+répond pas) :
 1. Sur Control, l'étape 02 affiche « IA hors ligne · règles locales ».
 2. Montrer la boucle avec l'historique :
    - « Conseils », pastilles « Acceptés » / « Exécutés » : les recommandations déjà décidées et
