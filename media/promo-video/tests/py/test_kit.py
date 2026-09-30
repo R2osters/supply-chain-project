@@ -21,6 +21,17 @@ def test_crit_stab_contains_the_minor_second():
     freqs = np.fft.rfftfreq(24000, 1 / 48000)
     def energy(f): return spec[(freqs > f * 0.98) & (freqs < f * 1.02)].sum()
     assert energy(146.83) > 0 and energy(155.56) > 0  # D3 and Eb3 both present
+    # Beyond the brief: "> 0" holds for any non-silent sound (a 1 kHz tone scores ~3.5 in both
+    # bins). So each note of the second must stand 20 dB clear of the off-chord bins, and the
+    # two voices must sound at the same level. The Hann window keeps the D3 and Eb3 sidelobes
+    # out of the neighbouring bins: with the rectangular spectrum above, leakage alone puts a
+    # D3 + D4 chord (Eb3 missing) at 3x the 170 Hz bin.
+    windowed = np.abs(np.fft.rfft(x[:24000] * np.hanning(24000)))
+    def level(f): return windowed[(freqs > f * 0.98) & (freqs < f * 1.02)].sum()
+    d3, eb3 = level(theory.hz("D3")), level(theory.hz("Eb3"))
+    off_chord = max(level(130.0), level(170.0))  # below D3, and between Eb3 and E3
+    assert d3 > 10 * off_chord and eb3 > 10 * off_chord, (d3, eb3, off_chord)
+    assert min(d3, eb3) > 0.5 * max(d3, eb3), (d3, eb3)  # the minor second is two equal voices
 
 def test_ink_kick_is_the_loudest_hit():
     rng = np.random.default_rng(0)
