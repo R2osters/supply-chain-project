@@ -1,10 +1,11 @@
 // src/scenes/S12-S14.test.ts — the timed logic of S12 (model race), S13 (supplier keyboard) and S14 (bridge).
 // Every frame comes from a cue or a word; these tests pin the frames and values the spec wants exact.
 import {frDecimal} from '../lib/format';
-import {cueLocal, sceneFrames, sceneStart, seriesLocal} from '../lib/timeline';
+import {cueLocal, sceneFrames, sceneStart, seriesLocal, wordLocal} from '../lib/timeline';
 import {digitPosition} from '../rb/Counter';
 import {
-  FINAL_RANKING, FLIP_FRAMES, foldAt, levelOf, meterLevel, MODELS, noteFrames, rowOpacity, rowSlot, S12_T, wapeAt, winnerOk,
+  FINAL_RANKING, FLIP_FADE, FLIP_FRAMES, flipFade, foldAt, LAND, levelOf, meterLevel, MODELS, noteFrames, ROLL_FRAMES, rowOpacity,
+  rowSlot, S12_T, selectedIn, WAPE, wapeAt, wapeColumns, wapeDigits, wapeHeader, winnerOk,
 } from './S12Modeles';
 import {CAP_SHARE, keyStates, S13_T, SHARES, SUPPLIERS, timerText} from './S13Clavier';
 import {
@@ -97,6 +98,87 @@ describe('S12 · la bataille des modèles', () => {
     expect(rowOpacity(gb, S12_T.dim - 1)).toBe(1);
     expect(rowOpacity(gb, S12_T.dim + 12)).toBeLessThan(0.5);
     for (let i = 0; i < 6; i++) if (i !== gb) expect(rowOpacity(i, frames + 15)).toBe(1);
+  });
+
+  // The number a row shows, read off its four odometer columns (a landing digit sits at most LAND off its line).
+  const shown = (i: number, f: number): number => {
+    const [t, u, d, c] = wapeColumns(i, f).map((p) => Math.round(p) % 10);
+    return (1000 * t + 100 * u + 10 * d + c) / 100;
+  };
+
+  it('rolls each odometer column its own short way: one digit at a time, less than one turn, landing on the step value', () => {
+    for (let i = 0; i < 6; i++) expect(wapeColumns(i, S12_T.steps[0] - 1)).toEqual([0, 0, 0, 0]);
+    for (let i = 0; i < 6; i++) {
+      const series = WAPE[MODELS[i]];
+      S12_T.steps.forEach((s, k) => {
+        // Settled at the end of each roll, on whole digits.
+        expect(wapeColumns(i, s + ROLL_FRAMES)).toEqual(wapeDigits(series[k]));
+        // During the roll each column moves one way only (the way of the change) and less than a full turn.
+        const dir = series[k] >= (k === 0 ? 0 : series[k - 1]) ? 1 : -1;
+        const travel = [0, 0, 0, 0];
+        for (let f = s; f <= s + ROLL_FRAMES; f++) {
+          const [prev, cur] = [wapeColumns(i, f - 1), wapeColumns(i, f)];
+          cur.forEach((p, c) => {
+            const step = (((dir * (p - prev[c])) % 10) + 10) % 10;
+            expect(step).toBeLessThan(5);
+            travel[c] += step;
+          });
+        }
+        for (const t of travel) expect(t).toBeLessThan(10);
+      });
+    }
+    // Every column shows a single numeral on every frame: never more than LAND rows off a whole digit.
+    for (let f = 0; f <= sceneFrames('S12') + 15; f++) {
+      for (let i = 0; i < 6; i++) {
+        for (const p of wapeColumns(i, f)) expect(Math.abs(p - Math.round(p))).toBeLessThanOrEqual(LAND + 1e-9);
+      }
+    }
+    expect(LAND * 36).toBeLessThan(6);
+  });
+
+  it('shows the exact spec digits on the odometer columns from the end of the sort to frames + 15', () => {
+    for (const f of [S12_T.sort + FLIP_FRAMES, frames - 1, frames + 15]) {
+      for (const m of MODELS) expect(frDecimal(shown(idx(m), f), 2)).toBe(FINAL[m]);
+    }
+  });
+
+  it('labels the column as a running mean that follows the TEST window: « WAPE MOYEN · PAS k/3 »', () => {
+    expect(wapeHeader(S12_T.steps[0] - 1)).toBe('WAPE MOYEN · PAS 0/3');
+    S12_T.steps.forEach((s, k) => {
+      expect(wapeHeader(s - 1)).toBe(`WAPE MOYEN · PAS ${k}/3`);
+      expect(wapeHeader(s)).toBe(`WAPE MOYEN · PAS ${k + 1}/3`);
+    });
+    expect(wapeHeader(frames + 15)).toBe('WAPE MOYEN · PAS 3/3');
+  });
+
+  it('lands « ✓ SÉLECTIONNÉ » once the counters have settled, inside « gagne », with the winner then showing the best WAPE', () => {
+    const last = S12_T.steps[S12_T.steps.length - 1];
+    expect(S12_T.selected).toBe(Math.max(S12_T.sort, last + ROLL_FRAMES));
+    expect(S12_T.selected).toBeLessThan(wordLocal('S12', 'gagne').end);
+    expect(selectedIn(S12_T.selected - 1)).toBe(0);
+    expect(selectedIn(S12_T.selected + 6)).toBe(1);
+    const hw = idx('HOLT_WINTERS');
+    for (let f = S12_T.selected; f <= frames + 15; f++) {
+      for (let i = 0; i < 6; i++) if (i !== hw) expect(shown(hw, f)).toBeLessThan(shown(i, f));
+    }
+  });
+
+  it('lets the other rows give way under the winner during the FLIP, so no two rows overprint at full ink', () => {
+    const hw = idx('HOLT_WINTERS');
+    for (let f = S12_T.sort - 5; f <= frames + 15; f++) expect(flipFade(hw, f)).toBe(1);
+    for (let i = 0; i < 6; i++) {
+      expect(flipFade(i, S12_T.sort)).toBe(1);
+      expect(flipFade(i, S12_T.sort + FLIP_FRAMES)).toBe(1);
+      if (i !== hw) expect(flipFade(i, S12_T.sort + 2)).toBeCloseTo(FLIP_FADE, 6);
+    }
+    for (let f = S12_T.sort; f <= S12_T.sort + FLIP_FRAMES; f++) {
+      for (let i = 0; i < 6; i++) {
+        for (let j = i + 1; j < 6; j++) {
+          // Rows closer than half a pitch would overprint: at most one of them (the winner) is at full ink.
+          if (Math.abs(rowSlot(i, f) - rowSlot(j, f)) < 0.5) expect(Math.min(flipFade(i, f), flipFade(j, f))).toBeLessThanOrEqual(0.4);
+        }
+      }
+    }
   });
 
   it('walks the test window forward one fold per step while the training zone grows', () => {

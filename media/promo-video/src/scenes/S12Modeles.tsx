@@ -2,10 +2,12 @@
 // Top: two years of daily demand (weekly ripple, annual swell) draw themselves in like tape; the walk-forward validation
 // is drawn over it — the « ENTRAÎNEMENT » zone grows and the « TEST » window ratchets one fold per step (S12.step.1-3).
 // On every step a playhead sweeps the test window while the six lanes play one sixteenth apart (the modelRun
-// arpeggio): each meter kicks on its note and the running WAPE rolls on its odometer (Counter). On « précis »
-// (S12.sort, ok) the rows FLIP into the final ranking of CONCEPT.fr.md over 18 frames and the winner flashes ok with
-// « SÉLECTIONNÉ »; the selected model then draws its forecast past the last day. On « compliqué » (S12.dim)
+// arpeggio): each meter kicks on its note and the running WAPE (header « WAPE MOYEN · PAS k/3 ») rolls on its
+// odometer (Counter, one column per digit). On « précis » (S12.sort, ok) the rows FLIP into the final ranking of
+// CONCEPT.fr.md over 18 frames, the others giving way under the winner, which flashes ok; « ✓ SÉLECTIONNÉ » lands once
+// the counters have settled. The selected model then draws its forecast past the last day. On « compliqué » (S12.dim)
 // GRADIENT_BOOSTING fades. Ghost word « WAPE ». Chip « OPTIMISER · PRÉVISION · VALIDATION GLISSANTE » + DÉMO.
+import {Fragment} from 'react';
 import {AbsoluteFill, useCurrentFrame} from 'remotion';
 import {Chip} from '../components/Chip';
 import {DemoPill, PILL} from '../components/DemoPill';
@@ -79,6 +81,11 @@ export const S12_T = (() => {
     /** « précis »: the rows re-rank, the winner flashes ok. */
     sort,
     flipEnd: sort + FLIP_FRAMES,
+    /**
+     * « ✓ SÉLECTIONNÉ » lands once the last roll has settled (the last step shares its frame with the sort), so the
+     * winner never carries the pill while its counter still reads worse than another (still inside « gagne »).
+     */
+    selected: Math.max(sort, steps[steps.length - 1] + ROLL_FRAMES),
     /** « compliqué »: GRADIENT_BOOSTING fades. */
     dim: cueLocal(S, 'S12.dim'),
     /** The demand line draws itself in over the frames before the first step. */
@@ -97,6 +104,49 @@ export const wapeAt = (i: number, f: number): number => {
     if (f >= s) v = lerp(k === 0 ? 0 : series[k - 1], series[k], ease(f, s, ROLL_FRAMES));
   });
   return v;
+};
+
+/** Steps scored so far at `f` (0 before the first): the running WAPE is the mean over these folds. */
+export const stepsDone = (f: number): number => S12_T.steps.filter((s) => f >= s).length;
+
+/** Column header: the counters are a running mean that follows the TEST window, « PAS k/3 ». */
+export const wapeHeader = (f: number): string => `WAPE MOYEN · PAS ${stepsDone(f)}/${S12_T.steps.length}`;
+
+/** The four digits of a WAPE on the display (tens, units, tenths, hundredths), rounded half up to the hundredth. */
+export const wapeDigits = (v: number): number[] => {
+  const u = roundHalfUp(v * 100);
+  return [Math.floor(u / 1000) % 10, Math.floor(u / 100) % 10, Math.floor(u / 10) % 10, u % 10];
+};
+
+/**
+ * How far off its line a landing digit may sit, in rows (0.15 × 36 px ≈ 5 px): its neighbour then stays more than
+ * 30 px away, outside the cell, so a column never shows two digits at once.
+ */
+export const LAND = 0.15;
+
+/**
+ * Odometer position (0..10, digit = position mod 10) of the four columns of lane `i` at `f`. A roll moves each column
+ * from its old digit to its new one in the direction of the change (up when the WAPE rises), easing over ROLL_FRAMES,
+ * so every column travels less than one turn. (A single value interpolated through the odometer made the hundredths
+ * spin through 50-150 digits in 12 frames and stacked half digits on every frame.) On the way the column clicks
+ * through whole digits; the new digit lands with a short slide of at most LAND rows from the side it rolls in from.
+ */
+export const wapeColumns = (i: number, f: number): number[] => {
+  const series = WAPE[MODELS[i]];
+  const k = stepsDone(f) - 1;
+  if (k < 0) return [0, 0, 0, 0];
+  const from = wapeDigits(k === 0 ? 0 : series[k - 1]);
+  const to = wapeDigits(series[k]);
+  const dir = series[k] >= (k === 0 ? 0 : series[k - 1]) ? 1 : -1;
+  const p = ease(f, S12_T.steps[k], ROLL_FRAMES);
+  return from.map((a, c) => {
+    if (p >= 1) return to[c];
+    const end = a + dir * ((dir * (to[c] - a) + 10) % 10);
+    const pos = a + (end - a) * p;
+    const whole = Math.round(pos);
+    const shown = whole === end ? end + Math.min(LAND, Math.max(-LAND, pos - end)) : whole;
+    return ((shown % 10) + 10) % 10;
+  });
 };
 
 /** How full a meter is for a WAPE: the more precise, the louder (spec § 4 S12, « plus forte s'il est plus précis »). */
@@ -128,6 +178,23 @@ export const winnerOk = (f: number): boolean => {
 
 /** GRADIENT_BOOSTING fades on « compliqué »; every other row stays at full strength. */
 export const rowOpacity = (i: number, f: number): number => (MODELS[i] === DIMMED ? 1 - 0.62 * ease(f, S12_T.dim, 10) : 1);
+
+/** Opacity of the rows that give way during the FLIP. */
+export const FLIP_FADE = 0.35;
+/**
+ * The FLIP's rows cross each other (NAIVE falls five slots, HOLT_WINTERS and GRADIENT_BOOSTING rise four) while
+ * 0.1 < FLIP progress < 0.9. Over that stretch every row but the winner steps back to FLIP_FADE, so no two labels or
+ * counters ever overprint at full ink; the winner travels at full strength on top. Rows are whole again as they land.
+ */
+export const flipFade = (i: number, f: number): number => {
+  if (MODELS[i] === WINNER) return 1;
+  const p = ease(f, S12_T.sort, FLIP_FRAMES);
+  if (p <= 0 || p >= 1) return 1;
+  return 1 - (1 - FLIP_FADE) * Math.min(1, p / 0.1, (1 - p) / 0.1);
+};
+
+/** Entrance of « ✓ SÉLECTIONNÉ » (0..1): nothing before S12_T.selected, then a 6-frame ease-out. */
+export const selectedIn = (f: number): number => (f < S12_T.selected ? 0 : ease(f, S12_T.selected, 6));
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The demand series and the walk-forward validation (screen px)
@@ -251,33 +318,57 @@ const Chart: React.FC<{f: number}> = ({f}) => {
   );
 };
 
+/** Counter size: one 36 px line box per digit cell, no vertical padding. */
+const WAPE_FONT = 36;
+/**
+ * Each digit cell is clipped to its line box, and its top and bottom edges fade out, so a rolling column shows the digit
+ * that is arriving and never a sliver of its neighbour (a settled Plex Mono numeral sits within 6-32 px of the box).
+ */
+const CELL_MASK = 'linear-gradient(to bottom, transparent 0px, #000 5px, #000 32px, transparent 36px)';
+
+/** The running WAPE « 24,13 »: one React Bits Counter column per digit, so each column rolls its own short way. */
+const WapeReadout: React.FC<{columns: number[]}> = ({columns}) => (
+  <span style={{display: 'flex', fontSize: WAPE_FONT, lineHeight: 1, fontWeight: 500}}>
+    {columns.map((position, c) => (
+      <Fragment key={c}>
+        {c === 2 && <span style={{height: WAPE_FONT, display: 'flex', alignItems: 'center'}}>,</span>}
+        <Counter
+          value={position} digits={1} fontSize={WAPE_FONT} fontWeight={500} gap={0} horizontalPadding={0} borderRadius={0} padding={0}
+          gradientHeight={0} digitStyle={{overflow: 'hidden'}} counterStyle={{WebkitMaskImage: CELL_MASK, maskImage: CELL_MASK}}
+        />
+      </Fragment>
+    ))}
+  </span>
+);
+
 const Lane: React.FC<{f: number; i: number}> = ({f, i}) => {
   const model = MODELS[i];
   const y = LANE_TOP + rowSlot(i, f) * PITCH;
   const enter = ease(f, 2 + 1.5 * i, 10);
   const played = f >= noteFrames(i)[0];
-  const winner = model === WINNER && winnerOk(f);
-  const wape = wapeAt(i, f);
+  const isWinner = model === WINNER;
+  const crest = isWinner && winnerOk(f);
+  const tagIn = isWinner ? selectedIn(f) : 0;
   return (
     <div
       style={{
-        position: 'absolute', left: 0, top: y, width: 1920, height: ROW_H, opacity: enter * rowOpacity(i, f),
-        transform: `translateX(${-24 * (1 - enter)}px)`,
+        position: 'absolute', left: 0, top: y, width: 1920, height: ROW_H, opacity: enter * rowOpacity(i, f) * flipFade(i, f),
+        transform: `translateX(${-24 * (1 - enter)}px)`, zIndex: isWinner ? 1 : 0,
       }}
     >
       <div style={{...LABEL, position: 'absolute', left: NAME_X, top: 10, color: played ? pal.ink : pal.dim}}>{model}</div>
       <VuLane
         theme={THEME} label="" value={meterLevel(i, f) * 16} max={16} length={METER_LEN} thickness={28}
-        peakColor={winner ? 'ok' : undefined} style={{position: 'absolute', left: METER_X, top: 8}}
+        peakColor={crest ? 'ok' : undefined} style={{position: 'absolute', left: METER_X, top: 8}}
       />
-      <div style={{position: 'absolute', right: 1920 - COUNTER_R, top: 2, fontFamily: MONO, color: played ? pal.ink : pal.dim}}>
-        <Counter value={wape} digits={2} decimals={2} fontSize={36} fontWeight={500} gap={0} horizontalPadding={0} borderRadius={0} padding={4} gradientHeight={0} />
+      <div style={{position: 'absolute', right: 1920 - COUNTER_R, top: (ROW_H - WAPE_FONT) / 2, fontFamily: MONO, color: played ? pal.ink : pal.dim}}>
+        <WapeReadout columns={wapeColumns(i, f)} />
       </div>
-      {winner && (
+      {tagIn > 0 && (
         <span
           style={{
             ...PILL, position: 'absolute', left: TAG_X, top: 4, gap: 8, color: OK, border: `1.5px solid ${OK}`,
-            background: 'rgb(63 138 92 / 0.08)',
+            background: 'rgb(63 138 92 / 0.08)', opacity: tagIn, transform: `translateX(${-16 * (1 - tagIn)}px)`,
           }}
         >
           <Check size={24} color={OK} />
@@ -312,7 +403,7 @@ export const S12Modeles: React.FC = () => {
 
       <Chart f={f} />
 
-      <div style={{...LABEL, position: 'absolute', right: 1920 - COUNTER_R, top: LANE_TOP - 44, color: pal.muted, opacity: headIn}}>WAPE</div>
+      <div style={{...LABEL, position: 'absolute', right: 1920 - COUNTER_R, top: LANE_TOP - 44, color: pal.muted, opacity: headIn}}>{wapeHeader(f)}</div>
       {Array.from({length: 6}, (_, r) => (
         <div key={r} style={{...LABEL, position: 'absolute', left: RANK_X, top: LANE_TOP + r * PITCH + 10, color: pal.dim, opacity: ranksIn}}>
           {String(r + 1).padStart(2, '0')}
