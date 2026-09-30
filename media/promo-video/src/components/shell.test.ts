@@ -5,7 +5,8 @@ import {SCENES} from '../scenes';
 import {sceneFrames, scenes} from '../lib/timeline';
 import {palette} from '../theme/tokens';
 import {HEX_CONTOURS, HEX_PATH, LOGO_PHASES, phaseProgress} from './Logo';
-import {startsWithWipe, WIPE_FRAMES, wipeProgress} from './ThemeWipe';
+import {startsWithWipe, WIPE_FRAMES, WIPE_PLAYHEAD_GAP, wipePlayheadX, wipeProgress} from './ThemeWipe';
+import {PLAYHEAD_WIDTH} from './Playhead';
 import {HUD_LOGO_FROM, hudLayers, hudText, litPads, SECTIONS} from './Hud';
 import {activeCell, armAngle} from './LoopSequencer';
 import {litSegments, segmentStates} from './VuLane';
@@ -41,6 +42,20 @@ describe('theme wipes', () => {
     expect(wipeProgress(7.5)).toBeGreaterThan(50);
     expect(wipeProgress(15)).toBe(100);
     expect(wipeProgress(40)).toBe(100);
+  });
+
+  it('draw the playhead inside the revealed region, with incoming background on both sides of the line', () => {
+    // The line is in the incoming action colour, which is close to the outgoing background: centred on the edge it
+    // would sit mostly on the outgoing side and vanish (review finding, T10 fix round 1).
+    expect(PLAYHEAD_WIDTH).toBe(2);
+    expect(WIPE_PLAYHEAD_GAP).toBeGreaterThanOrEqual(PLAYHEAD_WIDTH);
+    for (let local = 1; local <= WIPE_FRAMES; local++) {
+      const edge = (wipeProgress(local) / 100) * 1920;
+      const x = wipePlayheadX(local, 1920);
+      expect(x + PLAYHEAD_WIDTH / 2 + WIPE_PLAYHEAD_GAP).toBeCloseTo(edge, 9);
+      expect(x - PLAYHEAD_WIDTH / 2).toBeGreaterThanOrEqual(0);
+    }
+    expect(wipePlayheadX(WIPE_FRAMES, 1920)).toBe(1920 - WIPE_PLAYHEAD_GAP - 1);
   });
 });
 

@@ -2,6 +2,9 @@
 // hung from its top, to the right of the line. `x` is the centre of the line.
 import {LABEL} from './typography';
 
+/** Width of the playhead line, in px (spec § 2: « un trait d'encre vertical de 2 px »). */
+export const PLAYHEAD_WIDTH = 2;
+
 export interface PlayheadProps {
   x: number;
   height: number;
@@ -12,7 +15,7 @@ export interface PlayheadProps {
 }
 
 export const Playhead: React.FC<PlayheadProps> = ({x, height, color, timecode, top = 0}) => (
-  <div style={{position: 'absolute', left: x - 1, top, width: 2, height, background: color}}>
+  <div style={{position: 'absolute', left: x - PLAYHEAD_WIDTH / 2, top, width: PLAYHEAD_WIDTH, height, background: color}}>
     {timecode !== undefined && <div style={{...LABEL, position: 'absolute', left: 12, top: 0, color}}>{timecode}</div>}
   </div>
 );
