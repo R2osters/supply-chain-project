@@ -22,7 +22,7 @@ upstream calls. None has database tables: everything is live or cached in memory
 | `radio` | `GET /radio/stations`, `POST /radio/stations/:id/click` | Radio Browser | none | [intel/radio.md](intel/radio.md) |
 | `satellites` | `GET /satellites/groups`, `/satellites/tle`, `/satellites/visible` | CelesTrak | none | [intel/satellites.md](intel/satellites.md) |
 | `geocoding` | `GET /geocode`, `/geocode/reverse` | Photon, Nominatim | none | [intel/geocoding.md](intel/geocoding.md) |
-| `traffic` | `GET /traffic/status`, `/traffic/tiles/:z/:x/:y` | TomTom | `TOMTOM_API_KEY` | [intel/traffic.md](intel/traffic.md) |
+| `traffic` | `GET /traffic/status`, `/traffic/open-flow`, `/traffic/flow-tiles/:z/:x/:y`, `/traffic/tiles/:z/:x/:y` | Rennes Métropole, Métromobilité (Grenoble), TomTom; roads from OpenFreeMap | none (TomTom optional) | [intel/traffic.md](intel/traffic.md) |
 
 Configuration lives in the `intel` section of `apps/api/src/config/configuration.ts`; the
 variables are documented in `.env.example`.
@@ -31,8 +31,9 @@ variables are documented in `.env.example`.
 in its basins, GDACS elsewhere), earthquakes (USGS), floods, droughts and volcanic eruptions
 (GDACS), fires (GDACS forest fires and NASA EONET wildfires) and severe weather (Open-Meteo). A
 NASA FIRMS map key is optional: when one is set, in the settings screen or as `FIRMS_MAP_KEY`,
-FIRMS satellite hotspots replace the GDACS and EONET fires, decided per request. The only other
-keyed feed is TomTom live traffic.
+FIRMS satellite hotspots replace the GDACS and EONET fires, decided per request. Road traffic is
+keyless too: simulated on OpenFreeMap roads everywhere, with measured speeds from Rennes and
+Grenoble; a TomTom key adds measured speeds worldwide.
 
 ## Shared rules
 

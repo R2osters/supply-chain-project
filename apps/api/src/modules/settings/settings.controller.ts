@@ -125,11 +125,14 @@ export class SettingsController {
     return this.trafficSettings();
   }
 
-  private trafficSettings() {
+  /** Same precedence as the tiles use: the settings screen, then TOMTOM_DAILY_TILE_BUDGET, then the default. */
+  private trafficSettings(): { dailyTileBudget: number; from: 'settings' | 'environment' | 'default' } {
     const chosen = this.feeds.getTileBudget();
+    if (chosen !== null) return { dailyTileBudget: chosen, from: 'settings' };
+    const fromEnvironment = process.env.TOMTOM_DAILY_TILE_BUDGET?.trim();
     return {
-      dailyTileBudget: chosen ?? this.config.get('intel', { infer: true }).tomtomDailyTileBudget ?? DEFAULT_DAILY_TILE_BUDGET,
-      from: chosen === null ? ('default' as const) : ('settings' as const),
+      dailyTileBudget: this.config.get('intel', { infer: true }).tomtomDailyTileBudget ?? DEFAULT_DAILY_TILE_BUDGET,
+      from: fromEnvironment ? 'environment' : 'default',
     };
   }
 

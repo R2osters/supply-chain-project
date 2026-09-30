@@ -20,6 +20,7 @@ import { useFormat, useI18n, type TranslationKey } from '@/lib/i18n';
 import { Button, Empty, ErrorNote, Facts, Loading, PageHeader, Panel, Provenance } from '@/components/ui';
 import { useToast } from '@/components/toast';
 import { NetworkPanel } from './_components/network-panel';
+import { TrafficBudgetField } from './_components/traffic-budget';
 
 const LABEL: Record<FeedField, TranslationKey> = {
   aisStream: 'settings.aisStream',
@@ -156,6 +157,7 @@ function FeedsForm() {
               <ExternalLink href="https://developer.tomtom.com">developer.tomtom.com</ExternalLink>
             </>,
           )}
+          <TrafficBudgetField />
           {field(
             'firms',
             <>

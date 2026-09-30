@@ -90,9 +90,33 @@ export function SourcesPanel({
           status: (traffic.enabled ? 'OK' : 'DISABLED') as FeedStatus,
           fetchedAt: null,
           detail: traffic.enabled
-            ? t('sit.sources.tiles', { used: fmt.int(traffic.tilesUsedToday), budget: fmt.int(traffic.dailyBudget) })
+            ? t('sit.sources.tiles', {
+                used: fmt.int(traffic.tilesUsedToday),
+                budget: traffic.dailyBudget > 0 ? fmt.int(traffic.dailyBudget) : t('map.traffic.status.unlimited'),
+              })
             : (traffic.note ?? t('sit.hint.trafficOff')),
           attribution: traffic.attribution ?? '',
+        }]
+      : []),
+    // Keyless measured speeds for the live map's road traffic: asked only when the map shows the city.
+    ...(traffic?.sources ?? [])
+      .filter((source) => source.id !== 'tomtom')
+      .map((source) => ({
+        key: `flow:${source.id}`,
+        label: source.id === 'rennes' ? t('sit.sources.flowRennes') : t('sit.sources.flowGrenoble'),
+        status: (source.active ? (source.stale ? 'STALE' : 'OK') : 'DISABLED') as FeedStatus,
+        fetchedAt: source.updatedAt,
+        detail: source.active ? '' : t('sit.sources.flowIdle'),
+        attribution: source.attribution,
+      })),
+    ...(traffic
+      ? [{
+          key: 'roads',
+          label: 'OpenFreeMap',
+          status: 'OK' as FeedStatus,
+          fetchedAt: null,
+          detail: t('sit.sources.roads'),
+          attribution: '© OpenMapTiles © OpenStreetMap contributors (ODbL)',
         }]
       : []),
   ];

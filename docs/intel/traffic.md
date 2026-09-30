@@ -95,7 +95,7 @@ grey, free speed, base density, never a phantom jam. Adapted from God's Eye View
 | `GET /traffic/open-flow?bbox=minLon,minLat,maxLon,maxLat` | GeoJSON `FeatureCollection` of `LineString`s with `{ id, source, level, closed, speedKmh, limitKmh, bothDirections }`, at most 5000, `Cache-Control: private, max-age=60`. |
 | `GET /traffic/tiles/:z/:x/:y` | TomTom raster flow tile for the Situation page: a 256 px PNG, `Cache-Control: private, max-age=120`. |
 | `GET /traffic/flow-tiles/:z/:x/:y` | TomTom vector flow tile for the live map (`application/vnd.mapbox-vector-tile`), `Cache-Control: private, max-age=120`. Layer `Traffic flow`: `traffic_level`, `road_type`, `road_closure`, `traffic_road_coverage`. |
-| `GET /settings/traffic` | `{ dailyTileBudget, from }`: the budget in force and `'settings'` when it was chosen in the settings screen, `'default'` otherwise. Permission `company:update`. |
+| `GET /settings/traffic` | `{ dailyTileBudget, from }`: the budget in force and where it comes from: `'settings'` (chosen in the settings screen), `'environment'` (`TOMTOM_DAILY_TILE_BUDGET`) or `'default'` (6 000). Permission `company:update`. |
 | `PUT /settings/traffic` | Body `{ dailyTileBudget }`: a whole number from 0 to 10 000 000, or `null` to go back to the default. Applies at once, no restart. Permission `company:update`, audited as `settings.traffic.update`. |
 
 Status sources: TomTom is `active` when a key is set and today's budget is not spent. A keyless
@@ -148,6 +148,10 @@ Traffic tile requests per month; check the current figure on the TomTom pricing 
 and vector routes share one daily budget and one counter. The default of 6000 tiles a day keeps
 a 31-day month (186 000) under that allowance; a map without a limit can use up a month's
 allowance in a few days.
+
+The live map asks vector flow tiles up to zoom 12 only and over-zooms them beyond: one z12 tile
+covers a district, so a street-level view costs a handful of tiles, and moving around a city
+mostly reuses tiles already in the cache.
 
 ## Configuration
 
