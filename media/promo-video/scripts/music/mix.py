@@ -9,10 +9,11 @@ The chain:
    with Remotion (decode_vo), placed at startFrame * 1600 and panned to the centre. The voice bus
    alone is then gained to VO_LUFS (-18 LUFS).
 2. Music. The sum of the five stems of Task 7 (public/audio/stems/, rendered in memory when they
-   are missing), times the duck curve: DUCK_DB (-9 dB) during every word span [start - 2, end + 2]
+   are missing), times the duck curve (duck.py): -9 dB during every word span [start - 2, end + 2]
    frames and 0 dB elsewhere, smoothed by a one-pole in dB (attack 60 ms while the gain falls,
-   release 300 ms while it rises). The duck lets go on the two clicks, the human decisions: see
-   duck_gain.
+   release 300 ms while it rises). The rule has no exception. The S07 click, which lands under
+   « accepte », stays the loudest hit because the score plays it louder by the depth of the duck
+   (score.click_lift_db).
 3. Master. Music + voice, normalised to TARGET_LUFS (-16 LUFS, pyloudnorm), then a true-peak limiter
    (limit): 4x oversampling, 5 ms lookahead, 50 ms release, gain applied at 48 kHz. The limiter
    takes a little loudness off, so the normalise-limit-measure pass runs again, up to MAX_PASSES
@@ -30,6 +31,7 @@ from scipy.ndimage import maximum_filter1d
 from scipy.signal import resample_poly
 from common import ROOT, SR, SAMPLES_PER_FRAME, TOTAL_FRAMES, load_json, round_half_up
 from . import dsp, score
+from .duck import duck_curve  # public here too (Ruling R7): the brief's tests call mix.duck_curve()
 
 N = TOTAL_FRAMES * SAMPLES_PER_FRAME           # 8 160 000 samples
 MASTER_PATH = ROOT / "public" / "audio" / "master.wav"
@@ -44,11 +46,6 @@ LIMITER_MARGIN_DB = 0.2   # the limiter aims this far under the ceiling: its gai
 OVERSAMPLE = 4
 LOOKAHEAD_S = 0.005
 LIMITER_RELEASE_S = 0.050
-DUCK_DB = -9.0
-DUCK_ATTACK_S = 0.060
-DUCK_RELEASE_S = 0.300
-DUCK_PAD_FRAMES = 2       # a word span is [start - 2, end + 2] frames
-CLICK_OPEN_S = 0.005      # the duck lets go over the 5 ms before a click
 _CHUNK, _PAD = 1 << 18, 64  # oversampling by blocks; 64 samples cover resample_poly's filter
 
 
@@ -113,61 +110,6 @@ def vo_bus() -> np.ndarray:
             raise ValueError(f"{scene_id}: the clip runs past the end of the film")
         dsp.add_at(bus, dsp.pan(clip, 0.0), start)
     return bus * float(dsp.gain_db(VO_LUFS - pyln.Meter(SR).integrated_loudness(bus)))
-
-
-# --- ducking -------------------------------------------------------------------------------------
-
-def word_spans() -> list[tuple[int, int]]:
-    """[(start - 2) * 1600, (end + 2) * 1600) in samples for every word of every clip."""
-    return [((w["start"] - DUCK_PAD_FRAMES) * SAMPLES_PER_FRAME, (w["end"] + DUCK_PAD_FRAMES) * SAMPLES_PER_FRAME)
-            for t in _timings().values() for w in t["words"]]
-
-
-def click_samples() -> list[int]:
-    """The samples of the two clicks, by score.click_frames: the rule that opens the pad in D major there."""
-    return [f * SAMPLES_PER_FRAME for f in score.click_frames()]
-
-
-def duck_gain(spans: list[tuple[int, int]], opens: list[int], n: int = N) -> np.ndarray:
-    """Per-sample linear gain of the music bus.
-
-    The target is DUCK_DB inside the spans and 0 dB elsewhere. A one-pole smooths it in dB, with
-    time constant DUCK_ATTACK_S while the gain falls and DUCK_RELEASE_S while it rises.
-
-    `opens` holds the samples of the clicks. The end of « accepte » is set on the click of 64.0 s
-    (spec § 5.4), whose kick is the loudest hit of the film (spec § 4 S07), so the duck must not sit
-    on it. A span that covers a click therefore ends on the click. The gain returns to 0 dB over the
-    CLICK_OPEN_S before the click (half-cosine in dB), so the click lands at full level, and the next
-    word ducks the music again.
-    """
-    target = np.zeros(n)
-    for lo, hi in spans:
-        hi = min([hi] + [c for c in opens if lo < c < hi])
-        target[max(lo, 0):min(hi, n)] = DUCK_DB
-    opens_in = sorted({c for c in opens if 0 < c < n})
-    edges = np.flatnonzero(np.diff(target)) + 1
-    bounds = sorted(set(edges.tolist()) | set(opens_in) | {0, n})
-    attack = np.exp(-1.0 / (DUCK_ATTACK_S * SR))
-    release = np.exp(-1.0 / (DUCK_RELEASE_S * SR))
-    y = np.empty(n)
-    state = 0.0
-    for a, b in zip(bounds[:-1], bounds[1:]):
-        if a in opens_in:
-            state = 0.0
-        goal = target[a]
-        alpha = attack if goal < state else release
-        y[a:b] = goal + (state - goal) * alpha ** np.arange(1, b - a + 1)
-        state = y[b - 1]
-    ramp = _n(CLICK_OPEN_S)
-    for c in opens_in:
-        lo = max(c - ramp, 0)
-        y[lo:c] *= 0.5 + 0.5 * np.cos(np.pi * np.arange(c - lo) / ramp)
-    return dsp.gain_db(y)
-
-
-def duck_curve() -> np.ndarray:
-    """The ducking gain of the film, per sample (N,), from the word timings and the two clicks."""
-    return duck_gain(word_spans(), click_samples(), N)
 
 
 # --- true peak and limiter -----------------------------------------------------------------------

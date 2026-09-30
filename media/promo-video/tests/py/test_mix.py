@@ -2,7 +2,7 @@ import sys, pathlib, numpy as np, pyloudnorm as pyln
 import pytest
 from scipy.signal.windows import tukey
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "scripts"))
-from music import mix, report, score
+from music import duck, mix, report, score
 from common import SR, load_json
 
 N = 8_160_000
@@ -65,38 +65,68 @@ def test_limiter_holds_the_ceiling_ahead_of_the_peak_and_releases():
 
 def test_duck_gain_follows_attack_and_release_in_db():
     span = (SR, 2 * SR)
-    g = _db(mix.duck_gain([span], [], 3 * SR))
+    g = _db(duck.duck_gain([span], 3 * SR))
     assert np.all(g[:SR] == 0.0)
     assert g[SR + 2880] == pytest.approx(-9 * (1 - np.exp(-1)), abs=0.05)  # attack: 60 ms
     assert g[2 * SR - 1] == pytest.approx(-9.0, abs=0.01)
     assert g[2 * SR + 14_400] == pytest.approx(-9 * np.exp(-1), abs=0.05)  # release: 300 ms
 
 
-def test_duck_gain_lets_go_on_a_click():
-    click = int(1.5 * SR)
-    g = _db(mix.duck_gain([(SR, 2 * SR)], [click], 3 * SR))
-    assert g[click - 241] < -8.9           # ducked until the 5 ms ramp before the click
-    assert g[click] == pytest.approx(0.0, abs=1e-9)
-    assert np.all(np.abs(g[click:2 * SR]) < 1e-9)  # the rest of that word span stays open
+def test_duck_holds_every_word_span_down_with_no_exception():
+    """The brief's rule, literally: -9 dB on every word span [start - 2, end + 2] frames, 0 dB before
+    the first word. Wherever the spans (merged where they overlap) have lasted 8 attack time constants,
+    the gain is -9 dB within 0.01 dB, the S07 click included."""
+    g = _db(mix.duck_curve())
+    assert g.shape == (N,)
+    inside = np.zeros(N + 1, dtype=np.int8)
+    for lo, hi in duck.word_spans():
+        inside[lo:hi] = 1
+    edges = np.flatnonzero(np.diff(np.concatenate([[0], inside])))
+    settle = int(8 * duck.DUCK_ATTACK_S * SR)
+    settled = np.zeros(N, dtype=bool)
+    for lo, hi in zip(edges[::2], edges[1::2]):           # the merged spans [lo, hi)
+        settled[lo + settle:hi] = True
+    assert settled.sum() > 0.5 * inside.sum()             # most of the spoken film is checked
+    assert np.all(np.abs(g[settled] + 9.0) < 0.01)
+    assert settled[1920 * 1600]
+    assert np.all(g[:edges[0]] == 0.0)
 
 
-def test_duck_curve_opens_on_the_s07_click():
-    duck = mix.duck_curve()
-    assert duck.shape == (N,)
-    cues = load_json("generated/cues.json")
-    s07 = cues["S07.click"]["frame"]
+def test_duck_holds_the_music_down_on_the_s07_click():
+    """« accepte » ends on the click (spec § 5.4) and its span runs 2 frames past it: the duck does not
+    let go there. The click stays the loudest hit because the score lifts it (click_lift_db)."""
+    s07 = load_json("generated/cues.json")["S07.click"]["frame"]
     assert s07 == 1920
-    assert duck[(s07 - 5) * 1600] < 10 ** (-8 / 20)   # under « accepte »
-    assert duck[s07 * 1600] > 0.999                   # the click lands at full level
-    et = next(w["start"] for w in load_json("generated/vo-timings.json")["S07"]["words"] if w["start"] > s07)
-    assert duck[(et + 5) * 1600] < 10 ** (-8 / 20)    # and the voice is ducked again right after
+    accepte = next(w for w in load_json("generated/vo-timings.json")["S07"]["words"] if w["end"] == s07)
+    assert accepte["screen"] == "accepte"
+    assert _db(mix.duck_curve()[s07 * 1600]) == pytest.approx(-9.0, abs=0.01)
 
 
-def test_duck_opens_where_the_score_places_its_clicks(monkeypatch):
-    """One rule for the clicks: the duck lets go wherever score.click_frames says the clicks are."""
-    assert mix.click_samples() == [1920 * 1600, 4860 * 1600]
-    monkeypatch.setattr(score, "click_frames", lambda cues=None: [100])
-    assert mix.click_samples() == [100 * 1600]
+def test_the_score_lifts_each_click_by_the_depth_of_the_duck(monkeypatch):
+    """One duck for the mix and the score: each click is played louder by the duck's depth at its sample."""
+    lift = score.click_lift_db()
+    assert list(lift) == [1920, 4860]
+    assert lift[1920] == pytest.approx(9.0, abs=0.01)     # under « accepte »
+    assert 0.0 < lift[4860] < 1.0                         # the duck still releasing after the last word
+    g = mix.duck_curve()
+    for f, db in lift.items():
+        assert db == pytest.approx(-_db(g[f * 1600]), abs=1e-9)
+    monkeypatch.setattr(duck, "duck_curve", lambda: np.full(N, 10 ** (-3 / 20)))
+    assert score.click_lift_db() == pytest.approx({1920: 3.0, 4860: 3.0})
+
+
+def test_the_click_lift_stays_out_of_the_sidechain():
+    """The clicks are played louder, but the bass and pad pump at the level the click is heard at:
+    1.0 on the first click, CLICK_ECHO_DB on the next. A +9 dB trigger would turn 1 - 0.6 env negative."""
+    a = score._Arrangement(7)
+    a.place_cues()
+    a.place_groove()
+    heard = {1920 * 1600: 1.0, 4860 * 1600: 10 ** (score.CLICK_ECHO_DB / 20)}
+    for sample, level in heard.items():
+        on_click = [lv for s, lv in a.kicks if s == sample]
+        assert len(on_click) == 2, on_click                # the ink kick and the groove kick doubling it
+        assert on_click == pytest.approx([level, level])
+    assert score.sidechain_gain(a.kicks).min() >= 1.0 - score.SIDECHAIN_DEPTH - 1e-9
 
 
 def test_s07_click_is_the_strongest_transient_of_the_master():

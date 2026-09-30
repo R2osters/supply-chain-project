@@ -103,14 +103,16 @@ def test_the_two_clicks_are_the_loudest_hits_of_the_film(stems):
 
 
 def test_the_s07_click_is_louder_than_its_s17_twin(stems):
-    """The first click leads (spec § 4 S07); the reprise click is CLICK_ECHO_DB under it (gate A)."""
+    """The first click leads (spec § 4 S07). In the stems it also carries its lift over the voice duck
+    (click_lift_db); in the master the reprise click is heard CLICK_ECHO_DB under it (gate A)."""
     mix = np.abs(sum(stems.values())).max(axis=1)
     s07, s17 = (mix[frame(c) * 1600:frame(c) * 1600 + SR // 10].max() for c in ("S07.click", "S17.click"))
     assert s07 > s17, (s07, s17)
 
 
 def test_the_click_rule_finds_the_two_clicks_only():
-    """is_click is the one rule for the clicks (score and mix): inkKick with `major`, never a series head."""
+    """is_click is the one rule for the clicks (D-major bar, lift over the voice duck): inkKick with
+    `major`, never a series head."""
     assert score.click_frames() == [1920, 4860]
     assert score.click_frames(CUES) == [frame("S07.click"), frame("S17.click")]
     assert score.is_click(CUES["S07.click"]) and score.is_click(CUES["S17.click"])
