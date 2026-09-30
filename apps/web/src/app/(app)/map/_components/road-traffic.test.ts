@@ -92,6 +92,11 @@ describe('roadsInView', () => {
     const roads = [road('in', [[0.5, 0.5], [0.6, 0.5]]), road('margin', [[1.1, 0.5], [1.15, 0.5]]), road('far', [[3, 3], [3.1, 3]])];
     expect(roadsInView(roads, view).map((r) => r.id)).toEqual(['in', 'margin']);
   });
+
+  it('keeps a long road crossing the view with no vertex inside it', () => {
+    const view = { west: 0, south: 0, east: 0.01, north: 0.01 };
+    expect(roadsInView([road('motorway', [[-2, 0.005], [2, 0.005]])], view).map((r) => r.id)).toEqual(['motorway']);
+  });
 });
 
 describe('openFlowBboxKey', () => {

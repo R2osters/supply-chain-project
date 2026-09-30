@@ -102,7 +102,11 @@ export function measuredSourcesOf(lines: FlowLine[]): FlowSource[] {
   return SOURCE_ORDER.filter((source) => seen.has(source));
 }
 
-/** Items with a vertex in the view grown by `margin` of its size: tiles also hold roads far off-screen. */
+/**
+ * Items whose bounding box overlaps the view grown by `margin` of its size: tiles also hold roads
+ * far off-screen. Boxes, not vertices: a straight motorway can cross a street-level view with its
+ * nodes kilometres away on both sides. A false positive only costs a few match samples.
+ */
 export function inView<T extends { coordinates: [number, number][] }>(items: T[], view: View, margin = 0.2): T[] {
   const dx = (view.east - view.west) * margin;
   const dy = (view.north - view.south) * margin;
@@ -110,7 +114,19 @@ export function inView<T extends { coordinates: [number, number][] }>(items: T[]
   const east = view.east + dx;
   const south = view.south - dy;
   const north = view.north + dy;
-  return items.filter((item) => item.coordinates.some(([lon, lat]) => lon >= west && lon <= east && lat >= south && lat <= north));
+  return items.filter((item) => {
+    let minLon = Infinity;
+    let maxLon = -Infinity;
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    for (const [lon, lat] of item.coordinates) {
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+    }
+    return minLon <= east && maxLon >= west && minLat <= north && maxLat >= south;
+  });
 }
 
 export function roadsInView(roads: Road[], view: View, margin = 0.2): Road[] {
