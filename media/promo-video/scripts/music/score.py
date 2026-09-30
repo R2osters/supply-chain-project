@@ -2,7 +2,8 @@
 
 `render_stems(seed)` returns {"drums", "bass", "pad", "keys", "fx"}: stereo float64 arrays of exactly
 TOTAL_FRAMES * SAMPLES_PER_FRAME = 8 160 000 samples at 48 kHz. `write_stems()` writes them to
-public/audio/stems/<name>.wav (float32); `python -m music.score`, run from scripts/, does the same.
+.stems/<name>.wav (float32, git-ignored); `python -m music.score`, run from scripts/, does the same.
+The stems live outside public/ (Ruling R21): every Remotion bundle copies public/ into the temp dir.
 
 Where the timing comes from:
 - the section of each bar from timeline/timeline.json, one chord per bar from theory.PROGRESSIONS,
@@ -47,7 +48,7 @@ BAR = FRAMES_PER_BAR * SAMPLES_PER_FRAME       # 96 000 samples (2 s)
 SIX = BEAT // 4                                # 6 000 samples: one sixteenth
 EIGHTH = BEAT // 2
 STEMS = ("drums", "bass", "pad", "keys", "fx")
-STEM_DIR = ROOT / "public" / "audio" / "stems"
+STEM_DIR = ROOT / ".stems"                     # outside public/ (Ruling R21)
 
 # Tonal cue sounds, which belong with the keys rather than the effects.
 KEYS_SOUNDS = frozenset({"pluck", "phrase", "chordDm", "fmChord", "slabArp", "modelRun", "glissDown"})

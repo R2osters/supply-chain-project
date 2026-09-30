@@ -3,7 +3,8 @@ out/
 .venv/
 .geo-cache/
 .vo-cache/
-public/audio/stems/
+.stems/
+.vitest/
 public/audio/master.wav
 __pycache__/
 .rb-src/

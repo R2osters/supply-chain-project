@@ -8,7 +8,7 @@ The chain:
 1. Voice. Every clip of generated/vo-timings.json is decoded to mono 48 kHz by the ffmpeg that ships
    with Remotion (decode_vo), placed at startFrame * 1600 and panned to the centre. The voice bus
    alone is then gained to VO_LUFS (-18 LUFS).
-2. Music. The sum of the five stems of Task 7 (public/audio/stems/, rendered in memory when they
+2. Music. The sum of the five stems of Task 7 (.stems/, rendered in memory when they
    are missing), times the duck curve (duck.py): -9 dB during every word span [start - 2, end + 2]
    frames and 0 dB elsewhere, smoothed by a one-pole in dB (attack 60 ms while the gain falls,
    release 300 ms while it rises). The rule has no exception. The S07 click, which lands under
@@ -162,7 +162,7 @@ def limit(x: np.ndarray, ceiling_db: float = TRUE_PEAK_DB - LIMITER_MARGIN_DB) -
 # --- master --------------------------------------------------------------------------------------
 
 def load_stems() -> dict[str, np.ndarray]:
-    """The five stems from public/audio/stems/, or rendered in memory when a file is missing."""
+    """The five stems from .stems/ (score.STEM_DIR), or rendered in memory when a file is missing."""
     paths = {name: score.STEM_DIR / f"{name}.wav" for name in score.STEMS}
     if not all(p.exists() for p in paths.values()):
         print("stems missing: rendering them in memory (python -m music.score writes them)", file=sys.stderr)
