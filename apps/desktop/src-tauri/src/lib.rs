@@ -12,6 +12,7 @@ pub mod secrets;
 pub mod services;
 pub mod startup;
 pub mod supervisor;
+pub mod update;
 mod win_job;
 
 pub use bridge::run;
