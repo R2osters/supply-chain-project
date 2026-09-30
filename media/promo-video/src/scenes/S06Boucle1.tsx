@@ -4,7 +4,8 @@
 // « L'optimisation » the camera pushes onto OPTIMISER and the station opens into the tuner gauge: three SKU needles are
 // recalculated one beat apart, the last one springs 0 → 68 (overshooting towards 74), the warn zone lights as it passes
 // 60 and « 68 % » turns crit on the risk cue, with « RISQUE DE RUPTURE » and the EXEMPLE pill. Recoil to the whole ring
-// over frames 285-300, the station now summarising the analysis; S07 takes the world over from there.
+// over frames 285-300, the station now summarising the analysis; S07 takes the world over from there. The arm rests
+// on the station at work and moves on a notch per beat: 12 h, then 3 h before the push, then 6 h by the recoil.
 import {AbsoluteFill, useCurrentFrame} from 'remotion';
 import {Gauge, valueToAngle, type GaugeNeedle} from '../components/Gauge';
 import {DemoPill} from '../components/DemoPill';
@@ -20,8 +21,9 @@ import {palette, signal} from '../theme/tokens';
 import {RING_RADIUS, ringPoint} from '../components/LoopSequencer';
 import {
   DbCylinder, DB_CENTER, IDENTITY, lerp, lerpCamera, lerpRect, MorphBox, pop, pushOn, ramp, rectCenter, rectToScreen, RingWorld,
-  SMALL_PILL, StationCard, STATION_RECTS, stationHumain, stationOptimiserDone, stationOptimiserPending,
-  stationRecommandationPending, stationSuivreObserve, THEME, WORLD_FADE, type Camera, type Point, type Rect,
+  SMALL_PILL, StationCard, STATION_DEG, STATION_RECTS, stationHumain, stationOptimiserDone, stationOptimiserPending,
+  stationRecommandationPending, stationSuivreObserve, THEME, travelTo, WORLD_FADE, type ArmPath, type Camera, type Point,
+  type Rect,
 } from './refrain';
 
 const S = 'S06' as const;
@@ -65,6 +67,14 @@ export const S06_T = (() => {
     recoilEnd: FRAMES,
   };
 })();
+
+/** The arm rests on SUIVRE from the drop, leaves it once the event is written, and reaches OPTIMISER a beat before the
+ * camera pushes onto it. Its last move, to RECOMMANDATION, ends on the recoil: the arm has passed to 6 h when S07 pushes
+ * there (spec § 4 S07). */
+export const S06_ARM: ArmPath = {
+  fromDeg: STATION_DEG[0],
+  notches: [...travelTo(S06_T.push - FRAMES_PER_BEAT), ...travelTo(S06_T.recoil)],
+};
 
 export const s06NeedleValue = (f: number): number => dampedSpring(f - S06_T.needle, {...NEEDLE_SPRING, to: RISK_EXAMPLE});
 
@@ -230,7 +240,7 @@ export const S06Boucle1: React.FC = () => {
   return (
     <AbsoluteFill style={{background: pal.bg}}>
       <RingWorld
-        armFrame={f} camera={cam} opacity={worldOpacity} revealFrom={T.drop} highlight={{color: 'crit', cells: [0]}}
+        frame={f} arm={S06_ARM} camera={cam} opacity={worldOpacity} revealFrom={T.drop} highlight={{color: 'crit', cells: [0]}}
         stations={[
           {props: stationSuivreObserve(pop(f, T.drop)), opacity: enter(0)},
           f < T.push

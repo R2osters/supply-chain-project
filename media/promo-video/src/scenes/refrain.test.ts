@@ -2,16 +2,32 @@
 // from the cues, the needle and its readout, the cameras, the click choreography, the purchase order's ride, the drop.
 import {cueLocal, sceneFrames, seriesLocal, wordLocal} from '../lib/timeline';
 import {FRAMES_PER_BEAT, quantize} from '../lib/beat';
-import {armAngle, RING_CENTER} from '../components/LoopSequencer';
+import {armAngle, CELLS, RING_CENTER} from '../components/LoopSequencer';
 import {zoneAt} from '../components/Gauge';
-import {cellBox, IDENTITY, intersects, STATION_RECTS, toScreen, type Rect} from './refrain';
-import {S06_PANEL, S06_T, s06Camera, s06NeedleValue, s06PanelRect, s06Readout} from './S06Boucle1';
-import {BUTTON_RECT, clickFx, clusterNotes, holdFill, poRect, REC_CARD, S07_T, s07ArmFrame, s07Camera} from './S07Boucle2';
-import {DROP_WORDS, dropWordAt, ringTurn} from './S08Drop';
+import {armDegAt, armSequencerFrame, cellBox, IDENTITY, intersects, rectCenter, STATION_DEG, STATION_RECTS, toScreen, travelTo, type ArmPath, type Rect} from './refrain';
+import {S06_ARM, S06_PANEL, S06_T, s06Camera, s06NeedleValue, s06PanelRect, s06Readout} from './S06Boucle1';
+import {BUTTON_RECT, clickFx, clusterNotes, holdFill, poRect, REC_CARD, S07_ARM, S07_T, s07Camera, WAVE_CLIP_Y} from './S07Boucle2';
+import {DROP_WORDS, dropCellColors, dropWordAt, dropWordRise, ringTurn} from './S08Drop';
 
 const MARGIN = 96;
 const inFrame = (r: Rect) => r.x >= MARGIN && r.y >= MARGIN && r.x + r.w <= 1920 - MARGIN && r.y + r.h <= 1080 - MARGIN;
 const HUB: Rect = {x: RING_CENTER.x - 60, y: RING_CENTER.y - 60, w: 120, h: 120};
+/** The arm's angle wrapped to 0..360. */
+const armAt = (f: number, path: ArmPath) => ((armDegAt(f, path) % 360) + 360) % 360;
+/** A notch path moves one 22.5° step per beat in 6 frames, on beats, and rests otherwise. */
+const expectNotches = (path: ArmPath, frames: number) => {
+  path.notches.forEach((s, k) => {
+    expect(s % FRAMES_PER_BEAT).toBe(0);
+    if (k > 0) expect(s - path.notches[k - 1]).toBeGreaterThanOrEqual(FRAMES_PER_BEAT);
+  });
+  for (let f = 1; f <= frames + 15; f++) {
+    const d = armDegAt(f, path) - armDegAt(f - 1, path);
+    const moving = path.notches.some((s) => f > s && f <= s + 6);
+    if (moving) expect(d).toBeGreaterThan(0);
+    else expect(d).toBe(0);
+  }
+  for (const s of path.notches) expect(armDegAt(s + 6, path) - armDegAt(s, path)).toBe(22.5);
+};
 
 describe('refrain world', () => {
   it('keeps the four stations inside the margins, clear of every cell and of the hub', () => {
@@ -21,6 +37,22 @@ describe('refrain world', () => {
       expect(intersects(r, HUB)).toBe(false);
       for (let i = 0; i < 16; i++) expect(intersects(r, cellBox(i))).toBe(false);
     }
+  });
+
+  it('drives the sequencer arm along a notch path: rest, one notch per beat in 6 frames, rest', () => {
+    const path: ArmPath = {fromDeg: 90, notches: travelTo(60)};
+    expect(path.notches).toEqual([15, 30, 45, 60]);
+    expect(armDegAt(0, path)).toBe(90);
+    expect(armDegAt(14, path)).toBe(90);
+    expect(armDegAt(15, path)).toBe(90);
+    expect(armDegAt(18, path)).toBeGreaterThan(90);
+    expect(armDegAt(21, path)).toBe(112.5);
+    expect(armDegAt(66, path)).toBe(180);
+    expect(armDegAt(500, path)).toBe(180);
+    // The sequencer frame always lands on the free-running arm's own curve.
+    expect(armAngle(armSequencerFrame(40, path))).toBe(armDegAt(40, path));
+    expect(armDegAt(0, {fromDeg: 0, notches: []})).toBe(0);
+    expectNotches(path, 80);
   });
 
   it('maps the camera focus to the centre of the frame', () => {
@@ -76,6 +108,18 @@ describe('S06 · the loop (1)', () => {
     expect(s07Camera(0)).toEqual(IDENTITY); // the cut to S07 is seamless
   });
 
+  it('rests the arm on the station at work and moves it between stations a notch per beat', () => {
+    expectNotches(S06_ARM, sceneFrames('S06'));
+    // SUIVRE from the drop until the event is written.
+    for (let f = S06_T.drop; f <= S06_T.dbWrite; f++) expect(armAt(f, S06_ARM)).toBe(STATION_DEG[0]);
+    // On OPTIMISER before the camera pushes onto it, and while it opens.
+    for (let f = S06_T.push - 3; f < S06_T.pushEnd; f++) expect(armAt(f, S06_ARM)).toBe(STATION_DEG[1]);
+    // Passed to RECOMMANDATION by the end of the recoil, where S07 picks it up.
+    expect(armAt(S06_T.recoil - 1, S06_ARM)).toBeLessThan(STATION_DEG[2]);
+    for (let f = S06_T.recoil + 6; f <= sceneFrames('S06') + 15; f++) expect(armAt(f, S06_ARM)).toBe(STATION_DEG[2]);
+    expect(armAt(sceneFrames('S06'), S06_ARM)).toBe(armAt(0, S07_ARM));
+  });
+
   it('opens the OPTIMISER station into the gauge panel and closes it back', () => {
     expect(s06PanelRect(S06_T.push - 1)).toBeNull();
     expect(s06PanelRect(S06_T.push)).toEqual(STATION_RECTS[1]);
@@ -96,13 +140,29 @@ describe('S07 · the loop (2)', () => {
     expect(S07_T.live).toEqual(seriesLocal('S07', 'S07.live'));
   });
 
-  it('continues the S06 arm and brings the button in when the arm reaches 9 o’clock', () => {
-    expect(s07ArmFrame(0)).toBe(sceneFrames('S06'));
+  it('starts the arm on RECOMMANDATION as the camera pushes there, and brings the button in when it reaches 9 o’clock', () => {
+    expectNotches(S07_ARM, sceneFrames('S07'));
+    for (let f = S07_T.push; f <= S07_T.pushEnd; f++) expect(armAt(f, S07_ARM)).toBe(STATION_DEG[2]);
     const at = S07_T.buttonIn;
-    expect(((armAngle(s07ArmFrame(at)) % 360) + 360) % 360).toBe(270);
-    for (let f = 0; f < at; f++) expect(((armAngle(s07ArmFrame(f)) % 360) + 360) % 360).not.toBe(270);
+    expect(armAt(at, S07_ARM)).toBe(STATION_DEG[3]);
+    for (let f = 0; f < at; f++) expect(armAt(f, S07_ARM)).not.toBe(STATION_DEG[3]);
     expect(at).toBeGreaterThan(S07_T.resolve);
     expect(at).toBeLessThan(S07_T.hold);
+    // On HUMAIN through the hold, the click and the recoil.
+    for (let f = at; f < S07_T.steps[0] - FRAMES_PER_BEAT; f++) expect(armAt(f, S07_ARM)).toBe(STATION_DEG[3]);
+  });
+
+  it('carries the purchase order round to SUIVRE with the arm, back at 12 h before the first live cue', () => {
+    // The arm joins the order at its first rest, then both step on the same beats.
+    const joined = S07_T.steps[0] - FRAMES_PER_BEAT + 6;
+    for (let f = joined; f <= S07_T.ringTo; f++) {
+      const r = poRect(f)!;
+      const c = rectCenter(r);
+      const deg = ((Math.atan2(c.x - RING_CENTER.x, RING_CENTER.y - c.y) * 180) / Math.PI + 360) % 360;
+      expect(Math.abs(((deg - armAt(f, S07_ARM) + 540) % 360) - 180)).toBeLessThan(0.5);
+    }
+    for (let f = S07_T.ringTo; f <= sceneFrames('S07') + 15; f++) expect(armAt(f, S07_ARM)).toBe(STATION_DEG[0]);
+    expect(S07_T.ringTo).toBeLessThan(S07_T.live[0]);
   });
 
   it('fills the button over the beat before the click', () => {
@@ -127,6 +187,8 @@ describe('S07 · the loop (2)', () => {
     expect(clickFx(S07_T.click + 19).wave).toBeNull();
     expect(clickFx(S07_T.click + 12).zoom).toBe(1);
     expect(clickFx(S07_T.click + 12).pressed).toBe(0);
+    // The wave stops above the HUD's section tape.
+    expect(WAVE_CLIP_Y).toBeLessThanOrEqual(1080 - MARGIN);
   });
 
   it('resolves the crit cluster into a vertical ok chord on « C »', () => {
@@ -173,6 +235,42 @@ describe('S08 · drop', () => {
     expect(DROP_WORDS.map((w) => w.at)).toEqual(seriesLocal('S08', 'S08.word'));
     DROP_WORDS.forEach((w, i) => expect(dropWordAt(w.at)).toBe(i));
     expect(dropWordAt(sceneFrames('S08') + 15)).toBe(4);
+  });
+
+  it('hands each word over to the next on one frame, never through an empty or a dim frame', () => {
+    const last = sceneFrames('S08') + 15;
+    for (let f = 0; f <= last; f++) {
+      expect(dropWordAt(f)).not.toBeNull();
+      expect(dropWordRise(f)).toBeGreaterThan(0.5);
+    }
+    for (const w of DROP_WORDS.slice(1)) {
+      const first = w.at - 2; // the word appears 2 frames before its beat (spec § 3.5)
+      const i = DROP_WORDS.indexOf(w);
+      expect(dropWordAt(first - 1)).toBe(i - 1);
+      expect(dropWordRise(first - 1)).toBe(1);
+      expect(dropWordAt(first)).toBe(i);
+      for (let f = first + 1; f <= first + 4; f++) expect(dropWordRise(f)).toBeGreaterThan(dropWordRise(f - 1));
+      expect(dropWordRise(w.at + 3)).toBe(1);
+    }
+  });
+
+  it('sweeps each word’s colour over the ring from its cue, over the colour of the word before', () => {
+    expect(dropCellColors(-1).every((c) => c === null)).toBe(true);
+    DROP_WORDS.forEach((w, i) => {
+      const under = i === 0 ? null : DROP_WORDS[i - 1].color;
+      // Until the cue, the whole ring keeps the previous colour, through the frames the new word is already up.
+      for (let f = w.at - 3; f < w.at; f++) if (i > 0) expect(dropCellColors(f)).toEqual(Array(CELLS).fill(under));
+      const onCue = dropCellColors(w.at);
+      expect(onCue[0]).toBe(w.color);
+      expect(onCue[CELLS - 1]).toBe(under);
+      for (let f = w.at; f < w.at + 8; f++) {
+        const cells = dropCellColors(f);
+        const lit = cells.filter((c) => c === w.color).length;
+        expect(cells.slice(0, lit).every((c) => c === w.color)).toBe(true);
+        expect(cells.slice(lit).every((c) => c === under)).toBe(true);
+      }
+      expect(dropCellColors(w.at + 8)).toEqual(Array(CELLS).fill(w.color));
+    });
   });
 
   it('spins the ring one turn per bar, continuously', () => {

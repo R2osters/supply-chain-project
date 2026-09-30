@@ -4,10 +4,11 @@
 // crit notes that flew out of the risk figure tremble as a cluster and resolve into a vertical ok chord on « C ». When
 // the arm reaches 9 o'clock the big button comes in; the cursor glides onto it, it fills over the beat before the click,
 // and the click lands on frame 1920 exactly: press 0.96, shockwave 0 → 700 px, punch zoom 1 → 1.03 → 1. The draft
-// purchase order slides out of the button (no "ai" marker, spec § 8), the camera recoils, and the order ratchets round
-// the ring to SUIVRE, which now reads « SUIVRE · SUIVI » with a live dot beating on the four live cues.
+// purchase order slides out of the button (no "ai" marker, spec § 8), the camera recoils, and the arm carries the order
+// round the ring cell by cell to SUIVRE, which now reads « SUIVRE · SUIVI » with a live dot beating on the four live
+// cues. The shockwave runs on the background only, under the card and the button.
 import {AbsoluteFill, interpolateColors, useCurrentFrame} from 'remotion';
-import {armAngle, RING_RADIUS, ringPoint, STEP_DEG} from '../components/LoopSequencer';
+import {RING_RADIUS, ringPoint, STEP_DEG} from '../components/LoopSequencer';
 import {Button} from '../components/Button';
 import {Chip} from '../components/Chip';
 import {ContainerGlyph} from '../components/ContainerGlyph';
@@ -22,10 +23,10 @@ import {DecryptedText} from '../rb/DecryptedText';
 import {SplitText} from '../rb/SplitText';
 import {palette, SHADOW, signal} from '../theme/tokens';
 import {
-  DbCylinder, IDENTITY, lerp, lerpCamera, lerpPoint, lerpRect, LiveDot, MorphBox, pushOn, ramp, rectAround, rectCenter,
-  rectToScreen, RingWorld, Skeleton, SMALL_PILL, StationCard, STATION_RECTS, stationHumain, stationOptimiserDone,
-  stationRecommandationDone, stationRecommandationPending, stationSuivreObserve, stationSuivreSuivi, THEME, toScreen, WORLD_FADE,
-  type Camera, type Point, type Rect,
+  armDegAt, DbCylinder, IDENTITY, lerp, lerpCamera, lerpPoint, lerpRect, LiveDot, MorphBox, pushOn, ramp, rectAround, rectCenter,
+  rectToScreen, RingWorld, Skeleton, SMALL_PILL, StationCard, STATION_DEG, STATION_RECTS, stationHumain, stationOptimiserDone,
+  stationRecommandationDone, stationRecommandationPending, stationSuivreObserve, stationSuivreSuivi, THEME, toScreen, travelTo,
+  WORLD_FADE, type ArmPath, type Camera, type Point, type Rect,
 } from './refrain';
 
 const S = 'S07' as const;
@@ -36,9 +37,19 @@ const RECOIL_FRAMES = 18;
 const PUSH_SCALE = 2.4;
 const UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-/** The arm continues from S06: S07's frame 0 is S06's frame 300. */
-export const s07ArmFrame = (f: number): number => f + sceneFrames('S06');
-const armDeg = (f: number): number => ((armAngle(s07ArmFrame(f)) % 360) + 360) % 360;
+const rows = seriesLocal(S, 'S07.rows');
+const live = seriesLocal(S, 'S07.live');
+/** The order ratchets one cell per beat over the three beats before it docks, like the arm (spec § 3.5). */
+const poSteps = [live[0] - 4 * FRAMES_PER_BEAT, live[0] - 3 * FRAMES_PER_BEAT, live[0] - 2 * FRAMES_PER_BEAT] as const;
+
+/** The arm picks the world up from S06 at 6 h, on RECOMMANDATION. It moves on to HUMAIN while the recommendation fills
+ * in, reaching 9 h on the first row, where the button comes in; it holds there through the click. Then it joins the
+ * purchase order a beat before its first step and carries it cell by cell to SUIVRE at 12 h, before the first live cue. */
+export const S07_ARM: ArmPath = {
+  fromDeg: STATION_DEG[2],
+  notches: [...travelTo(rows[0]), ...travelTo(poSteps[2])],
+};
+const armDeg = (f: number): number => ((armDegAt(f, S07_ARM) % 360) + 360) % 360;
 /** First frame of the scene at which the arm points at `deg` (clockwise from 12 o'clock). */
 const armReaches = (deg: number): number => {
   for (let f = 0; f < FRAMES; f++) if (armDeg(f) === deg) return f;
@@ -49,7 +60,6 @@ const armReaches = (deg: number): number => {
 export const S07_T = (() => {
   const push = cueLocal(S, 'S07.push');
   const po = cueLocal(S, 'S07.po');
-  const live = seriesLocal(S, 'S07.live');
   const recoil = quantize(po, 'beat');
   return {
     push,
@@ -57,7 +67,7 @@ export const S07_T = (() => {
     hero: [wordLocal(S, 'trois').start - 2, wordLocal(S, 'unités').start - 2] as const,
     supplier: wordLocal(S, 'fournisseur').start - 2,
     resolve: cueLocal(S, 'S07.resolve'),
-    rows: seriesLocal(S, 'S07.rows'),
+    rows,
     /** « Bras à 9 h : grand bouton » */
     buttonIn: armReaches(270),
     cursorIn: wordLocal(S, 'humain').start - 2,
@@ -67,9 +77,8 @@ export const S07_T = (() => {
     recoil,
     recoilEnd: recoil + RECOIL_FRAMES,
     ringFrom: recoil + RECOIL_FRAMES,
-    /** The order ratchets one cell per beat over the three beats before it docks, like the arm (spec § 3.5). */
-    steps: [live[0] - 4 * FRAMES_PER_BEAT, live[0] - 3 * FRAMES_PER_BEAT, live[0] - 2 * FRAMES_PER_BEAT] as const,
-    ringTo: live[0] - 2 * FRAMES_PER_BEAT + 6,
+    steps: poSteps,
+    ringTo: poSteps[2] + 6,
     dock: live[0] - FRAMES_PER_BEAT,
     dockEnd: live[0] - FRAMES_PER_BEAT + 10,
     live,
@@ -106,6 +115,8 @@ export const holdFill = (f: number): number => Math.min(1, Math.max(0, (f - S07_
 export interface ClickFx { pressed: number; zoom: number; wave: {radius: number; opacity: number; width: number} | null }
 const WAVE_FRAMES = 18;
 const WAVE_RADIUS = 700;
+/** The shockwave stops above the HUD's section tape (text centred on y 1020). */
+export const WAVE_CLIP_Y = 980;
 const PUNCH = 0.03;
 const PUNCH_FRAMES = 12;
 
@@ -323,7 +334,7 @@ export const S07Boucle2: React.FC = () => {
     <AbsoluteFill style={{background: pal.bg}}>
       <AbsoluteFill style={{transformOrigin: `${BUTTON_C.x}px ${BUTTON_C.y}px`, transform: `scale(${fx.zoom})`}}>
         <RingWorld
-          armFrame={s07ArmFrame(f)} camera={cam} opacity={worldOpacity}
+          frame={f} arm={S07_ARM} camera={cam} opacity={worldOpacity}
           highlight={f < T.dock ? {color: 'crit', cells: [0]} : f >= T.live[0] ? {color: 'live', cells: [0]} : undefined}
           stations={[
             {props: docked ? stationSuivreSuivi(suivreTitle, <LiveDot frame={f} beats={T.live} />) : stationSuivreObserve(1)},
@@ -335,6 +346,14 @@ export const S07Boucle2: React.FC = () => {
           {/* Written in S06. */}
           <DbCylinder frame={f} />
         </RingWorld>
+        {fx.wave && (
+          // On the background only: under the chord, the card, the order and the button, whose type it never crosses,
+          // and above the HUD band.
+          <svg width={1920} height={WAVE_CLIP_Y} style={{position: 'absolute', left: 0, top: 0}}>
+            <circle cx={BUTTON_C.x} cy={BUTTON_C.y} r={fx.wave.radius} fill="none" stroke={pal.action} strokeWidth={fx.wave.width} opacity={fx.wave.opacity} />
+            <circle cx={BUTTON_C.x} cy={BUTTON_C.y} r={0.62 * fx.wave.radius} fill="none" stroke={pal.action} strokeWidth={fx.wave.width * 0.6} opacity={0.5 * fx.wave.opacity} />
+          </svg>
+        )}
         {zoomed && <Staff f={f} />}
         {zoomed && (
           <MorphBox rect={recRect} radius={lerp(10, 14, f < T.recoil ? pushP : 1 - recoilP)} shadow="lg" style={{opacity: f < T.recoil ? 1 : 1 - back}}>
@@ -349,13 +368,6 @@ export const S07Boucle2: React.FC = () => {
         )}
         {/* Under the button: the order slides out from beneath it, and stays under its morph during the recoil. */}
         {po && f < T.dock && <PoCard rect={po} opacity={1} />}
-        {fx.wave && (
-          // Behind the button: the rings come out from under it and never cross its label.
-          <svg width={1920} height={1080} style={{position: 'absolute', left: 0, top: 0}}>
-            <circle cx={BUTTON_C.x} cy={BUTTON_C.y} r={fx.wave.radius} fill="none" stroke={pal.action} strokeWidth={fx.wave.width} opacity={fx.wave.opacity} />
-            <circle cx={BUTTON_C.x} cy={BUTTON_C.y} r={0.62 * fx.wave.radius} fill="none" stroke={pal.action} strokeWidth={fx.wave.width * 0.6} opacity={0.5 * fx.wave.opacity} />
-          </svg>
-        )}
         {f >= T.buttonIn && f < T.recoil && (
           <div style={{position: 'absolute', left: BUTTON_RECT.x, top: BUTTON_RECT.y, opacity: btnIn, transform: `translateX(${-80 * (1 - btnIn)}px)`}}>
             <Button

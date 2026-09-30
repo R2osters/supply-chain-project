@@ -1,13 +1,15 @@
 // src/scenes/refrain.tsx — the world the two refrain scenes share (spec § 4 S06-S07): the sequencer ring, its four
 // station cards (SUIVRE at 12 h, OPTIMISER at 3 h, RECOMMANDATION at 6 h, HUMAIN at 9 h), the domain_events cylinder,
-// and a camera that pushes into a station and recoils (spec § 3.5, transition 3: scale, ease-out, never a blur).
+// the arm's path from station to station, and a camera that pushes into a station and recoils (spec § 3.5,
+// transition 3: scale, ease-out, never a blur).
 // S06 hands the world over to S07 in the state it leaves it, so the cut between them is seamless.
 import type {CSSProperties, ReactNode} from 'react';
 import {AbsoluteFill} from 'remotion';
-import {LoopSequencer, RING_CENTER, RING_RADIUS, ringPoint, STEP_DEG, type LoopHighlight} from '../components/LoopSequencer';
+import {armAngle, LoopSequencer, RING_CENTER, RING_RADIUS, ringPoint, STEP_DEG, type LoopHighlight} from '../components/LoopSequencer';
 import {DemoPill} from '../components/DemoPill';
 import {ExamplePill} from '../components/ExamplePill';
 import {LABEL} from '../components/typography';
+import {FRAMES_PER_BEAT, roundHalfUp} from '../lib/beat';
 import {EASE_OUT} from '../lib/easing';
 import {frInt, frPercent} from '../lib/format';
 import {sceneDef} from '../lib/timeline';
@@ -70,6 +72,39 @@ export const cellBox = (i: number): Rect => {
 
 /** The domain_events cylinder sits outside the ring at 2 o'clock, between SUIVRE and OPTIMISER, its label to the right. */
 export const DB_CENTER: Point = ringPoint(60, 470);
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The arm: the playhead of the loop follows the story (spec § 4 S07: « le bras passe à 6 h, puis poussée »). It rests on
+// the station at work and travels to the next one a notch per beat, 22.5° in 6 frames (spec § 3.5).
+
+/** Angles of the stations, clockwise from 12 o'clock: SUIVRE, OPTIMISER, RECOMMANDATION, HUMAIN. */
+export const STATION_DEG = [0, 90, 180, 270] as const;
+const NOTCHES_PER_STATION = roundHalfUp(90 / STEP_DEG);
+
+export interface ArmPath {
+  /** Where the arm rests when the scene starts (degrees clockwise from 12 o'clock, a multiple of a notch). */
+  fromDeg: number;
+  /** The frames a notch starts on (local frames, on beats, at least a beat apart). */
+  notches: readonly number[];
+}
+
+/** The notches of a move to the next station, the last one starting on `last`: one per beat. */
+export const travelTo = (last: number): number[] =>
+  Array.from({length: NOTCHES_PER_STATION}, (_, k) => last - (NOTCHES_PER_STATION - 1 - k) * FRAMES_PER_BEAT);
+
+/** LoopSequencer drives its arm from a frame, one notch per beat from frame 0. This is the frame at which that
+ * free-running arm shows the angle `path` gives at `f`: notches done so far, plus the one in progress. */
+export const armSequencerFrame = (f: number, path: ArmPath): number => {
+  const started = path.notches.filter((s) => f >= s);
+  const n = roundHalfUp(path.fromDeg / STEP_DEG) + started.length;
+  if (n === 0) return 0;
+  const since = started.length === 0 ? Infinity : f - started[started.length - 1];
+  // Frames 0-5 of a beat move the free-running arm by one notch; frames 6-14 hold it there.
+  return FRAMES_PER_BEAT * (n - 1) + Math.min(since, FRAMES_PER_BEAT - 1);
+};
+
+/** The arm's angle at `f` (degrees clockwise from 12 o'clock, not wrapped). */
+export const armDegAt = (f: number, path: ArmPath): number => armAngle(armSequencerFrame(f, path));
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Camera: the world point `focus` is shown at the centre of the frame, magnified `scale` times.
@@ -296,8 +331,10 @@ export const DbCylinder: React.FC<DbCylinderProps> = ({frame, appear, writes = [
 // The ring world
 
 export interface RingWorldProps {
-  /** Frame of the arm (continuous across S06 and S07). */
-  armFrame: number;
+  /** The scene's frame. */
+  frame: number;
+  /** Where the arm rests and when it travels (it ends S06 where S07 picks it up). */
+  arm: ArmPath;
   camera: Camera;
   /** Opacity of the whole world (it recedes behind a card opened from a station). */
   opacity?: number;
@@ -312,28 +349,34 @@ export interface RingWorldProps {
 /** Offset a station slides in from, towards the ring centre (it settles outwards onto its slot). */
 const ENTER_FROM: readonly Point[] = [{x: 0, y: 16}, {x: -16, y: 0}, {x: 0, y: -16}, {x: 16, y: 0}];
 
-export const RingWorld: React.FC<RingWorldProps> = ({armFrame, camera, opacity = 1, revealFrom, highlight, stations, children}) => (
-  <AbsoluteFill style={{...worldTransform(camera), opacity}}>
-    <LoopSequencer theme={THEME} frame={armFrame} stations={[null, null, null, null]} highlight={highlight} revealFrom={revealFrom} />
-    {children}
-    {stations.map((s, i) => {
-      if (!s) return null;
-      const e = s.opacity ?? 1;
-      const r = STATION_RECTS[i];
-      return (
-        <div
-          key={i}
-          style={{
-            position: 'absolute', left: r.x, top: r.y, opacity: e,
-            transform: `translate(${ENTER_FROM[i].x * (1 - e)}px, ${ENTER_FROM[i].y * (1 - e)}px)`,
-          }}
-        >
-          <StationCard {...s.props} />
-        </div>
-      );
-    })}
-  </AbsoluteFill>
-);
+export const RingWorld: React.FC<RingWorldProps> = ({frame, arm, camera, opacity = 1, revealFrom, highlight, stations, children}) => {
+  const armFrame = armSequencerFrame(frame, arm);
+  // LoopSequencer reads one frame for its arm and for its cell reveal: the reveal is shifted by the same amount, so the
+  // cells keep the scene's time.
+  const reveal = revealFrom === undefined ? undefined : revealFrom + armFrame - frame;
+  return (
+    <AbsoluteFill style={{...worldTransform(camera), opacity}}>
+      <LoopSequencer theme={THEME} frame={armFrame} stations={[null, null, null, null]} highlight={highlight} revealFrom={reveal} />
+      {children}
+      {stations.map((s, i) => {
+        if (!s) return null;
+        const e = s.opacity ?? 1;
+        const r = STATION_RECTS[i];
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute', left: r.x, top: r.y, opacity: e,
+              transform: `translate(${ENTER_FROM[i].x * (1 - e)}px, ${ENTER_FROM[i].y * (1 - e)}px)`,
+            }}
+          >
+            <StationCard {...s.props} />
+          </div>
+        );
+      })}
+    </AbsoluteFill>
+  );
+};
 
 /** A box that morphs between a station and a card in front of the world (spec § 3.5, transition 4). */
 export const MorphBox: React.FC<{rect: Rect; radius: number; shadow: 'md' | 'lg'; children?: ReactNode; style?: CSSProperties}> = ({rect, radius, shadow, children, style}) => (
