@@ -1,7 +1,9 @@
 import sys, pathlib, numpy as np
 import pytest
+from scipy.signal import hilbert
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "scripts"))
-from music import score
+from music import score, dsp, theory
+from common import SR, load_json
 
 
 # One render per variant for the whole module: a full render takes about 20 s.
@@ -39,9 +41,6 @@ def test_silence_before_the_drop(stems):
 
 
 # --- beyond the brief: the promises of the arrangement -------------------------------------------
-
-from music import theory
-from common import SR, load_json
 
 CUES = load_json("generated/cues.json")
 
@@ -177,8 +176,6 @@ def test_pad_is_the_demo_pad_from_s14_split(dry):
     signal); the vibrato puts a 5 Hz component in it. D3 is used because its ±8 cent voices beat
     slowly (0.7 Hz), far from 5 Hz.
     """
-    from scipy.signal import hilbert
-    from music import dsp
     pad, f = dry["pad"][:, 0], theory.hz("D3")
     assert bar(63) + SR < frame("S14.split") * 1600 < bar(67)
 
