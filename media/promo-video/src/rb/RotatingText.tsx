@@ -1,8 +1,9 @@
 // Adapted from React Bits RotatingText (https://reactbits.dev), MIT + Commons Clause. Rewritten to be a pure function of the Remotion frame.
 // Original: an interval timer advances the index and motion's AnimatePresence springs each character in from y 100 %
 // (opacity 0) and out to y -120 %. Here the index is `floor((frame - startFrame) / every)`, each character enters over
-// `enterFrames` with the charter's EASE_OUT, and the outgoing item leaves on a hard cut (spec § 3.5). The stylesheet
-// is inlined.
+// `enterFrames` with the charter's EASE_OUT, and the outgoing item leaves on a hard cut (spec § 3.5). The default entry
+// is 6 frames, the shortest spec § 3.5 allows (entries last 6-18 frames); the plan's 4 would break the charter. The
+// stylesheet is inlined.
 import type {CSSProperties} from 'react';
 import {interpolate} from 'remotion';
 import {EASE_OUT} from '../lib/easing';
@@ -13,6 +14,7 @@ export interface RotatingTextProps {
   /** Frames per item (one beat at 120 BPM). */
   every?: number;
   startFrame: number;
+  /** Frames each character (or word) takes to enter; spec § 3.5 allows 6-18. */
   enterFrames?: number;
   /** Start again from the first item after the last one; otherwise the last item stays (the original looped). */
   loop?: boolean;
@@ -52,7 +54,7 @@ export const RotatingText: React.FC<RotatingTextProps> = ({
   frame,
   every = 15,
   startFrame,
-  enterFrames = 4,
+  enterFrames = 6,
   loop = false,
   splitBy = 'characters',
   staggerFrames = 0,

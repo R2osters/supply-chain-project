@@ -1,12 +1,12 @@
 // Adapted from React Bits Radar (https://reactbits.dev), MIT + Commons Clause. Rewritten to be a pure function of the Remotion frame.
 // Original: an ogl full-screen triangle redrawn on every display frame with uTime = wall-clock seconds, plus mouse
-// parallax. Here uTime = frame / fps and the canvas is redrawn synchronously in a layout effect on every render, with
-// preserveDrawingBuffer so the capture sees the pixels; the render is held (delayRender) until the program has linked.
-// The mouse is gone (uMouse stays centred). The shader is the original, with one added branch, `uInk`: the colour at
-// alpha = intensity, so an ink-coloured sweep can darken a light scene (the original modes only add light).
-import {Mesh, Program, Renderer, Triangle} from 'ogl';
-import {useLayoutEffect, useRef, useState, type CSSProperties} from 'react';
-import {cancelRender, continueRender, delayRender, useVideoConfig} from 'remotion';
+// parallax. Here uTime = frame / fps, and the WebGL lifecycle (render hold until the program links, synchronous
+// redraw on every render, preserveDrawingBuffer) is the shared one in ./useOglFrame. The mouse is gone (uMouse stays
+// centred). The shader is the original, with one added branch, `uInk`: the colour at alpha = intensity, so an
+// ink-coloured sweep can darken a light scene (the original modes only add light).
+import type {CSSProperties} from 'react';
+import {useVideoConfig} from 'remotion';
+import {useOglFrame} from './useOglFrame';
 
 export interface RadarProps {
   frame: number;
@@ -130,7 +130,7 @@ void main() {
 }
 `;
 
-interface Gl { renderer: Renderer; program: Program; mesh: Mesh }
+const CENTRED = new Float32Array([0.5, 0.5]);
 
 export const Radar: React.FC<RadarProps> = ({
   frame,
@@ -158,95 +158,34 @@ export const Radar: React.FC<RadarProps> = ({
   const video = useVideoConfig();
   const w = width ?? video.width;
   const h = height ?? video.height;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const glRef = useRef<Gl | null>(null);
-  const [handle] = useState(() => delayRender('Radar: compiling the WebGL program'));
-  const held = useRef(true);
-
-  // Context and program, once per mount.
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) return undefined;
-    const renderer = new Renderer({alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true, dpr: 1});
-    const gl = renderer.gl;
-    if (!gl) {
-      cancelRender(new Error('Radar: WebGL is unavailable'));
-      return undefined;
-    }
-    gl.clearColor(0, 0, 0, 0);
-    const program = new Program(gl, {
-      vertex: vertexShader,
-      fragment: fragmentShader,
-      uniforms: {
-        uTime: {value: 0},
-        uResolution: {value: [1, 1, 1]},
-        uSpeed: {value: speed},
-        uScale: {value: scale},
-        uRingCount: {value: ringCount},
-        uSpokeCount: {value: spokeCount},
-        uRingThickness: {value: ringThickness},
-        uSpokeThickness: {value: spokeThickness},
-        uSweepSpeed: {value: sweepSpeed},
-        uSweepWidth: {value: sweepWidth},
-        uSweepLobes: {value: sweepLobes},
-        uColor: {value: hexToVec3(color)},
-        uBgColor: {value: hexToVec3(backgroundColor)},
-        uLightMode: {value: lightMode},
-        uInk: {value: ink},
-        uFalloff: {value: falloff},
-        uBrightness: {value: brightness},
-        uMouse: {value: new Float32Array([0.5, 0.5])},
-        uMouseInfluence: {value: 0},
-        uEnableMouse: {value: false},
-      },
-    });
-    if (!gl.getProgramParameter(program.program, gl.LINK_STATUS)) {
-      cancelRender(new Error(`Radar: the WebGL program did not link: ${gl.getProgramInfoLog(program.program)}`));
-      return undefined;
-    }
-    const mesh = new Mesh(gl, {geometry: new Triangle(gl), program});
-    gl.canvas.style.display = 'block';
-    container.appendChild(gl.canvas);
-    glRef.current = {renderer, program, mesh};
-    return () => {
-      glRef.current = null;
-      container.removeChild(gl.canvas);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-    };
-    // The context lives as long as the component; the draw effect below writes every uniform.
-  }, []);
-
-  // Draw, synchronously, on every render (every frame change and every prop change).
-  useLayoutEffect(() => {
-    const g = glRef.current;
-    if (!g) return;
-    const {renderer, program, mesh} = g;
-    const {canvas} = renderer.gl;
-    // Resizing clears the drawing buffer, so only when the size really changes.
-    if (canvas.width !== w || canvas.height !== h) renderer.setSize(w, h);
-    const u = program.uniforms;
-    u.uTime.value = frame / fps;
-    u.uResolution.value = [canvas.width, canvas.height, canvas.width / canvas.height];
-    u.uSpeed.value = speed;
-    u.uScale.value = scale;
-    u.uRingCount.value = ringCount;
-    u.uSpokeCount.value = spokeCount;
-    u.uRingThickness.value = ringThickness;
-    u.uSpokeThickness.value = spokeThickness;
-    u.uSweepSpeed.value = sweepSpeed;
-    u.uSweepWidth.value = sweepWidth;
-    u.uSweepLobes.value = sweepLobes;
-    u.uColor.value = hexToVec3(color);
-    u.uBgColor.value = hexToVec3(backgroundColor);
-    u.uLightMode.value = lightMode;
-    u.uInk.value = ink;
-    u.uFalloff.value = falloff;
-    u.uBrightness.value = brightness;
-    renderer.render({scene: mesh});
-    if (held.current) {
-      held.current = false;
-      continueRender(handle);
-    }
+  const containerRef = useOglFrame({
+    name: 'Radar',
+    vertex: vertexShader,
+    fragment: fragmentShader,
+    width: w,
+    height: h,
+    uniforms: (canvas) => ({
+      uTime: frame / fps,
+      uResolution: [canvas.width, canvas.height, canvas.width / canvas.height],
+      uSpeed: speed,
+      uScale: scale,
+      uRingCount: ringCount,
+      uSpokeCount: spokeCount,
+      uRingThickness: ringThickness,
+      uSpokeThickness: spokeThickness,
+      uSweepSpeed: sweepSpeed,
+      uSweepWidth: sweepWidth,
+      uSweepLobes: sweepLobes,
+      uColor: hexToVec3(color),
+      uBgColor: hexToVec3(backgroundColor),
+      uLightMode: lightMode,
+      uInk: ink,
+      uFalloff: falloff,
+      uBrightness: brightness,
+      uMouse: CENTRED,
+      uMouseInfluence: 0,
+      uEnableMouse: false,
+    }),
   });
 
   return <div ref={containerRef} className="radar-container" style={{width: w, height: h, opacity, ...style}} />;

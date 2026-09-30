@@ -1,12 +1,14 @@
 // Adapted from React Bits Threads (https://reactbits.dev), MIT + Commons Clause. Rewritten to be a pure function of the Remotion frame.
 // Original: an ogl full-screen triangle redrawn on every display frame (paused off-screen by a visibility observer) with
 // iTime = wall-clock seconds and mouse-driven drift. Here iTime = frame / fps, the caller drives `amplitude` (pluck
-// envelopes), and the canvas is redrawn synchronously in a layout effect on every render, with preserveDrawingBuffer
-// so the capture sees the pixels; the render is held (delayRender) until the program has linked. The mouse is gone
-// (uMouse stays centred). The shader is the original.
-import {Color, Mesh, Program, Renderer, Triangle} from 'ogl';
-import {useLayoutEffect, useRef, useState, type CSSProperties} from 'react';
-import {cancelRender, continueRender, delayRender, useVideoConfig} from 'remotion';
+// envelopes), and the WebGL lifecycle (render hold until the program links, synchronous redraw on every render,
+// preserveDrawingBuffer) is the shared one in ./useOglFrame. The mouse is gone (uMouse stays centred). The shader is
+// the original. The original's gl.enable(BLEND) is dropped: ogl's Program.applyState disables blending for a program
+// without a blend function before every draw, so it never applied (the stills are byte-identical without it).
+import {Color} from 'ogl';
+import type {CSSProperties} from 'react';
+import {useVideoConfig} from 'remotion';
+import {useOglFrame} from './useOglFrame';
 
 export interface ThreadsProps {
   frame: number;
@@ -139,77 +141,26 @@ void main() {
 }
 `;
 
-interface Gl { renderer: Renderer; program: Program; mesh: Mesh }
+const CENTRED = new Float32Array([0.5, 0.5]);
 
 export const Threads: React.FC<ThreadsProps> = ({frame, fps, amplitude, color, distance = 0, width, height, style}) => {
   const video = useVideoConfig();
   const w = width ?? video.width;
   const h = height ?? video.height;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const glRef = useRef<Gl | null>(null);
-  const [handle] = useState(() => delayRender('Threads: compiling the WebGL program'));
-  const held = useRef(true);
-
-  // Context and program, once per mount.
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) return undefined;
-    const renderer = new Renderer({alpha: true, preserveDrawingBuffer: true, dpr: 1});
-    const gl = renderer.gl;
-    if (!gl) {
-      cancelRender(new Error('Threads: WebGL is unavailable'));
-      return undefined;
-    }
-    gl.clearColor(0, 0, 0, 0);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    const program = new Program(gl, {
-      vertex: vertexShader,
-      fragment: fragmentShader,
-      uniforms: {
-        iTime: {value: 0},
-        iResolution: {value: new Color(1, 1, 1)},
-        uColor: {value: new Color(color)},
-        uAmplitude: {value: amplitude},
-        uDistance: {value: distance},
-        uMouse: {value: new Float32Array([0.5, 0.5])},
-      },
-    });
-    if (!gl.getProgramParameter(program.program, gl.LINK_STATUS)) {
-      cancelRender(new Error(`Threads: the WebGL program did not link: ${gl.getProgramInfoLog(program.program)}`));
-      return undefined;
-    }
-    const mesh = new Mesh(gl, {geometry: new Triangle(gl), program});
-    gl.canvas.style.display = 'block';
-    container.appendChild(gl.canvas);
-    glRef.current = {renderer, program, mesh};
-    return () => {
-      glRef.current = null;
-      container.removeChild(gl.canvas);
-      gl.getExtension('WEBGL_lose_context')?.loseContext();
-    };
-    // The context lives as long as the component; the draw effect below writes every uniform.
-  }, []);
-
-  // Draw, synchronously, on every render (every frame change and every prop change).
-  useLayoutEffect(() => {
-    const g = glRef.current;
-    if (!g) return;
-    const {renderer, program, mesh} = g;
-    const {canvas} = renderer.gl;
-    // Resizing clears the drawing buffer, so only when the size really changes.
-    if (canvas.width !== w || canvas.height !== h) renderer.setSize(w, h);
-    const u = program.uniforms;
-    u.iTime.value = frame / fps;
-    u.iResolution.value.set(canvas.width, canvas.height, canvas.width / canvas.height);
-    u.uColor.value.set(color);
-    u.uAmplitude.value = amplitude;
-    u.uDistance.value = distance;
-    renderer.render({scene: mesh});
-    if (held.current) {
-      held.current = false;
-      continueRender(handle);
-    }
+  const containerRef = useOglFrame({
+    name: 'Threads',
+    vertex: vertexShader,
+    fragment: fragmentShader,
+    width: w,
+    height: h,
+    uniforms: (canvas) => ({
+      iTime: frame / fps,
+      iResolution: [canvas.width, canvas.height, canvas.width / canvas.height],
+      uColor: new Color(color),
+      uAmplitude: amplitude,
+      uDistance: distance,
+      uMouse: CENTRED,
+    }),
   });
 
   return <div ref={containerRef} className="threads-container" style={{position: 'relative', width: w, height: h, ...style}} />;

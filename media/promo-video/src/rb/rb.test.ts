@@ -29,9 +29,10 @@ const WALL_CLOCK_CSS = /@keyframes|\banimation\s*:|\btransition\s*:/;
 
 const header = (name: string): string =>
   `// Adapted from React Bits ${name} (https://reactbits.dev), MIT + Commons Clause. Rewritten to be a pure function of the Remotion frame.`;
+// Components, the shared WebGL hook (useOglFrame.ts) and any stylesheet; the tests hold the tokens as literals.
 const sources = (): Array<[string, string]> =>
   readdirSync(DIR)
-    .filter((f) => /\.(tsx|css)$/.test(f))
+    .filter((f) => /\.(tsx?|css)$/.test(f) && !f.endsWith('.test.ts'))
     .map((f) => [f, readFileSync(join(DIR, f), 'utf8')]);
 
 describe('src/rb', () => {
@@ -117,6 +118,16 @@ describe('contract semantics', () => {
     expect(rotatingIndex(9, 10, 15, 5)).toBeNull();
     expect([10, 24, 25, 70, 200].map((f) => rotatingIndex(f, 10, 15, 5))).toEqual([0, 0, 1, 4, 4]);
     expect(rotatingIndex(85, 10, 15, 5, true)).toBe(0);
+  });
+
+  it('RotatingText characters enter over 6 frames by default, the shortest entry spec § 3.5 allows', () => {
+    const opacities = (frame: number): number[] =>
+      [...renderToStaticMarkup(createElement(RotatingText, {items: ['OBSERVER'], frame, startFrame: 10})).matchAll(/opacity:([\d.e-]+)/g)]
+        .map((m) => Number(m[1]));
+    expect(opacities(10)).toHaveLength(8);
+    expect(Math.max(...opacities(10))).toBe(0);
+    expect(Math.max(...opacities(15))).toBeLessThan(1); // still entering on its 6th frame
+    expect(opacities(16).every((o) => o === 1)).toBe(true);
   });
 
   it('SplitText entry starts hidden and lands at rest', () => {
