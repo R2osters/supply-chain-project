@@ -105,6 +105,19 @@ pub mod tests {
         assert_eq!(update_message("0.3.0", "ab", 12), "scip-update-v1\n0.3.0\nab\n12");
     }
 
+    /// Made by scripts/release/sign.mjs (Node) with the same seed: what the release script signs,
+    /// SCIP accepts (scripts/release/sign.test.mjs holds the mirror of this test).
+    #[test]
+    fn accepts_a_signature_from_the_release_script() {
+        const PUBLIC: &str = "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=";
+        const SIGNATURE: &str = "XT8m7PZ/9BCQ0A0czOYby2gh/r8flnCyc649HWD2af7PZyujTLf0YZyH8xO54seA7oo7wffQN2v1ZTN149xAAQ==";
+        assert_eq!(public_b64(&test_key()), PUBLIC);
+        let message = update_message("0.3.0", &"ab".repeat(32), 1234);
+        assert!(verify_signature(PUBLIC, message.as_bytes(), SIGNATURE).is_ok());
+        let other = update_message("0.3.0", &"ab".repeat(32), 1235);
+        assert!(verify_signature(PUBLIC, other.as_bytes(), SIGNATURE).is_err());
+    }
+
     #[test]
     fn sha256_matches_a_known_digest() {
         let dir = tempfile::tempdir().unwrap();

@@ -20,7 +20,10 @@
     "db:down": "docker compose down",
     "desktop:stage": "npm run stage --workspace @scip/desktop",
     "desktop:build": "npm run build --workspace @scip/desktop",
-    "desktop:test": "npm run test --workspace @scip/desktop"
+    "desktop:test": "npm run test --workspace @scip/desktop",
+    "release": "node scripts/release/release.mjs",
+    "release:keygen": "node scripts/release/keygen.mjs",
+    "release:test": "node --test scripts/release/*.test.mjs"
   },
   "engines": {
     "node": ">=20"
