@@ -1,6 +1,7 @@
 //! SCIP desktop shell: a Tauri window plus a supervisor for the local sidecars
 //! (Postgres, API, AI). Architecture: docs/desktop-architecture.md.
 
+pub mod backup;
 mod bridge;
 pub mod events;
 pub mod paths;
