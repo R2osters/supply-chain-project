@@ -6,6 +6,9 @@ import { companyFilter, requireCompanyId } from '../../common/tenancy/tenant-sco
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.service';
 
+/** The note on every purchase order raised by accepting a recommendation. */
+export const RECOMMENDATION_ORDER_NOTE = 'Raised from an accepted SCIP recommendation';
+
 /**
  * Recommendations, and the machinery that makes them executable.
  *
@@ -182,7 +185,7 @@ export class RecommendationsService {
           ...(payload.requiredByDate
             ? { expectedDeliveryDate: String(payload.requiredByDate) }
             : {}),
-          notes: 'Raised from an accepted SCIP recommendation',
+          notes: RECOMMENDATION_ORDER_NOTE,
         });
         created.push(order.orderNumber);
       }
@@ -218,7 +221,7 @@ export class RecommendationsService {
       supplierId: offer.supplierId,
       warehouseId,
       items: [{ productId, quantity }],
-      notes: 'Raised from an accepted SCIP recommendation',
+      notes: RECOMMENDATION_ORDER_NOTE,
     });
 
     return {

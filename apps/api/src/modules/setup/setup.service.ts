@@ -15,7 +15,7 @@ export interface SetupStatus {
 }
 
 /** The seed's administrator; its presence means the demo data set is loaded. */
-const DEMO_ADMIN_EMAIL = 'admin@demo-scip.com';
+export const DEMO_ADMIN_EMAIL = 'admin@demo-scip.com';
 
 /**
  * First run of a desktop install. The database starts empty, so the first person to open the

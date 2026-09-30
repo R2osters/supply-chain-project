@@ -13,6 +13,24 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ShipmentsService } from '../shipments/shipments.service';
 import { TrackingGateway } from '../gps/tracking.gateway';
 
+/** Pace for a shipment without a usable planned window. */
+const DEFAULT_CRUISE_KMH = 55;
+/**
+ * The fastest a simulated truck drives. The pace otherwise follows the plan, and a plan can be
+ * impossible on purpose: the demo rehearsal promises two 250 km trips in five minutes so the ETA
+ * engine has a real delay to detect. Followed literally, that promise would move the truck at
+ * 3 000 km/h and end the delay before anyone saw it.
+ */
+export const MAX_CRUISE_KMH = 90;
+/** How long a rehearsal waits for a tick already in flight before going ahead anyway. */
+const PAUSE_WAIT_MS = 10_000;
+
+/** The simulation's cruising speed: the plan's own pace, within what a truck can do. */
+export function cruiseSpeedKmh(routeKm: number, plannedHours: number): number {
+  const planned = plannedHours > 0 ? routeKm / plannedHours : DEFAULT_CRUISE_KMH;
+  return Math.min(MAX_CRUISE_KMH, planned);
+}
+
 /**
  * Telemetry simulator — **DEMO DATA**.
  *
@@ -48,6 +66,8 @@ export class TelemetrySimulatorService {
   >();
 
   private ticking = false;
+  /** Callers inside `pauseWhile`; ticks are skipped while any is running. */
+  private paused = 0;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -75,7 +95,7 @@ export class TelemetrySimulatorService {
    */
   @Interval(5000)
   async tick(): Promise<void> {
-    if (!this.enabled || this.ticking) return;
+    if (!this.enabled || this.ticking || this.paused > 0) return;
     this.ticking = true;
 
     try {
@@ -150,7 +170,7 @@ export class TelemetrySimulatorService {
     const plannedHours =
       (shipment.plannedArrivalAt.getTime() - shipment.plannedDepartureAt.getTime()) / 3_600_000;
     const routeKm = polylineLengthMeters(polyline) / 1000;
-    const nominalSpeed = plannedHours > 0 ? routeKm / plannedHours : 55;
+    const nominalSpeed = cruiseSpeedKmh(routeKm, plannedHours);
 
     // Speed varies ±25 % around nominal, so the observed average is not a constant and the ETA
     // engine's speed blending has something real to work with.
@@ -257,6 +277,30 @@ export class TelemetrySimulatorService {
     });
 
     this.logger.log(`Simulated shipment ${shipment.id} arrived`);
+  }
+
+  /** Drops the progress of these shipments: their next tick starts again from the origin. */
+  forget(shipmentIds: string[]): void {
+    for (const id of shipmentIds) this.state.delete(id);
+  }
+
+  /**
+   * Runs `work` with no tick in flight and none starting until it returns. A tick reads its
+   * shipments first and writes a few awaits later: running beside a rewrite of those shipments,
+   * it would put back a fix the rewrite deleted, or restore progress `forget` just dropped, or
+   * mark as arrived a shipment that was just sent back to its origin.
+   */
+  async pauseWhile<T>(work: () => Promise<T>): Promise<T> {
+    this.paused += 1;
+    try {
+      const deadline = Date.now() + PAUSE_WAIT_MS;
+      while (this.ticking && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return await work();
+    } finally {
+      this.paused -= 1;
+    }
   }
 
   /** Recomputes ETAs for simulated shipments so the map's countdown stays live. */
