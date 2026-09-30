@@ -94,7 +94,7 @@ export class AircraftService {
       creditsRemaining: this.creditsRemaining,
       coolingDownUntil: this.coolingDownUntil > Date.now() ? new Date(this.coolingDownUntil).toISOString() : null,
       lastError: this.lastError,
-      attribution: `${ATTRIBUTION.opensky}; fallback ${ATTRIBUTION['adsb.lol']}`,
+      attribution: `${ATTRIBUTION.opensky} ; en secours ${ATTRIBUTION['adsb.lol']}`,
     };
   }
 
@@ -190,11 +190,11 @@ export class AircraftService {
       const retryAfter = Number.parseInt(response.headers.get('x-rate-limit-retry-after-seconds') ?? '', 10);
       const wait = Number.isFinite(retryAfter) ? retryAfter * 1000 : COOLDOWN_MIN_MS;
       this.coolingDownUntil = Date.now() + Math.min(COOLDOWN_MAX_MS, Math.max(COOLDOWN_MIN_MS, wait));
-      throw new Error('rate limited');
+      throw new Error('quota de requêtes dépassé');
     }
     if (response.status === 401 && token) {
       this.token = null;
-      throw new Error('credentials rejected');
+      throw new Error('identifiants refusés');
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

@@ -124,7 +124,9 @@ export class TrafficService {
         tilesUsedToday: 0,
         dailyBudget: this.budget.dailyLimit,
         attribution: null,
-        note: 'Live traffic is off: add a free TomTom key in Settings → Data sources (or set TOMTOM_API_KEY).',
+        note:
+          'Trafic en direct désactivé : ajoutez une clé TomTom gratuite dans Réglages → Sources de données ' +
+          '(ou définissez TOMTOM_API_KEY).',
       };
     }
     return {
@@ -134,7 +136,7 @@ export class TrafficService {
       dailyBudget: this.budget.dailyLimit,
       attribution: TOMTOM_ATTRIBUTION,
       note: this.budget.exhausted()
-        ? 'Daily tile budget reached: cached tiles only until 00:00 UTC.'
+        ? 'Le budget quotidien de tuiles est atteint : seules les tuiles en cache sont servies jusqu’à 00:00 UTC.'
         : null,
     };
   }
@@ -150,18 +152,18 @@ export class TrafficService {
   }
 
   private async serveTile(kind: TileKind, z: number, x: number, y: number): Promise<Buffer> {
-    if (!this.apiKey) throw new NotFoundException('Live traffic is not enabled');
-    if (!isValidTile(z, x, y)) throw new BadRequestException('Invalid tile coordinates');
+    if (!this.apiKey) throw new NotFoundException('Le trafic en direct n’est pas activé');
+    if (!isValidTile(z, x, y)) throw new BadRequestException('Coordonnées de tuile invalides');
 
     try {
       const cached = await this.tiles.getOrLoad(`${kind}/${z}/${x}/${y}`, () => this.fetchTile(kind, z, x, y));
       return cached.value;
     } catch (error) {
       if (error instanceof TileBudgetExceededError) {
-        throw new HttpException('Daily traffic tile budget reached', HttpStatus.TOO_MANY_REQUESTS);
+        throw new HttpException('Budget quotidien de tuiles de trafic atteint', HttpStatus.TOO_MANY_REQUESTS);
       }
       this.logger.warn(`TomTom ${kind} tile ${z}/${x}/${y} failed: ${this.redact(describe(error))}`);
-      throw new BadGatewayException('Traffic tiles are temporarily unavailable');
+      throw new BadGatewayException('Les tuiles de trafic sont momentanément indisponibles');
     }
   }
 

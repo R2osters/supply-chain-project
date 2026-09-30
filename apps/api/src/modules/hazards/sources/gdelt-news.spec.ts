@@ -68,7 +68,12 @@ describe('GDELT news', () => {
   it('derives a searchable place from an earthquake location', () => {
     const quake = { kind: 'EARTHQUAKE', title: 'x', details: { place: '12 km SSW of Tema, Ghana' } } as unknown as Hazard;
     expect(placeQueryFromHazard(quake)).toBe('Tema, Ghana');
-    const fire = { kind: 'FIRE', title: 'Active fire', details: {} } as unknown as Hazard;
+    const fire = { kind: 'FIRE', title: 'Feu actif', details: {} } as unknown as Hazard;
     expect(placeQueryFromHazard(fire)).toBeNull();
+  });
+
+  it('searches a storm by its English name, not its French title', () => {
+    const storm = { kind: 'CYCLONE', title: 'Ouragan Ernesto', details: { place: 'Hurricane Ernesto' } } as unknown as Hazard;
+    expect(placeQueryFromHazard(storm)).toBe('Hurricane Ernesto');
   });
 });

@@ -35,7 +35,7 @@ describe('USGS earthquakes', () => {
     expect(hazard.severity).toBe('MEDIUM');
     expect(hazard.severityScore).toBe(0.5);
     expect(hazard.radiusKm).toBe(100);
-    expect(hazard.title).toBe('M5.0 earthquake — 12 km SSW of Tema, Ghana');
+    expect(hazard.title).toBe('Séisme M5.0 — 12 km SSW of Tema, Ghana');
   });
 
   it('lets a PAGER alert and a tsunami flag raise the level', () => {

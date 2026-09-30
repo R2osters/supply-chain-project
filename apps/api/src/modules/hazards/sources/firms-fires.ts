@@ -72,7 +72,7 @@ export function acquisitionMsUtc(acqDate: string, acqTime: string): number {
 /** Parses the area CSV, keeping only detections from the trailing 24 h. Throws on a non-CSV body. */
 export function parseFirmsCsv(text: string, nowMs: number, maxRows = MAX_FIRMS_ROWS): FireDetection[] {
   if (!isFirmsCsv(text)) {
-    throw new UpstreamError('FIRMS answered with something other than CSV', FIRMS_HOST, null);
+    throw new UpstreamError('FIRMS a répondu autre chose que du CSV', FIRMS_HOST, null);
   }
   const lines = text.trimStart().split('\n');
   const header = lines[0].trim().toLowerCase().split(',').map((f) => f.trim());
@@ -150,7 +150,7 @@ function clusterToHazard(key: string, members: FireDetection[]): Hazard {
   return {
     id: `firms:${key}`,
     kind: 'FIRE',
-    title: `Active fire — ${members.length} detection${members.length === 1 ? '' : 's'}`,
+    title: `Feu actif — ${members.length} détection${members.length === 1 ? '' : 's'}`,
     severity: levelFromScore(score),
     severityScore: score,
     latitude: round(latitude, 4),

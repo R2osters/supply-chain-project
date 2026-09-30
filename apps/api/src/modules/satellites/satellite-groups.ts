@@ -11,15 +11,15 @@ export interface SatelliteGroup {
 }
 
 export const SATELLITE_GROUPS: readonly SatelliteGroup[] = [
-  { id: 'gps-ops', label: 'GPS (operational)', description: 'US Global Positioning System satellites in service.' },
-  { id: 'galileo', label: 'Galileo', description: 'European Union GNSS constellation.' },
-  { id: 'glo-ops', label: 'GLONASS (operational)', description: 'Russian GNSS constellation in service.' },
-  { id: 'beidou', label: 'BeiDou', description: 'Chinese GNSS constellation, including its geostationary members.' },
-  { id: 'stations', label: 'Space stations', description: 'ISS, Tiangong and visiting vehicles.' },
-  { id: 'weather', label: 'Weather', description: 'Meteorological satellites (GOES, Meteosat, NOAA, Metop and others).' },
-  { id: 'resource', label: 'Earth resources', description: 'Earth-observation satellites (Landsat, Sentinel and others).' },
-  { id: 'geo', label: 'Geostationary', description: 'Active satellites in geostationary orbit, mostly communications.' },
-  { id: 'iridium-NEXT', label: 'Iridium NEXT', description: 'Low-orbit satellite phone and data constellation used by trackers off-grid.' },
+  { id: 'gps-ops', label: 'GPS (opérationnels)', description: 'Satellites du système de positionnement mondial américain en service.' },
+  { id: 'galileo', label: 'Galileo', description: 'Constellation GNSS de l’Union européenne.' },
+  { id: 'glo-ops', label: 'GLONASS (opérationnels)', description: 'Constellation GNSS russe en service.' },
+  { id: 'beidou', label: 'BeiDou', description: 'Constellation GNSS chinoise, y compris ses satellites géostationnaires.' },
+  { id: 'stations', label: 'Stations spatiales', description: 'ISS, Tiangong et véhicules en visite.' },
+  { id: 'weather', label: 'Météo', description: 'Satellites météorologiques (GOES, Meteosat, NOAA, Metop et autres).' },
+  { id: 'resource', label: 'Ressources terrestres', description: 'Satellites d’observation de la Terre (Landsat, Sentinel et autres).' },
+  { id: 'geo', label: 'Géostationnaires', description: 'Satellites actifs en orbite géostationnaire, surtout de télécommunications.' },
+  { id: 'iridium-NEXT', label: 'Iridium NEXT', description: 'Constellation en orbite basse de téléphonie et de données par satellite, utilisée par les balises hors réseau.' },
 ];
 
 export const CELESTRAK_ATTRIBUTION = 'CelesTrak (celestrak.org), Dr. T.S. Kelso';

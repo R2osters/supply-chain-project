@@ -51,7 +51,7 @@ function rowToRecord(row: CalgaryRow): CameraRecord | null {
     name:
       toTrimmedString(row.camera_location) ||
       toTrimmedString(row.camera_url?.description) ||
-      `Calgary camera ${upstreamId}`,
+      `Caméra Calgary ${upstreamId}`,
     latitude: latitude as number,
     longitude: longitude as number,
     headingDegrees: null,
@@ -69,7 +69,7 @@ function upgradeFrameUrl(value: unknown): URL | null {
 
 export const calgaryPack: CameraPack = {
   id: 'calgary',
-  label: 'City of Calgary traffic cameras',
+  label: 'Caméras de circulation de la ville de Calgary',
   attribution: 'Contains information licensed under the Open Government Licence – City of Calgary',
   licence: 'Open Government Licence – City of Calgary',
   catalogUrl: 'https://data.calgary.ca/resource/k7p9-kppz.json?$limit=500',

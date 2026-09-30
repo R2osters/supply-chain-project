@@ -29,7 +29,7 @@ import type { Hazard } from '../hazard.types';
 
 export const EONET_EVENTS_URL = 'https://eonet.gsfc.nasa.gov/api/v3/events';
 export const EONET_ATTRIBUTION =
-  'NASA Earth Observatory Natural Event Tracker (EONET), public domain; US incidents from IRWIN';
+  'NASA Earth Observatory Natural Event Tracker (EONET), domaine public ; incidents américains issus d’IRWIN';
 const EONET_HOST = 'eonet.gsfc.nasa.gov';
 
 export const EONET_WINDOW_DAYS = 14;
@@ -89,7 +89,7 @@ export function eonetUrl(days = EONET_WINDOW_DAYS): string {
 export function parseEonetFires(payload: unknown, nowMs: number, windowDays = EONET_WINDOW_DAYS): EonetFire[] {
   const events = (payload as { events?: unknown } | null)?.events;
   if (!Array.isArray(events)) {
-    throw new UpstreamError('EONET answer has no events list', EONET_HOST, null);
+    throw new UpstreamError('La réponse EONET ne contient pas de liste events', EONET_HOST, null);
   }
   const oldest = nowMs - windowDays * DAY_MS;
   const newest = nowMs + DAY_MS;

@@ -70,7 +70,7 @@ function codeFactor(code: number | null): Factor | null {
   if (code === null) return null;
   const label = describeWeatherCode(code);
   const score = WEATHER_CODE_SCORES[code] ?? 0;
-  return score > 0 ? { score, reason: `${label} (WMO code ${code})` } : null;
+  return score > 0 ? { score, reason: `${label} (code OMM ${code})` } : null;
 }
 
 /**
@@ -107,11 +107,11 @@ const WEATHER_CODE_SCORES: Record<number, number> = {
 function windFactor(gustKmh: number | null, windKmh: number | null): Factor | null {
   if (gustKmh !== null) {
     const score = gustKmh >= 100 ? 0.9 : gustKmh >= 75 ? 0.7 : gustKmh >= 60 ? 0.5 : gustKmh >= 45 ? 0.25 : 0;
-    return { score, reason: `Wind gusts ${Math.round(gustKmh)} km/h` };
+    return { score, reason: `Rafales à ${Math.round(gustKmh)} km/h` };
   }
   if (windKmh !== null) {
     const score = windKmh >= 75 ? 0.9 : windKmh >= 55 ? 0.7 : windKmh >= 40 ? 0.4 : windKmh >= 30 ? 0.2 : 0;
-    return { score, reason: `Sustained wind ${Math.round(windKmh)} km/h` };
+    return { score, reason: `Vent soutenu à ${Math.round(windKmh)} km/h` };
   }
   return null;
 }
@@ -119,32 +119,32 @@ function windFactor(gustKmh: number | null, windKmh: number | null): Factor | nu
 function precipitationFactor(mm: number | null): Factor | null {
   if (mm === null) return null;
   const score = mm >= 10 ? 0.7 : mm >= 5 ? 0.5 : mm >= 2 ? 0.25 : mm >= 0.5 ? 0.05 : 0;
-  return { score, reason: `Precipitation ${round(mm, 1)} mm` };
+  return { score, reason: `Précipitations ${round(mm, 1)} mm` };
 }
 
 function visibilityFactor(metres: number | null): Factor | null {
   if (metres === null) return null;
   const score = metres < 200 ? 0.7 : metres < 500 ? 0.5 : metres < 1000 ? 0.3 : metres < 2000 ? 0.15 : 0;
   const shown = metres >= 1000 ? `${round(metres / 1000, 1)} km` : `${Math.round(metres)} m`;
-  return { score, reason: `Visibility ${shown}` };
+  return { score, reason: `Visibilité ${shown}` };
 }
 
-/** Short, plain-English label for a WMO present-weather code as used by Open-Meteo. */
+/** Short French label for a WMO present-weather code as used by Open-Meteo. */
 export function describeWeatherCode(code: number | null): string {
-  if (code === null || !Number.isFinite(code)) return 'Unknown conditions';
-  if (code === 0) return 'Clear sky';
-  if (code === 1 || code === 2) return 'Partly cloudy';
-  if (code === 3) return 'Overcast';
-  if (code === 45 || code === 48) return 'Fog';
-  if (code === 56 || code === 57) return 'Freezing drizzle';
-  if (code >= 51 && code <= 55) return 'Drizzle';
-  if (code === 66 || code === 67) return 'Freezing rain';
-  if (code === 65) return 'Heavy rain';
-  if (code >= 61 && code <= 63) return 'Rain';
-  if (code === 75 || code === 86) return 'Heavy snow';
-  if ((code >= 71 && code <= 77) || code === 85) return 'Snow';
-  if (code >= 80 && code <= 82) return code === 82 ? 'Violent rain showers' : 'Rain showers';
-  if (code === 95) return 'Thunderstorm';
-  if (code === 96 || code === 99) return 'Thunderstorm with hail';
-  return 'Unknown conditions';
+  if (code === null || !Number.isFinite(code)) return 'Conditions inconnues';
+  if (code === 0) return 'Ciel dégagé';
+  if (code === 1 || code === 2) return 'Partiellement nuageux';
+  if (code === 3) return 'Couvert';
+  if (code === 45 || code === 48) return 'Brouillard';
+  if (code === 56 || code === 57) return 'Bruine verglaçante';
+  if (code >= 51 && code <= 55) return 'Bruine';
+  if (code === 66 || code === 67) return 'Pluie verglaçante';
+  if (code === 65) return 'Forte pluie';
+  if (code >= 61 && code <= 63) return 'Pluie';
+  if (code === 75 || code === 86) return 'Fortes chutes de neige';
+  if ((code >= 71 && code <= 77) || code === 85) return 'Neige';
+  if (code >= 80 && code <= 82) return code === 82 ? 'Averses violentes' : 'Averses';
+  if (code === 95) return 'Orage';
+  if (code === 96 || code === 99) return 'Orage avec grêle';
+  return 'Conditions inconnues';
 }

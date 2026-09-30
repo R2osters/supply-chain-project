@@ -223,7 +223,7 @@ describe('HazardsService keyless feeds (GDACS, EONET)', () => {
     const withNhc = await makeService(null).listHazards({});
     expect(withNhc.hazards.map((h) => h.id)).not.toContain('gdacs:TC:1001325'); // POLO, eastern Pacific
     expect(withNhc.hazards.map((h) => h.id)).toContain('gdacs:TC:1001327'); // SURIGAE, West Pacific
-    expect(withNhc.sources[0].note).toContain('cyclones in other basins come from GDACS');
+    expect(withNhc.sources[0].note).toContain('les cyclones des autres bassins viennent de GDACS');
 
     stubFetch(routes({ 'www.nhc.noaa.gov': down }));
     const withoutNhc = await makeService(null).listHazards({});
@@ -238,7 +238,7 @@ describe('HazardsService keyless feeds (GDACS, EONET)', () => {
 
     const status = result.sources.find((s) => s.id === 'gdacs');
     expect(status).toMatchObject({ status: 'STALE' });
-    expect(status?.note).toContain('droughts');
+    expect(status?.note).toContain('sécheresses');
     expect(result.hazards.some((h) => h.kind === 'FLOOD')).toBe(true);
     expect(result.hazards.some((h) => h.kind === 'DROUGHT')).toBe(false);
   });
@@ -247,7 +247,7 @@ describe('HazardsService keyless feeds (GDACS, EONET)', () => {
     stubFetch(routes({ 'www.gdacs.org': down }));
     const result = await makeService(null).listHazards({});
     expect(result.sources.find((s) => s.id === 'gdacs')?.status).toBe('UNAVAILABLE');
-    expect(result.sources[0].note).toContain('West Pacific typhoons and Indian Ocean cyclones are not included');
+    expect(result.sources[0].note).toContain('les typhons du Pacifique Ouest et les cyclones de l’océan Indien n’y figurent pas');
   });
 
   it('matches a warehouse against a GDACS flood', async () => {

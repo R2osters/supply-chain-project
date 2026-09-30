@@ -56,9 +56,9 @@ export function shipmentAssetPoints(shipment: ActiveShipment, lastFix: LatLon | 
     latitude: shipment.destinationLatitude,
     longitude: shipment.destinationLongitude,
   });
-  if (lastFix) return [asset('last GPS fix', lastFix), destination];
+  if (lastFix) return [asset('dernière position GPS', lastFix), destination];
   return [
-    asset(`origin ${shipment.originName} (no GPS fix)`, {
+    asset(`origine ${shipment.originName} (sans position GPS)`, {
       latitude: shipment.originLatitude,
       longitude: shipment.originLongitude,
     }),

@@ -58,7 +58,7 @@ function featureToRecord(feature: NswFeature): CameraRecord | null {
   const direction = toTrimmedString(props.direction) || null;
   return {
     upstreamId,
-    name: cameraLabel(props) || `NSW camera ${upstreamId}`,
+    name: cameraLabel(props) || `Caméra NSW ${upstreamId}`,
     latitude: latitude as number,
     longitude: longitude as number,
     headingDegrees: headingFromDirection(direction),

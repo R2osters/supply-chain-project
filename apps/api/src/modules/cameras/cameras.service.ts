@@ -142,14 +142,14 @@ export class CamerasService implements OnApplicationBootstrap {
       // A catalogue row that passed the normaliser but fails the fetch-time check means the pack
       // definition and its normaliser disagree. Worth a log line; not worth telling the client.
       this.logger.warn(`Refused frame URL for ${camera.id}: host or scheme not allowed for ${pack.id}`);
-      throw new BadGatewayException('This camera frame is not available');
+      throw new BadGatewayException('L’image de cette caméra n’est pas disponible');
     }
     try {
       const cached = await this.frames.getOrLoad(camera.id, () => this.loadFrame(url, pack));
       return cached.value;
     } catch (error) {
       this.logger.warn(`Frame for ${camera.id} failed: ${describe(error)}`);
-      throw new BadGatewayException('The camera provider did not return a picture');
+      throw new BadGatewayException('L’exploitant de la caméra n’a renvoyé aucune image');
     }
   }
 
@@ -165,11 +165,11 @@ export class CamerasService implements OnApplicationBootstrap {
   ): Promise<{ camera: Camera; pack: CameraPack; frameUrl: string }> {
     const parsed = parseCameraId(id);
     const pack = parsed ? this.packs.find((candidate) => candidate.id === parsed.pack) : undefined;
-    if (!parsed || !pack) throw new NotFoundException('Unknown camera');
+    if (!parsed || !pack) throw new NotFoundException('Caméra inconnue');
     const load = await this.loadPack(pack);
     const camera = load.snapshot?.byUpstreamId.get(parsed.upstreamId);
     const frameUrl = load.snapshot?.frameUrls.get(parsed.upstreamId);
-    if (!camera || !frameUrl) throw new NotFoundException('Unknown camera');
+    if (!camera || !frameUrl) throw new NotFoundException('Caméra inconnue');
     return { camera, pack, frameUrl };
   }
 
@@ -264,9 +264,9 @@ function readBoundingBox(query: BoundingBoxQuery): Box | null {
   const values = [query.minLat, query.minLon, query.maxLat, query.maxLon];
   const given = values.filter((value) => value !== undefined).length;
   if (given === 0) return null;
-  if (given !== 4) throw new BadRequestException('Give all of minLat, minLon, maxLat, maxLon, or none');
+  if (given !== 4) throw new BadRequestException('Indiquez minLat, minLon, maxLat et maxLon, ou aucun des quatre');
   const box = query as Box;
-  if (box.minLat > box.maxLat) throw new BadRequestException('minLat must not exceed maxLat');
+  if (box.minLat > box.maxLat) throw new BadRequestException('minLat ne doit pas dépasser maxLat');
   return box;
 }
 

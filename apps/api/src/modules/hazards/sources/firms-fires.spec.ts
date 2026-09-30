@@ -30,7 +30,7 @@ describe('FIRMS fires', () => {
   });
 
   it('treats an HTML or text error body as a failure, not as "no fires"', () => {
-    expect(() => parseFirmsCsv('Invalid MAP_KEY.', NOW)).toThrow('other than CSV');
+    expect(() => parseFirmsCsv('Invalid MAP_KEY.', NOW)).toThrow('autre chose que du CSV');
     expect(() => parseFirmsCsv('<html>oops</html>', NOW)).toThrow();
   });
 
@@ -46,7 +46,7 @@ describe('FIRMS fires', () => {
   it('clusters neighbouring pixels into one hazard and drops low-confidence ones', () => {
     const hazards = clusterFires(parseFirmsCsv(CSV, NOW));
     expect(hazards).toHaveLength(1);
-    expect(hazards[0]).toMatchObject({ kind: 'FIRE', title: 'Active fire — 2 detections' });
+    expect(hazards[0]).toMatchObject({ kind: 'FIRE', title: 'Feu actif — 2 détections' });
     expect(hazards[0].details.totalFrpMw).toBe(160.5);
     // The FRP-weighted centroid leans towards the hotter pixel.
     expect(hazards[0].latitude).toBeLessThan(6.015);

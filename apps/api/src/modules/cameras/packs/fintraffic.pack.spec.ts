@@ -22,7 +22,7 @@ describe('normalizeFintraffic', () => {
     expect(cameras.map((camera) => camera.upstreamId)).toEqual(['C0150301', 'C0150309']);
     expect(cameras[0]).toEqual({
       upstreamId: 'C0150301',
-      name: 'kt51 Inkoo (view 01)',
+      name: 'kt51 Inkoo (vue 01)',
       latitude: 60.05374,
       longitude: 23.99616,
       headingDegrees: null,

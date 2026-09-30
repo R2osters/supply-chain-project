@@ -21,8 +21,8 @@ export const NHC_STATUS_URL = 'https://www.nhc.noaa.gov/CurrentStorms.json';
 export const NHC_GIS_URL =
   'https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather_summary/MapServer';
 export const NHC_COVERAGE_NOTE =
-  'NHC covers the Atlantic and eastern/central North Pacific only; West Pacific typhoons and ' +
-  'Indian Ocean cyclones are not included.';
+  'Le NHC ne couvre que l’Atlantique et le Pacifique Nord oriental et central : les typhons du ' +
+  'Pacifique Ouest et les cyclones de l’océan Indien n’y figurent pas.';
 
 const HOUR_MS = 3_600_000;
 const KNOT_KMH = 1.852;
@@ -77,7 +77,7 @@ interface GeoJsonCollection {
 export function parseCurrentStorms(payload: unknown): StormStatus[] {
   const rawStorms = (payload as { activeStorms?: unknown } | null)?.activeStorms;
   if (!Array.isArray(rawStorms)) {
-    throw new UpstreamError('NHC status feed has no activeStorms list', 'www.nhc.noaa.gov', null);
+    throw new UpstreamError('Le flux d’état du NHC ne contient pas de liste activeStorms', 'www.nhc.noaa.gov', null);
   }
   const seen = new Set<string>();
   const storms: StormStatus[] = [];
@@ -311,10 +311,11 @@ export function cycloneRadiusKm(windKt: number | null): number {
 
 export function stormToHazard(storm: StormStatus, geometry: StormGeometry): Hazard {
   const score = round(cycloneSeverityScore(storm.windKt), 2);
+  const classification = classificationLabels(storm.classification);
   return {
     id: `nhc:${storm.id}`,
     kind: 'CYCLONE',
-    title: `${classificationLabel(storm.classification)} ${storm.name}`,
+    title: `${classification.label} ${storm.name}`,
     severity: levelFromScore(score),
     severityScore: score,
     latitude: storm.latitude,
@@ -333,23 +334,28 @@ export function stormToHazard(storm: StormStatus, geometry: StormGeometry): Haza
       movementDirDeg: storm.movementDirDeg,
       movementSpeedKt: storm.movementSpeedKt,
       geometry: geometry.track || geometry.cone ? 'current' : 'unavailable',
+      // What a reporter writes, in English, as for GDACS `place`: the news search (the web's and
+      // `placeQueryFromHazard`) runs on it, since GDELT is queried in English, not with the French title.
+      place: `${classification.english} ${storm.name}`,
     },
     track: geometry.track,
     cone: geometry.cone,
   };
 }
 
-function classificationLabel(code: string): string {
-  const labels: Record<string, string> = {
-    TD: 'Tropical Depression',
-    TS: 'Tropical Storm',
-    HU: 'Hurricane',
-    STD: 'Subtropical Depression',
-    STS: 'Subtropical Storm',
-    PTC: 'Potential Tropical Cyclone',
-    PC: 'Post-tropical Cyclone',
-  };
-  return labels[code.toUpperCase()] ?? 'Tropical Cyclone';
+/** The French label shown in the title, and NHC's own English wording for the news search. */
+const CLASSIFICATIONS: Record<string, { label: string; english: string }> = {
+  TD: { label: 'Dépression tropicale', english: 'Tropical Depression' },
+  TS: { label: 'Tempête tropicale', english: 'Tropical Storm' },
+  HU: { label: 'Ouragan', english: 'Hurricane' },
+  STD: { label: 'Dépression subtropicale', english: 'Subtropical Depression' },
+  STS: { label: 'Tempête subtropicale', english: 'Subtropical Storm' },
+  PTC: { label: 'Cyclone tropical potentiel', english: 'Potential Tropical Cyclone' },
+  PC: { label: 'Cyclone post-tropical', english: 'Post-tropical Cyclone' },
+};
+
+function classificationLabels(code: string): { label: string; english: string } {
+  return CLASSIFICATIONS[code.toUpperCase()] ?? { label: 'Cyclone tropical', english: 'Tropical Cyclone' };
 }
 
 /* -------------------------------------------------------------------- fetch */

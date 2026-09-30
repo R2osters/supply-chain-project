@@ -46,7 +46,7 @@ describe('Open-Meteo weather', () => {
     expect(hazard).toMatchObject({
       id: 'open-meteo:5.6,-0.2',
       kind: 'SEVERE_WEATHER',
-      title: 'Severe weather — Thunderstorm',
+      title: 'Météo sévère — Orage',
       severity: 'CRITICAL',
     });
   });

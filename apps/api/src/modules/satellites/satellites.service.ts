@@ -81,7 +81,7 @@ export class SatellitesService {
       return await this.cache.getOrLoad(group, () => this.fetchGroup(group));
     } catch (error) {
       this.logger.warn(`CelesTrak group ${group} unavailable: ${(error as Error).message}`);
-      throw new ServiceUnavailableException('Orbital elements are temporarily unavailable');
+      throw new ServiceUnavailableException('Les éléments orbitaux sont momentanément indisponibles');
     }
   }
 

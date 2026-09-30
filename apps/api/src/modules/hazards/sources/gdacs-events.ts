@@ -55,12 +55,13 @@ const KIND: Record<GdacsType, HazardKind> = {
   WF: 'FIRE',
 };
 
+/** Names an event GDACS left unnamed; GDACS's own names are shown as published. */
 const TYPE_LABEL: Record<GdacsType, string> = {
-  TC: 'Tropical cyclone',
-  FL: 'Flood',
-  VO: 'Volcanic eruption',
-  DR: 'Drought',
-  WF: 'Forest fire',
+  TC: 'Cyclone tropical',
+  FL: 'Inondation',
+  VO: 'Éruption volcanique',
+  DR: 'Sécheresse',
+  WF: 'Feu de forêt',
 };
 
 export interface GdacsQuery {
@@ -81,15 +82,15 @@ export const GDACS_QUERIES: Record<'events' | 'droughts' | 'fires', GdacsQuery> 
   /** Cyclones, floods and eruptions are updated daily or faster: ten days reaches every live one. */
   events: {
     key: 'TC;FL;VO',
-    label: 'cyclones, floods and eruptions',
+    label: 'cyclones, inondations et éruptions',
     types: ['TC', 'FL', 'VO'],
     windowDays: 10,
     maxPages: 3,
   },
   /** Droughts are re-assessed about every ten days, so their window is longer. */
-  droughts: { key: 'DR', label: 'droughts', types: ['DR'], windowDays: 45, maxPages: 2 },
+  droughts: { key: 'DR', label: 'sécheresses', types: ['DR'], windowDays: 45, maxPages: 2 },
   /** Forest fires, only asked for while no FIRMS key is configured. */
-  fires: { key: 'WF', label: 'forest fires', types: ['WF'], windowDays: 3, maxPages: 3 },
+  fires: { key: 'WF', label: 'feux de forêt', types: ['WF'], windowDays: 3, maxPages: 3 },
 };
 
 /** How long after its latest episode a GDACS-flagged current event still counts as live. */
@@ -153,7 +154,7 @@ export function parseGdacsEvents(payload: unknown): GdacsEvent[] {
 function featuresOf(payload: unknown): unknown[] {
   const features = (payload as { features?: unknown } | null)?.features;
   if (!Array.isArray(features)) {
-    throw new UpstreamError('GDACS answer has no features list', GDACS_HOST, null);
+    throw new UpstreamError('La réponse GDACS ne contient pas de liste features', GDACS_HOST, null);
   }
   return features.slice(0, GDACS_PAGE_SIZE * 2);
 }
@@ -340,9 +341,9 @@ export function stormClass(severityText: string | null): StormClass | null {
 /** Floors matching NHC's Saffir–Simpson bands, so a typhoon ranks like a hurricane. */
 const STORM_CLASS_SCORE: Record<StormClass, number> = { TD: 0.2, TS: 0.45, HU: 0.7 };
 const STORM_CLASS_LABEL: Record<StormClass, string> = {
-  TD: 'Tropical depression',
-  TS: 'Tropical storm',
-  HU: 'Hurricane / typhoon',
+  TD: 'Dépression tropicale',
+  TS: 'Tempête tropicale',
+  HU: 'Ouragan / typhon',
 };
 
 /**
@@ -438,9 +439,12 @@ export function gdacsEventToHazard(event: GdacsEvent): Hazard {
   };
 }
 
-/** GDACS's own names, which read well ("Flood in Guinea"), made distinct where they repeat. */
+/**
+ * GDACS's own names, which read well ("Flood in Guinea") and stay as published, made distinct
+ * where they repeat.
+ */
 function gdacsTitle(event: GdacsEvent): string {
-  if (event.type === 'DR' && event.eventName) return `Drought — ${event.eventName}`;
+  if (event.type === 'DR' && event.eventName) return `Sécheresse — ${event.eventName}`;
   const area = burnedAreaHa(event);
   // Dozens of fires are all "Forest fires in Australia"; the burned area tells them apart.
   if (area !== null) return `${event.name} — ${Math.round(area).toLocaleString('en-US')} ha`;
@@ -543,7 +547,7 @@ async function fetchGdacsPage(url: string): Promise<{ events: GdacsEvent[]; full
   try {
     payload = JSON.parse(text);
   } catch {
-    throw new UpstreamError('GDACS returned a body that is not JSON', GDACS_HOST, response.status);
+    throw new UpstreamError('GDACS a renvoyé une réponse qui n’est pas du JSON', GDACS_HOST, response.status);
   }
   return { events: parseGdacsEvents(payload), full: featuresOf(payload).length >= GDACS_PAGE_SIZE };
 }

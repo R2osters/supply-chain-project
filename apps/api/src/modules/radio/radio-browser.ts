@@ -20,7 +20,7 @@
 
 import { haversineKm, isValidLatLon, type LatLon } from '../../common/http';
 
-export const RADIO_ATTRIBUTION = 'Radio Browser (radio-browser.info), public domain directory';
+export const RADIO_ATTRIBUTION = 'Radio Browser (radio-browser.info), annuaire du domaine public';
 
 export const RADIO_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

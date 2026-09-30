@@ -132,7 +132,7 @@ describe('GDACS hazards', () => {
     // Orange ("Medium impact for agricultural drought" in GDACS's words) is MEDIUM, not HIGH.
     expect(hazard).toMatchObject({
       kind: 'DROUGHT',
-      title: 'Drought — Europe-2026',
+      title: 'Sécheresse — Europe-2026',
       severity: 'MEDIUM',
       severityScore: 0.41,
     });

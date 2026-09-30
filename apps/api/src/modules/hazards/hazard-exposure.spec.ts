@@ -100,12 +100,12 @@ describe('shipmentAssetPoints', () => {
 
   it('uses the last GPS fix and the destination when a fix exists', () => {
     const points = shipmentAssetPoints(shipment, { latitude: 6, longitude: -1 });
-    expect(points.map((p) => p.subjectLabel)).toEqual(['TRK-1 — last GPS fix', 'TRK-1 — destination Kumasi']);
+    expect(points.map((p) => p.subjectLabel)).toEqual(['TRK-1 — dernière position GPS', 'TRK-1 — destination Kumasi']);
   });
 
   it('falls back to both ends of the trip without a fix, and says so', () => {
     const points = shipmentAssetPoints(shipment, null);
-    expect(points[0].subjectLabel).toContain('no GPS fix');
+    expect(points[0].subjectLabel).toContain('sans position GPS');
     expect(points[0].latitude).toBe(ACCRA.latitude);
     expect(points[1].latitude).toBe(KUMASI.latitude);
   });

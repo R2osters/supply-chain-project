@@ -17,7 +17,7 @@ import type { WeatherSeverity } from '../weather-severity';
  */
 
 export const OPEN_METEO_URL = 'https://api.open-meteo.com/v1/forecast';
-export const OPEN_METEO_ATTRIBUTION = 'Weather data by Open-Meteo.com (CC BY 4.0)';
+export const OPEN_METEO_ATTRIBUTION = 'Données météo Open-Meteo.com (CC BY 4.0)';
 
 const CURRENT_FIELDS =
   'temperature_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,visibility,cloud_cover';
@@ -92,7 +92,7 @@ export function weatherToHazard(observation: WeatherObservation, assessment: Wea
   return {
     id: `open-meteo:${cell.key}`,
     kind: 'SEVERE_WEATHER',
-    title: `Severe weather — ${assessment.condition}`,
+    title: `Météo sévère — ${assessment.condition}`,
     severity: levelFromScore(assessment.severity),
     severityScore: assessment.severity,
     latitude: cell.latitude,
@@ -104,7 +104,7 @@ export function weatherToHazard(observation: WeatherObservation, assessment: Wea
     url: null,
     details: {
       condition: assessment.condition,
-      reasons: assessment.reasons.join('; '),
+      reasons: assessment.reasons.join(' ; '),
       weatherCode: observation.weatherCode,
       windKmh: observation.windKmh,
       windGustKmh: observation.windGustKmh,

@@ -42,7 +42,7 @@ export interface QuakeEvent {
 export function parseUsgsFeed(payload: unknown): QuakeEvent[] {
   const features = (payload as { features?: unknown } | null)?.features;
   if (!Array.isArray(features)) {
-    throw new UpstreamError('USGS feed has no features list', 'earthquake.usgs.gov', null);
+    throw new UpstreamError('Le flux USGS ne contient pas de liste features', 'earthquake.usgs.gov', null);
   }
   const seen = new Set<string>();
   const events: QuakeEvent[] = [];
@@ -119,7 +119,8 @@ export function quakeToHazard(event: QuakeEvent): Hazard {
   return {
     id: `usgs:${event.id}`,
     kind: 'EARTHQUAKE',
-    title: `M${event.magnitude.toFixed(1)} earthquake${event.place ? ` — ${event.place}` : ''}`,
+    // The place is USGS's own text ("12 km SSW of Tema, Ghana") and stays as published.
+    title: `Séisme M${event.magnitude.toFixed(1)}${event.place ? ` — ${event.place}` : ''}`,
     severity,
     severityScore: round(score, 2),
     latitude: event.latitude,

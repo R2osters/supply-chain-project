@@ -99,10 +99,14 @@ export function parseSeenDate(value: unknown): string | null {
 /**
  * A searchable place name for a hazard, used when the caller gave coordinates but no words.
  * USGS places read "12 km SSW of Tema, Ghana" — the part after "of" is what newsrooms write.
- * A named storm is searched by its name. Fire clusters and weather cells have no name.
+ * A named storm is searched by its name as newsrooms write it ("Hurricane Ernesto", its English
+ * `place`): the title is French, and GDELT is queried in English. Fire clusters and weather cells
+ * have no name.
  */
 export function placeQueryFromHazard(hazard: Hazard): string | null {
-  if (hazard.kind === 'CYCLONE') return hazard.title;
+  if (hazard.kind === 'CYCLONE') {
+    return typeof hazard.details.place === 'string' ? hazard.details.place : hazard.title;
+  }
   if (hazard.kind === 'EARTHQUAKE' && typeof hazard.details.place === 'string') {
     const place = hazard.details.place;
     const afterOf = /\bof\s+(.+)$/i.exec(place);

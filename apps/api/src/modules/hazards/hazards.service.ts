@@ -62,40 +62,47 @@ import { SEVERE_WEATHER_THRESHOLD, computeWeatherSeverity } from './weather-seve
 
 const MINUTE_MS = 60_000;
 
+/**
+ * Labels are shown as is in the sources panel. The NHC label stays the agency's proper name: the
+ * web matches a hazard's `source` ('NOAA National Hurricane Center') to its feed by this label.
+ */
 const SOURCE_META: Record<SourceId, { label: string; attribution: string }> = {
   nhc: {
     label: 'NOAA National Hurricane Center',
-    attribution: 'NOAA/NWS National Hurricane Center (public domain)',
+    attribution: 'NOAA/NWS National Hurricane Center (domaine public)',
   },
   usgs: {
-    label: 'USGS earthquakes (M2.5+, past day)',
-    attribution: 'U.S. Geological Survey Earthquake Hazards Program (public domain)',
+    label: 'Séismes USGS (M2.5+, dernières 24 h)',
+    attribution: 'U.S. Geological Survey Earthquake Hazards Program (domaine public)',
   },
   firms: {
-    label: 'NASA FIRMS active fires (VIIRS)',
+    label: 'Feux actifs NASA FIRMS (VIIRS)',
     attribution:
       'We acknowledge the use of data and/or imagery from NASA’s Fire Information for Resource ' +
       'Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA’s Earth ' +
       'Science Data and Information System (ESDIS).',
   },
   'open-meteo': {
-    label: 'Open-Meteo current weather',
+    label: 'Météo actuelle Open-Meteo',
     attribution: `${OPEN_METEO_ATTRIBUTION} — https://open-meteo.com/`,
   },
-  gdelt: { label: 'GDELT news', attribution: 'GDELT Project (https://www.gdeltproject.org/)' },
+  gdelt: { label: 'Actualités GDELT', attribution: 'GDELT Project (https://www.gdeltproject.org/)' },
   gdacs: {
-    label: 'GDACS global disaster alerts',
+    label: 'Alertes catastrophes mondiales GDACS',
     attribution: `${GDACS_ATTRIBUTION} (https://www.gdacs.org/)`,
   },
   eonet: {
-    label: 'NASA EONET wildfires',
+    label: 'Feux de forêt NASA EONET',
     attribution: `${EONET_ATTRIBUTION} (https://eonet.gsfc.nasa.gov/)`,
   },
 };
 
 /** NHC's coverage caveat when GDACS is answering for the other basins. */
 const NHC_COVERAGE_WITH_GDACS_NOTE =
-  'NHC covers the Atlantic and eastern/central North Pacific; cyclones in other basins come from GDACS.';
+  'Le NHC couvre l’Atlantique et le Pacifique Nord oriental et central ; les cyclones des autres bassins viennent de GDACS.';
+
+/** A source served from cache because its upstream failed. */
+const STALE_NOTE = 'Source indisponible : affichage des dernières données valides.';
 
 /** Active shipment states: the goods are between two places and can be caught by weather. */
 const ACTIVE_SHIPMENT_STATUSES = ['DEPARTED', 'IN_TRANSIT', 'DELAYED'] as const;
@@ -213,7 +220,7 @@ export class HazardsService {
       result = await this.weatherCache.getOrLoad(cell.key, () => fetchOpenMeteo(cell.latitude, cell.longitude));
     } catch (error) {
       this.logger.warn(`Open-Meteo unavailable: ${describeError(error)}`);
-      throw new ServiceUnavailableException('Weather is temporarily unavailable. Try again shortly.');
+      throw new ServiceUnavailableException('La météo est momentanément indisponible. Réessayez dans un instant.');
     }
     const observation = result.value;
     const assessment = computeWeatherSeverity(observation);
@@ -290,7 +297,7 @@ export class HazardsService {
   async news(query: NewsQueryDto): Promise<NewsResponse> {
     const text = query.q?.trim() || (await this.placeNear(query));
     if (text === undefined) {
-      throw new BadRequestException('Give a place or keyword in q, or lat and lon.');
+      throw new BadRequestException('Indiquez un lieu ou un mot-clé dans q, ou bien lat et lon.');
     }
     const cleaned = text ? sanitiseQuery(text) : '';
     if (cleaned.length < 2) {
@@ -346,13 +353,20 @@ export class HazardsService {
     if (!bbox) {
       return {
         value: [],
-        status: status('firms', 'OK', null, 0, 'Fires are only fetched for a map area; send a bounding box.'),
+        status: status(
+          'firms',
+          'OK',
+          null,
+          0,
+          'Les feux ne sont chargés que pour une zone de la carte : envoyez une emprise (minLat, minLon, maxLat, maxLon).',
+        ),
       };
     }
     const { box, clamped } = clampFirmsBox(bbox);
     const loaded = await this.loadFireBoxes([box], key);
     if (clamped) {
-      const note = 'View too large: fires shown for its central 15°×15° only. Zoom in for full coverage.';
+      const note =
+        'Vue trop étendue : feux affichés pour ses 15°×15° centraux seulement. Zoomez pour une couverture complète.';
       loaded.status.note = loaded.status.note ? `${loaded.status.note} ${note}` : note;
     }
     return loaded;
@@ -360,7 +374,9 @@ export class HazardsService {
 
   private async loadFiresAroundAssets(assets: ExposureAsset[], key: string | null): Promise<Loaded<Hazard[]>> {
     if (!key) return disabledFirms();
-    if (assets.length === 0) return { value: [], status: status('firms', 'OK', null, 0, 'No located assets to check.') };
+    if (assets.length === 0) {
+      return { value: [], status: status('firms', 'OK', null, 0, 'Aucun actif géolocalisé à vérifier.') };
+    }
     // Pad each box by the exposure radius plus a fire's own footprint, in degrees of latitude.
     const paddingDeg = (this.exposureRadiusKm + 10) / 111;
     return this.loadFireBoxes(boxesAroundPoints(assets, paddingDeg), key);
@@ -396,10 +412,15 @@ export class HazardsService {
     }
     const partial = ok < boxes.length;
     const state = stale > 0 || partial ? 'STALE' : 'OK';
+    const failed = boxes.length - ok;
     const note = partial
-      ? `${boxes.length - ok} of ${boxes.length} areas could not be fetched.`
+      ? plural(
+          failed,
+          `${failed} zone sur ${boxes.length} n’a pas pu être récupérée.`,
+          `${failed} zones sur ${boxes.length} n’ont pas pu être récupérées.`,
+        )
       : stale > 0
-        ? 'Upstream unavailable; showing the last good data.'
+        ? STALE_NOTE
         : null;
     return { value: hazards, status: status('firms', state, oldest?.toISOString() ?? null, hazards.length, note) };
   }
@@ -447,9 +468,9 @@ export class HazardsService {
     const oldest = Math.min(...answered.map(({ result }) => result.fetchedAt.getTime()));
     const notes: string[] = [];
     if (failed.length > 0) {
-      notes.push(`Not available right now: ${failed.map(({ query }) => query.label).join(', ')}.`);
+      notes.push(`Momentanément indisponible : ${failed.map(({ query }) => query.label).join(', ')}.`);
     }
-    if (stale) notes.push('Upstream unavailable; showing the last good data.');
+    if (stale) notes.push(STALE_NOTE);
     return {
       gdacs: {
         value: answered.flatMap(({ result }) => result.value),
@@ -468,7 +489,7 @@ export class HazardsService {
 
   private loadEonet(enabled: boolean): Promise<Loaded<EonetFire[]>> {
     if (!enabled) {
-      const note = 'Not used while a NASA FIRMS key is set: FIRMS detections cover fires.';
+      const note = 'Non utilisé tant qu’une clé NASA FIRMS est définie : les détections FIRMS couvrent les feux.';
       return Promise.resolve({ value: [], status: status('eonet', 'DISABLED', null, 0, note) });
     }
     return this.loadSource('eonet', this.eonetCache, 'wildfires', () => fetchEonetFires());
@@ -524,9 +545,26 @@ export class HazardsService {
     });
 
     const notes: string[] = [];
-    if (cells.size > checked.length) notes.push(`Checked ${checked.length} of ${cells.size} locations.`);
-    if (ok < checked.length) notes.push(`${checked.length - ok} locations could not be fetched.`);
-    if (stale > 0) notes.push('Some observations are from cache because the upstream was unavailable.');
+    if (cells.size > checked.length) {
+      notes.push(
+        plural(
+          checked.length,
+          `${checked.length} emplacement vérifié sur ${cells.size}.`,
+          `${checked.length} emplacements vérifiés sur ${cells.size}.`,
+        ),
+      );
+    }
+    const missing = checked.length - ok;
+    if (missing > 0) {
+      notes.push(
+        plural(
+          missing,
+          `${missing} emplacement n’a pas pu être récupéré.`,
+          `${missing} emplacements n’ont pas pu être récupérés.`,
+        ),
+      );
+    }
+    if (stale > 0) notes.push('Certaines observations viennent du cache, car la source était indisponible.');
 
     const state = checked.length > 0 && ok === 0 ? 'UNAVAILABLE' : stale > 0 || ok < checked.length ? 'STALE' : 'OK';
     return {
@@ -556,7 +594,7 @@ export class HazardsService {
           result.stale ? 'STALE' : 'OK',
           result.fetchedAt.toISOString(),
           result.value.length,
-          result.stale ? 'Upstream unavailable; showing the last good data.' : null,
+          result.stale ? STALE_NOTE : null,
         ),
       };
     } catch (error) {
@@ -663,9 +701,15 @@ function status(
   return { id, ...SOURCE_META[id], status: state, fetchedAt, count, note };
 }
 
+/** Singular or plural form for a count: French treats 0 and 1 as singular. */
+function plural(count: number, singular: string, pluralForm: string): string {
+  return Math.abs(count) < 2 ? singular : pluralForm;
+}
+
 function disabledFirms(): Loaded<Hazard[]> {
   const note =
-    'Optional: without a key, fires come from GDACS and NASA EONET. A free FIRMS map key adds satellite hotspots.';
+    'Facultatif : sans clé, les feux viennent de GDACS et de NASA EONET. Une clé FIRMS gratuite (MAP_KEY) ajoute ' +
+    'les points chauds détectés par satellite.';
   return { value: [], status: status('firms', 'DISABLED', null, 0, note) };
 }
 
@@ -686,9 +730,9 @@ export function parseBoundingBox(query: HazardsQueryDto): BoundingBox | null {
   const edges = [query.minLat, query.minLon, query.maxLat, query.maxLon];
   const given = edges.filter((e) => e !== undefined).length;
   if (given === 0) return null;
-  if (given < 4) throw new BadRequestException('Give all of minLat, minLon, maxLat and maxLon, or none.');
+  if (given < 4) throw new BadRequestException('Indiquez minLat, minLon, maxLat et maxLon, ou aucun des quatre.');
   const box = query as Required<HazardsQueryDto>;
-  if (box.minLat > box.maxLat) throw new BadRequestException('minLat must not exceed maxLat.');
+  if (box.minLat > box.maxLat) throw new BadRequestException('minLat ne doit pas dépasser maxLat.');
   return { minLat: box.minLat, minLon: box.minLon, maxLat: box.maxLat, maxLon: box.maxLon };
 }
 
@@ -701,8 +745,8 @@ function hazardTouchesBox(hazard: Hazard, box: BoundingBox): boolean {
 /** Upstream errors carry only host and status; anything else is reduced to a generic line. */
 function describeError(error: unknown): string {
   if (error instanceof UpstreamError) return error.message;
-  if (error instanceof GateFullError) return 'Too many requests queued for this source.';
-  return 'Upstream request failed.';
+  if (error instanceof GateFullError) return 'Trop de requêtes en attente pour cette source.';
+  return 'La requête vers la source a échoué.';
 }
 
 async function mapWithConcurrency<T>(items: T[], limit: number, task: (item: T) => Promise<void>): Promise<void> {

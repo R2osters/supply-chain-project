@@ -48,7 +48,7 @@ export class TrafficController {
   })
   openFlow(@Query('bbox') bbox?: string) {
     const box = parseBbox(bbox);
-    if (!box) throw new BadRequestException('bbox must be minLon,minLat,maxLon,maxLat, at most 5° wide');
+    if (!box) throw new BadRequestException('bbox doit valoir minLon,minLat,maxLon,maxLat, sur 5° au plus');
     return this.openFlowService.inBbox(box);
   }
 
@@ -67,7 +67,7 @@ export class TrafficController {
   })
   async tile(@Param('z') z: string, @Param('x') x: string, @Param('y') y: string): Promise<StreamableFile> {
     const [zoom, column, row] = [z, x, y.replace(/\.png$/i, '')].map(parseTileSegment);
-    if (zoom === null || column === null || row === null) throw new BadRequestException('Invalid tile coordinates');
+    if (zoom === null || column === null || row === null) throw new BadRequestException('Coordonnées de tuile invalides');
     const png = await this.traffic.getTile(zoom, column, row);
     return new StreamableFile(png, { type: 'image/png', length: png.length });
   }
@@ -86,7 +86,7 @@ export class TrafficController {
   })
   async flowTile(@Param('z') z: string, @Param('x') x: string, @Param('y') y: string): Promise<StreamableFile> {
     const [zoom, column, row] = [z, x, y.replace(/\.pbf$/i, '')].map(parseTileSegment);
-    if (zoom === null || column === null || row === null) throw new BadRequestException('Invalid tile coordinates');
+    if (zoom === null || column === null || row === null) throw new BadRequestException('Coordonnées de tuile invalides');
     const tile = await this.traffic.getFlowTile(zoom, column, row);
     return new StreamableFile(tile, { type: 'application/vnd.mapbox-vector-tile', length: tile.length });
   }

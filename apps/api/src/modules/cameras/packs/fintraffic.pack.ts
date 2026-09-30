@@ -60,7 +60,7 @@ function stationToRecords(feature: FintrafficFeature): CameraRecord[] {
     if (!PRESET_ID.test(presetId) || !presetId.startsWith(stationId)) continue;
     records.push({
       upstreamId: presetId,
-      name: `${stationName} (view ${presetId.slice(stationId.length)})`,
+      name: `${stationName} (vue ${presetId.slice(stationId.length)})`,
       latitude: latitude as number,
       longitude: longitude as number,
       // The only facing Digitraffic publishes is road-register relative, not a bearing.
@@ -74,8 +74,8 @@ function stationToRecords(feature: FintrafficFeature): CameraRecord[] {
 
 export const fintrafficPack: CameraPack = {
   id: 'fintraffic',
-  label: 'Fintraffic weather cameras (Finland)',
-  attribution: 'Fintraffic / digitraffic.fi, license CC BY 4.0',
+  label: 'Caméras météo Fintraffic (Finlande)',
+  attribution: 'Fintraffic / digitraffic.fi, licence CC BY 4.0',
   licence: 'CC BY 4.0',
   catalogUrl: 'https://tie.digitraffic.fi/api/weathercam/v1/stations',
   // Stations collect a new picture about every ten minutes.

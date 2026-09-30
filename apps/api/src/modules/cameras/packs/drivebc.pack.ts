@@ -49,7 +49,7 @@ function rowToRecord(row: DriveBcRow): CameraRecord | null {
   const orientation = toTrimmedString(row.orientation).toUpperCase() || null;
   return {
     upstreamId: String(id),
-    name: toTrimmedString(row.name) || `DriveBC camera ${id}`,
+    name: toTrimmedString(row.name) || `Caméra DriveBC ${id}`,
     latitude: latitude as number,
     longitude: longitude as number,
     headingDegrees: headingFromDirection(orientation),
@@ -60,7 +60,7 @@ function rowToRecord(row: DriveBcRow): CameraRecord | null {
 
 export const drivebcPack: CameraPack = {
   id: 'drivebc',
-  label: 'DriveBC highway cameras',
+  label: 'Caméras autoroutières DriveBC',
   attribution: 'DriveBC. Contains information licensed under the Open Government Licence – British Columbia',
   licence: 'Open Government Licence – British Columbia',
   catalogUrl: 'https://www.drivebc.ca/api/webcams/',

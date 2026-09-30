@@ -105,12 +105,14 @@ describe('NHC cyclones', () => {
     expect(hazard).toMatchObject({
       id: 'nhc:al052026',
       kind: 'CYCLONE',
-      title: 'Hurricane Ernesto',
+      title: 'Ouragan Ernesto',
       severity: 'CRITICAL',
       radiusKm: 300,
       url: 'https://www.nhc.noaa.gov/text/MIATCMAT5.shtml',
     });
     expect(hazard.details.geometry).toBe('unavailable');
+    // The French title is for people; the news search runs on NHC's English wording.
+    expect(hazard.details.place).toBe('Hurricane Ernesto');
   });
 
   it('orders intensity bands monotonically', () => {
