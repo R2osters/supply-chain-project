@@ -124,9 +124,8 @@ def word_spans() -> list[tuple[int, int]]:
 
 
 def click_samples() -> list[int]:
-    """The samples of the two clicks: the inkKick cues with `major` (the same rule as score.py)."""
-    return [c["frame"] * SAMPLES_PER_FRAME for c in load_json("generated/cues.json").values()
-            if not c.get("seriesHead") and c.get("sound") == "inkKick" and (c.get("params") or {}).get("major")]
+    """The samples of the two clicks, by score.click_frames: the rule that opens the pad in D major there."""
+    return [f * SAMPLES_PER_FRAME for f in score.click_frames()]
 
 
 def duck_gain(spans: list[tuple[int, int]], opens: list[int], n: int = N) -> np.ndarray:

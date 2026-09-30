@@ -2,7 +2,7 @@ import sys, pathlib, numpy as np, pyloudnorm as pyln
 import pytest
 from scipy.signal.windows import tukey
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "scripts"))
-from music import mix, report
+from music import mix, report, score
 from common import SR, load_json
 
 N = 8_160_000
@@ -90,6 +90,20 @@ def test_duck_curve_opens_on_the_s07_click():
     assert duck[s07 * 1600] > 0.999                   # the click lands at full level
     et = next(w["start"] for w in load_json("generated/vo-timings.json")["S07"]["words"] if w["start"] > s07)
     assert duck[(et + 5) * 1600] < 10 ** (-8 / 20)    # and the voice is ducked again right after
+
+
+def test_duck_opens_where_the_score_places_its_clicks(monkeypatch):
+    """One rule for the clicks: the duck lets go wherever score.click_frames says the clicks are."""
+    assert mix.click_samples() == [1920 * 1600, 4860 * 1600]
+    monkeypatch.setattr(score, "click_frames", lambda cues=None: [100])
+    assert mix.click_samples() == [100 * 1600]
+
+
+def test_s07_click_is_the_strongest_transient_of_the_master():
+    """Gate A: the S07 click leads every onset of the master; its S17 twin comes second."""
+    ranked = report.transients(mix.build_master(), 2)
+    assert abs(ranked[0][0] - 1920 * 1600) <= 2 * 1600, ranked
+    assert abs(ranked[1][0] - 4860 * 1600) <= 2 * 1600, ranked
 
 
 def test_vo_bus_is_centred_and_measures_minus_18_lufs():

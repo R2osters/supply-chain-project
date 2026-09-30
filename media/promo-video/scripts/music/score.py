@@ -12,7 +12,8 @@ Where the timing comes from:
   (KEYS_SOUNDS) and into `fx` for the others. The score's own parts anchor on scene starts and on
   cues (S04.hop.8, S05.slide, S05.silence, S06.needle, S07.resolve, S09.deadzone, S11.cut,
   S14.split, S16.tiles, S18.dot, S18.ring.4, S18.final, and the two clicks, the inkKick cues with
-  `major`): nothing is timed by hand.
+  `major` (is_click, which the mix reads too)): nothing is timed by hand. The first click is the
+  loudest hit of the film; the later one is CLICK_ECHO_DB under it.
 
 Processing, in this order, after every note is placed:
   drums  room (FDN 0.6 s, mix 0.08)
@@ -69,6 +70,10 @@ BASS_DRIVE = 2.0          # soft saturation of the bass (spec § 5.1 « saturati
 # integrated, 2 dB under the -18 LUFS voice bus of Task 8, so the music ducked by 9 dB under the
 # words leaves the voice about 11 dB clear.
 BUS_DB = -8.0
+# The two clicks are twins (spec § 4 S17: « avec la chorégraphie de S07 »), but the first one is « le
+# coup le plus fort du film » (spec § 4 S07). Every later click, its ink kick and the groove kick that
+# doubles it, is played CLICK_ECHO_DB under the first (Task 8, gate A).
+CLICK_ECHO_DB = -1.0
 SIDECHAIN_DEPTH = 0.6
 SIDECHAIN_TAU = 0.090
 SIDECHAIN_ATTACK = 0.003
@@ -137,6 +142,22 @@ def _reverb(x: np.ndarray, decay: float, mix: float) -> np.ndarray:
     return (1.0 - mix) * x + mix * wet
 
 
+def is_click(cue: dict) -> bool:
+    """True for a click, a human decision (spec § 5.2-5.3): an inkKick cue with `major`, series heads aside.
+
+    The one rule behind the clicks, for the score (the pad opens in D major for the click's bar, the
+    click is the loudest hit) and for the mix (the duck lets go on the click, mix.duck_curve).
+    """
+    return (not cue.get("seriesHead") and cue.get("sound") == "inkKick"
+            and bool((cue.get("params") or {}).get("major")))
+
+
+def click_frames(cues: dict | None = None) -> list[int]:
+    """The frames of the clicks (is_click) of generated/cues.json, or of `cues` ({id: cue}), in time order."""
+    cues = load_json("generated/cues.json") if cues is None else cues
+    return sorted(c["frame"] for c in cues.values() if is_click(c))
+
+
 def sidechain_gain(kicks: list[tuple[int, float]], n: int = N) -> np.ndarray:
     """Per-sample gain 1 - 0.6 env; env rises (half-cosine, 3 ms) to each kick's level, then decays with τ = 90 ms.
 
@@ -182,11 +203,11 @@ class _Arrangement:
             same = bar < TOTAL_BARS and self.section_of[bar + 1] == self.section_of[bar]
             self.run_end[bar] = self.run_end[bar + 1] if same else bar
 
-        # The two clicks (inkKick with `major`, the human decisions) open the pad in D major for their
-        # bar (spec § 5.2) and are the loudest hits of the film (place_groove).
-        self.clicks = [c["frame"] for c in self.cues
-                       if c.get("sound") == "inkKick" and (c.get("params") or {}).get("major")]
+        # The two clicks (is_click, the human decisions) open the pad in D major for their bar
+        # (spec § 5.2) and are the loudest hits of the film, the first one above all (place_groove).
+        self.clicks = click_frames(self.by_id)
         self.major_bars = {f // FRAMES_PER_BAR + 1 for f in self.clicks}
+        self.echo_clicks = {_frame(f) for f in self.clicks[1:]}   # samples of the clicks after the first
         # Silent after all effects: the S05 silence (to the start of S06) and every cutBeat.
         self.gates = [(_frame(self.frame("S05.silence")), _frame(scene_end(self.tl, "S05")))]
         self.gates += [(_frame(c["frame"]), _frame(c["frame"] + FRAMES_PER_BEAT))
@@ -246,6 +267,10 @@ class _Arrangement:
     def add(self, stem: str, x: np.ndarray, start: int, db: float = 0.0) -> None:
         dsp.add_at(self.stems[stem], x, start, float(dsp.gain_db(db)))
 
+    def click_db(self, start: int) -> float:
+        """CLICK_ECHO_DB for a kick on a click after the first (its ink kick, the groove kick doubling it), else 0."""
+        return CLICK_ECHO_DB if start in self.echo_clicks else 0.0
+
     # --- cues -----------------------------------------------------------------------------------
 
     def place_cues(self) -> None:
@@ -256,9 +281,10 @@ class _Arrangement:
             params = cue.get("params") or {}
             x = kit.render(sound, params, self.cue_rng, cue_id=cue["id"])
             start = _frame(cue["frame"])
-            self.add("keys" if sound in KEYS_SOUNDS else "fx", x, start)
+            trim = self.click_db(start) if is_click(cue) else 0.0
+            self.add("keys" if sound in KEYS_SOUNDS else "fx", x, start, trim)
             if sound in _CUE_KICKS:
-                db = params.get("gain", 0.0) + (_SOFT_INK_DB if params.get("soft") else 0.0)
+                db = params.get("gain", 0.0) + (_SOFT_INK_DB if params.get("soft") else 0.0) + trim
                 self.kicks.append((start, _CUE_KICKS[sound] * float(dsp.gain_db(db))))
 
     # --- drums ----------------------------------------------------------------------------------
@@ -308,7 +334,8 @@ class _Arrangement:
         hats_from = _frame(self.frame("S04.hop.8"))  # closed hats from the 8th hop (plan, Task 7)
         # A cue that carries a kick (inkKick, fullHit) takes the groove's kick on its beat, except the
         # two clicks: there the groove's kick doubles the ink kick (the same waveform, so they add up
-        # in phase) and the click is the loudest hit of the film (spec § 4 S07).
+        # in phase) and the click is the loudest hit of the film (spec § 4 S07). On a later click the
+        # doubling kick takes the ink kick's echo trim (click_db).
         clicks = {_frame(f) for f in self.clicks}
         cue_kicks = [s for s, _ in self.kicks if s not in clicks]
         for bar in range(1, TOTAL_BARS + 1):
@@ -321,6 +348,7 @@ class _Arrangement:
                 if name == "kick":
                     if any(abs(start - s) < SIX // 2 for s in cue_kicks):
                         continue
+                    db += self.click_db(start)
                     self.kicks.append((start, float(dsp.gain_db(db - LEVEL_DB["kick"]))))
                 self.add("drums", shots[name], start, db)
         # Crashes: the first downbeat of the drop, and the S11 stamp (« fullHit + crash »). The

@@ -8,7 +8,8 @@ The report gives:
   loss (loudness of the stereo minus that of (L + R) / 2 on both channels), each against its target;
 - the alignment of S01.late (the late stab, 4.233 s) and S07.click (64.0 s): the strongest onset
   within ±6 frames of the cue, which must be within one frame of it;
-- the strongest onsets of the whole film, with the cue each one lands on (S07.click should lead);
+- the strongest onsets of the whole film, with the cue each one lands on, and PASS when the first is
+  S07.click (LEAD_CUE);
 - per scene, the loudness and the share of the energy above 6 kHz.
 The spectrogram shows the whole film, its level, and five close-ups (the late stab, the gap before
 the drop, the S07 click, the offline breakdown and the coda).
@@ -26,6 +27,7 @@ from . import dsp, mix
 
 OUT_DIR = ROOT / "out"
 ALIGN_CUES = ("S01.late", "S07.click")
+LEAD_CUE = "S07.click"     # spec § 4 S07: « le coup le plus fort du film », the strongest transient
 ALIGN_SEARCH_FRAMES = 6
 ALIGN_TOLERANCE_FRAMES = 1
 HF_HZ = 6000.0
@@ -151,9 +153,12 @@ def report_text(x: np.ndarray, source: str) -> str:
                      f"{at // SAMPLES_PER_FRAME:4d}   {1000 * off / SR:+6.1f} ms   "
                      f"{_ok(abs(off) <= ALIGN_TOLERANCE_FRAMES * SAMPLES_PER_FRAME)}")
     lines += ["", "Strongest transients (largest rise of the mean power over 5 ms, 0.5 s apart)"]
-    for rank, (start, rise) in enumerate(transients(x), 1):
+    ranked = transients(x)
+    for rank, (start, rise) in enumerate(ranked, 1):
         lines.append(f"  {rank}  {start / SR:7.3f} s  frame {start // SAMPLES_PER_FRAME:4d}  {rise:6.1f} dB  "
                      f"{_cue_at(start, cues)}")
+    lead = _cue_at(ranked[0][0], cues) if ranked else ""
+    lines.append(f"  strongest: {lead or 'no cue'}   expected {LEAD_CUE}   {_ok(lead == LEAD_CUE)}")
     lines += ["", f"Scenes: loudness, and energy above {HF_HZ / 1000:.0f} kHz relative to the whole spectrum"]
     for r in scene_levels(x):
         lines.append(f"  {r['id']}  {r['section']:<12} {r['start']:6.1f} s  {r['lufs']:7.2f} LUFS  HF {r['hf']:6.1f} dB")
