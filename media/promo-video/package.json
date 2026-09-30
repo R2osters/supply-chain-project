@@ -7,7 +7,7 @@
     "studio": "remotion studio src/index.ts",
     "still": "remotion still src/index.ts SignalVideo",
     "render": "remotion render src/index.ts SignalVideo out/scip-le-signal.mp4 --codec=h264 --crf=18 --audio-codec=aac --audio-bitrate=320k",
-    "render:draft": "remotion render src/index.ts SignalVideo out/scip-le-signal-draft.mp4 --codec=h264 --crf=28 --scale=0.6667",
+    "render:draft": "remotion render src/index.ts SignalVideo out/scip-le-signal-draft.mp4 --codec=h264 --crf=28 --scale=0.6666666666666666",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "geo": "node scripts/geo.mjs",
