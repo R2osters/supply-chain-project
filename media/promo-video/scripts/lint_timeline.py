@@ -7,6 +7,22 @@ EXEMPT_GRID = {"S01.late", "S01.caption", "S05.silence", "S07.hold", "S07.po", "
 COLORS = {"crit", "warn", "ok", "live", "info", "demo", "ink"}
 
 
+def known_sounds() -> set[str] | None:
+    """KNOWN_SOUNDS of music.kit, or None when the music package or its kit module does not exist yet.
+
+    Any other failure (a missing dependency of the kit, a broken import inside it) propagates, so
+    the lint fails loudly instead of silently skipping the sound check.
+    """
+    try:
+        from music.kit import KNOWN_SOUNDS
+    except ModuleNotFoundError as e:
+        if e.name not in ("music", "music.kit"):
+            raise
+        print("notice: music.kit not found, sound names not checked")
+        return None
+    return KNOWN_SOUNDS
+
+
 def main() -> int:
     tl, vo, cues = load_timeline(), load_json("generated/vo-timings.json"), load_json("generated/cues.json")
     errors: list[str] = []
@@ -23,10 +39,7 @@ def main() -> int:
         if cues[cid]["frame"] != frame: errors.append(f"{cid} at {cues[cid]['frame']}, must be {frame}")
     acc = next((w for w in vo["S07"]["words"] if w["screen"].startswith("accepte")), None)
     if acc is None or abs(acc["end"] - 1920) > 3: errors.append(f"'accepte' ends at {acc and acc['end']}, must be 1920±3")
-    try:
-        from music.kit import KNOWN_SOUNDS
-    except ImportError:
-        KNOWN_SOUNDS = None; print("notice: music.kit not found, sound names not checked")
+    KNOWN_SOUNDS = known_sounds()
     for cid, c in cues.items():
         a, b = scene_start(tl, c["scene"]), scene_end(tl, c["scene"])
         if not (a <= c["frame"] < b): errors.append(f"{cid} at {c['frame']} is outside {c['scene']} [{a}, {b})")
@@ -36,6 +49,10 @@ def main() -> int:
         if "color" in c and c["color"] not in COLORS: errors.append(f"{cid} has unknown colour {c['color']}")
         if KNOWN_SOUNDS is not None and c.get("sound") and c["sound"] not in KNOWN_SOUNDS:
             errors.append(f"{cid} uses unknown sound {c['sound']}")
+    if KNOWN_SOUNDS is not None:
+        used = {c["sound"] for c in cues.values() if c.get("sound")}
+        unknown = used - KNOWN_SOUNDS
+        print(f"sound names: {len(used)} used by the cues, {'all known' if not unknown else f'{len(unknown)} unknown'}")
     for e in errors: print("LINT:", e)
     print("timeline lint:", "OK" if not errors else f"{len(errors)} problem(s)")
     return 1 if errors else 0
