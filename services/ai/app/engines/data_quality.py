@@ -102,7 +102,7 @@ def clean_demand_history(
 
     if rows_in == 0:
         issues.append(
-            DataQualityIssue("EMPTY_SERIES", "BLOCKING", "No demand history was supplied.")
+            DataQualityIssue("EMPTY_SERIES", "BLOCKING", "Aucun historique de demande n’a été fourni.")
         )
         return CleanedSeries(pd.Series(dtype=float), DataQualityReport(0, 0, issues))
 
@@ -112,7 +112,8 @@ def clean_demand_history(
             DataQualityIssue(
                 "MISSING_COLUMNS",
                 "BLOCKING",
-                "Each history row needs a 'date' and a 'quantity'.",
+                "Chaque ligne d’historique doit comporter un champ « date » et un champ "
+                "« quantity ».",
             )
         )
         return CleanedSeries(pd.Series(dtype=float), DataQualityReport(rows_in, 0, issues))
@@ -125,7 +126,7 @@ def clean_demand_history(
             DataQualityIssue(
                 "UNPARSEABLE_DATE",
                 "WARNING",
-                f"{unparseable} row(s) had a date that could not be parsed and were dropped.",
+                f"{unparseable} ligne(s) écartée(s) : leur date n’a pas pu être interprétée.",
                 unparseable,
             )
         )
@@ -133,7 +134,9 @@ def clean_demand_history(
     frame["date"] = parsed[parsed.notna()].dt.normalize()
 
     if frame.empty:
-        issues.append(DataQualityIssue("NO_VALID_DATES", "BLOCKING", "No row had a usable date."))
+        issues.append(
+            DataQualityIssue("NO_VALID_DATES", "BLOCKING", "Aucune ligne n’a de date exploitable.")
+        )
         return CleanedSeries(pd.Series(dtype=float), DataQualityReport(rows_in, 0, issues))
 
     future = frame["date"] > pd.Timestamp(date.today())
@@ -143,7 +146,7 @@ def clean_demand_history(
             DataQualityIssue(
                 "FUTURE_DATE",
                 "WARNING",
-                f"{count} row(s) were dated in the future and were dropped.",
+                f"{count} ligne(s) écartée(s) : datée(s) dans le futur.",
                 count,
             )
         )
@@ -157,7 +160,7 @@ def clean_demand_history(
             DataQualityIssue(
                 "NON_NUMERIC_QUANTITY",
                 "WARNING",
-                f"{non_numeric} row(s) had a non-numeric quantity and were dropped.",
+                f"{non_numeric} ligne(s) écartée(s) : quantité non numérique.",
                 non_numeric,
             )
         )
@@ -173,8 +176,8 @@ def clean_demand_history(
             DataQualityIssue(
                 "NEGATIVE_QUANTITY",
                 "WARNING",
-                f"{count} row(s) had a negative quantity and were clipped to zero "
-                "(most often a return booked against sales).",
+                f"{count} ligne(s) avec une quantité négative, ramenée(s) à zéro "
+                "(le plus souvent un retour comptabilisé dans les ventes).",
                 count,
             )
         )
@@ -182,7 +185,9 @@ def clean_demand_history(
 
     if frame.empty:
         issues.append(
-            DataQualityIssue("NO_VALID_QUANTITIES", "BLOCKING", "No row had a usable quantity.")
+            DataQualityIssue(
+                "NO_VALID_QUANTITIES", "BLOCKING", "Aucune ligne n’a de quantité exploitable."
+            )
         )
         return CleanedSeries(pd.Series(dtype=float), DataQualityReport(rows_in, 0, issues))
 
@@ -193,7 +198,7 @@ def clean_demand_history(
             DataQualityIssue(
                 "DUPLICATE_DATE",
                 "WARNING",
-                f"{duplicated} duplicate date(s) were summed into a single daily total.",
+                f"{duplicated} date(s) en double additionnée(s) en un seul total journalier.",
                 duplicated,
             )
         )
@@ -211,9 +216,10 @@ def clean_demand_history(
                 DataQualityIssue(
                     "SPARSE_SERIES",
                     "BLOCKING",
-                    f"{missing} of {span} days ({fraction:.0%}) have no record. Above "
-                    f"{MAX_MISSING_FRACTION:.0%} the series is too sparse to model as a daily "
-                    "demand signal — aggregate to weekly, or fix the upstream feed.",
+                    f"{missing} jours sur {span} ({fraction:.0%}) n’ont aucun enregistrement. "
+                    f"Au-delà de {MAX_MISSING_FRACTION:.0%}, la série est trop clairsemée pour être "
+                    "modélisée comme un signal de demande journalier — agrégez à la semaine ou "
+                    "corrigez le flux amont.",
                     missing,
                 )
             )
@@ -222,8 +228,9 @@ def clean_demand_history(
                 DataQualityIssue(
                     "GAPS_ZERO_FILLED",
                     "WARNING",
-                    f"{missing} missing day(s) were filled with zero demand rather than "
-                    "interpolated, so the variance used for safety stock is not understated.",
+                    f"{missing} jour(s) manquant(s) complété(s) par une demande nulle plutôt "
+                    "qu’interpolé(s), pour ne pas sous-estimer la variance utilisée pour le stock "
+                    "de sécurité.",
                     missing,
                 )
             )
@@ -237,8 +244,8 @@ def clean_demand_history(
             DataQualityIssue(
                 "TOO_SHORT",
                 "BLOCKING",
-                f"Only {len(daily)} day(s) of history; at least {MIN_OBSERVATIONS} are needed "
-                "to fit and validate even a naive model.",
+                f"Seulement {len(daily)} jour(s) d’historique ; il en faut au moins "
+                f"{MIN_OBSERVATIONS} pour ajuster et valider ne serait-ce qu’un modèle naïf.",
                 len(daily),
             )
         )
@@ -249,8 +256,9 @@ def clean_demand_history(
             DataQualityIssue(
                 "ZERO_VARIANCE",
                 "INFO",
-                "Demand is perfectly constant. Forecasting is trivial and safety stock "
-                "collapses to zero variability — check this is real and not a placeholder feed.",
+                "La demande est parfaitement constante. La prévision est triviale et le stock de "
+                "sécurité ne voit plus aucune variabilité — vérifiez que c’est réel et non un flux "
+                "factice.",
                 len(daily),
             )
         )
@@ -261,9 +269,9 @@ def clean_demand_history(
             DataQualityIssue(
                 "EXTREME_OUTLIER",
                 "WARNING",
-                f"{outliers} day(s) sit beyond {OUTLIER_Z:.0f} robust standard deviations from "
-                "the median. They are kept — a genuine demand spike is signal — but they will "
-                "widen the forecast interval.",
+                f"{outliers} jour(s) au-delà de {OUTLIER_Z:.0f} écarts-types robustes de la "
+                "médiane. Ils sont conservés — un vrai pic de demande est un signal — mais ils "
+                "élargiront l’intervalle de prévision.",
                 outliers,
             )
         )
@@ -294,12 +302,12 @@ def _count_outliers(series: pd.Series) -> int:
 def validate_positive(name: str, value: float | None, *, allow_zero: bool = False) -> None:
     """Guard for scalar inputs to the optimisers. Raises ``ValueError`` with a usable message."""
     if value is None:
-        raise ValueError(f"{name} is required")
+        raise ValueError(f"{name} est requis")
     if not np.isfinite(value):
-        raise ValueError(f"{name} must be a finite number, got {value!r}")
+        raise ValueError(f"{name} doit être un nombre fini (reçu : {value!r})")
     if value < 0 or (value == 0 and not allow_zero):
-        bound = "non-negative" if allow_zero else "strictly positive"
-        raise ValueError(f"{name} must be {bound}, got {value}")
+        bound = "positif ou nul" if allow_zero else "strictement positif"
+        raise ValueError(f"{name} doit être {bound} (reçu : {value})")
 
 
 def summarise_issues(reports: Iterable[DataQualityReport]) -> list[str]:

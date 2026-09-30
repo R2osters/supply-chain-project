@@ -44,6 +44,18 @@ DEFAULT_GPS_GAP_MINUTES = 30.0
 HIGH_SEVERITY_SCORE = 0.6
 MEDIUM_SEVERITY_SCORE = 0.25
 
+#: French labels used in the explanation text; the JSON keeps the codes. Same wording as the web UI.
+TYPE_LABELS: dict[str, str] = {
+    "PROLONGED_STOP": "Arrêt prolongé",
+    "ROUTE_DEVIATION": "Écart d’itinéraire",
+    "ABNORMAL_SPEED": "Vitesse anormale",
+    "GPS_LOSS": "Perte du signal GPS",
+    "EXCESSIVE_DURATION": "Durée excessive",
+    "UNUSUAL_STOP": "Arrêt inhabituel",
+    "SUSPICIOUS_DELIVERY": "Livraison suspecte",
+}
+SEVERITY_LABELS: dict[str, str] = {"HIGH": "élevée", "MEDIUM": "moyenne", "LOW": "faible"}
+
 
 @dataclass
 class GpsSample:
@@ -213,8 +225,8 @@ def _emit_stop(
             latitude=start.latitude,
             longitude=start.longitude,
             description=(
-                f"Vehicle stationary for {minutes:.0f} minutes, against a tolerance of "
-                f"{tolerance_minutes:.0f}."
+                f"Véhicule immobile pendant {minutes:.0f} minutes, pour une tolérance de "
+                f"{tolerance_minutes:.0f} minutes."
             ),
             evidence={
                 "stoppedMinutes": round(minutes, 1),
@@ -260,8 +272,8 @@ def detect_route_deviation(
             latitude=worst_sample.latitude,
             longitude=worst_sample.longitude,
             description=(
-                f"Vehicle strayed {worst_distance / 1000:.1f} km from the planned corridor, "
-                f"against a tolerance of {corridor_tolerance_m / 1000:.1f} km."
+                f"Le véhicule s’est écarté de {worst_distance / 1000:.1f} km du corridor prévu, "
+                f"pour une tolérance de {corridor_tolerance_m / 1000:.1f} km."
             ),
             evidence={
                 "maxDeviationM": round(worst_distance, 1),
@@ -294,8 +306,8 @@ def detect_abnormal_speed(
             latitude=fastest.latitude,
             longitude=fastest.longitude,
             description=(
-                f"Peak speed {fastest.speed_kmh:.0f} km/h against an expected maximum of "
-                f"{expected_max_speed_kmh:.0f} km/h, across {len(over)} fixes."
+                f"Vitesse de pointe de {fastest.speed_kmh:.0f} km/h pour un maximum attendu de "
+                f"{expected_max_speed_kmh:.0f} km/h, sur {len(over)} positions GPS."
             ),
             evidence={
                 "peakSpeedKmh": round(fastest.speed_kmh or 0.0, 1),
@@ -331,8 +343,8 @@ def detect_gps_loss(
                 latitude=previous.latitude,
                 longitude=previous.longitude,
                 description=(
-                    f"No position for {minutes:.0f} minutes; the vehicle reappeared "
-                    f"{distance_km:.1f} km away."
+                    f"Aucune position pendant {minutes:.0f} minutes ; le véhicule est réapparu "
+                    f"à {distance_km:.1f} km de là."
                 ),
                 evidence={
                     "gapMinutes": round(minutes, 1),
@@ -368,7 +380,8 @@ def detect_excessive_duration(
             latitude=positions[-1].latitude,
             longitude=positions[-1].longitude,
             description=(
-                f"Trip has run {elapsed_hours:.1f} h against a planned {planned_duration_hours:.1f} h."
+                f"Trajet en cours depuis {elapsed_hours:.1f} h pour une durée prévue de "
+                f"{planned_duration_hours:.1f} h."
             ),
             evidence={
                 "elapsedHours": round(elapsed_hours, 2),
@@ -402,7 +415,8 @@ def detect_suspicious_delivery(
             latitude=delivery_point[0],
             longitude=delivery_point[1],
             description=(
-                f"Delivery was captured {distance / 1000:.1f} km from the declared destination."
+                f"La livraison a été enregistrée à {distance / 1000:.1f} km de la destination "
+                "déclarée."
             ),
             evidence={"distanceM": round(distance, 1), "toleranceM": tolerance_m},
         )
@@ -433,7 +447,7 @@ def detect_anomalies(
             anomalies=[],
             positions_analysed=len(ordered),
             reasons=[
-                "Fewer than two position fixes: nothing can be inferred about movement yet."
+                "Moins de deux positions GPS : rien ne peut encore être déduit du déplacement."
             ],
             assumptions=[],
         )
@@ -455,17 +469,18 @@ def detect_anomalies(
         positions_analysed=len(ordered),
         reasons=_reasons(anomalies, ordered),
         assumptions=[
-            f"A vehicle counts as stopped below {STOPPED_SPEED_KMH:.0f} km/h, because GPS jitter "
-            "reports 1–2 km/h at rest.",
-            f"Stops are flagged past {stop_tolerance_minutes:.0f} minutes; a legitimate rest "
-            "break or customs queue will trip this and is expected to be dismissed by an operator.",
-            f"Route deviation is measured as lateral distance from the planned corridor, "
-            f"tolerance {corridor_tolerance_m / 1000:.1f} km — one alert for the worst point, not "
-            "one per off-corridor fix.",
-            "Overspeed needs at least three fixes above the limit, so a single noisy reading "
-            "does not raise an alert.",
-            "Scores measure distance past the threshold, not probability; they exist to rank "
-            "alerts against each other.",
+            f"Un véhicule est considéré à l’arrêt en dessous de {STOPPED_SPEED_KMH:.0f} km/h, car "
+            "l’imprécision du GPS affiche 1–2 km/h sur un véhicule immobile.",
+            f"Les arrêts sont signalés au-delà de {stop_tolerance_minutes:.0f} minutes ; une pause "
+            "réglementaire ou une file d’attente en douane déclenchera cette alerte, qu’un "
+            "opérateur est censé écarter.",
+            f"L’écart d’itinéraire se mesure comme la distance latérale au corridor prévu, "
+            f"tolérance {corridor_tolerance_m / 1000:.1f} km — une seule alerte pour le point le "
+            "plus éloigné, pas une par position hors corridor.",
+            "Un excès de vitesse exige au moins trois positions au-dessus de la limite, pour "
+            "qu’un relevé isolé et bruité ne déclenche pas d’alerte.",
+            "Les scores mesurent l’écart au-delà du seuil, pas une probabilité ; ils servent à "
+            "classer les alertes entre elles.",
         ],
     )
 
@@ -477,12 +492,17 @@ def _reasons(anomalies: Sequence[DetectedAnomaly], positions: Sequence[GpsSample
 
     if not anomalies:
         return [
-            f"Analysed {len(positions)} fixes over {span_hours:.1f} h; every check passed.",
+            f"{len(positions)} positions GPS analysées sur {span_hours:.1f} h ; tous les "
+            "contrôles sont conformes.",
         ]
 
     reasons = [
-        f"Analysed {len(positions)} fixes over {span_hours:.1f} h and raised "
-        f"{len(anomalies)} anomaly(ies).",
+        f"{len(positions)} positions GPS analysées sur {span_hours:.1f} h : "
+        f"{len(anomalies)} anomalie(s) relevée(s).",
     ]
-    reasons.extend(f"{a.type} ({a.severity}): {a.description}" for a in anomalies)
+    reasons.extend(
+        f"{TYPE_LABELS.get(a.type, a.type)} (gravité {SEVERITY_LABELS.get(a.severity, a.severity)}) : "
+        f"{a.description}"
+        for a in anomalies
+    )
     return reasons

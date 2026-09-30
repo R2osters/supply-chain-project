@@ -67,6 +67,29 @@ MIN_MINORITY_CLASS = 5
 HIGH_RISK = 0.6
 MEDIUM_RISK = 0.3
 
+#: French labels for the explanation text; the JSON keeps the codes. Same wording as the web UI.
+RISK_LABELS: dict[str, str] = {"HIGH": "élevé", "MEDIUM": "moyen", "LOW": "faible"}
+
+#: Readable name of each feature, as it appears in the reasons.
+FEATURE_LABELS: dict[str, str] = {
+    "carrier_unreliability": "le taux de ponctualité du transporteur",
+    "distance_scaled": "la distance du trajet",
+    "traffic_congestion": "la congestion du trafic",
+    "weather_severity": "la sévérité de la météo",
+    "route_incident_rate": "l’historique d’incidents de ce corridor",
+    "unsocial_departure": "un départ en soirée ou de nuit",
+    "weekend_departure": "un départ le week-end",
+    "speed_shortfall": "le fait que le véhicule roule déjà sous la vitesse requise par le plan",
+    "stops_scaled": "le nombre d’arrêts intermédiaires",
+    "supplier_unreliability": "la fiabilité du fournisseur",
+}
+
+
+def _feature_label(feature: str) -> str:
+    """Readable feature name, capitalised to open a sentence."""
+    label = FEATURE_LABELS.get(feature, feature.replace("_", " "))
+    return label[:1].upper() + label[1:]
+
 
 @dataclass
 class DelayPrediction:
@@ -174,18 +197,20 @@ def predict_scorecard(payload: dict) -> DelayPrediction:
         model_version="1.0.0",
         reasons=_scorecard_reasons(contributions, probability, features, intercept),
         assumptions=[
-            "This is a calibrated logistic scorecard, not a model fitted to your data. The "
-            "coefficients encode ordinary freight knowledge and are published in the response.",
-            f"The intercept places a completely benign shipment at the {BASE_LATE_RATE:.0%} "
-            "industry base rate.",
-            "Contributions are additive in log-odds, so they explain the score exactly; they are "
-            "not probabilities and do not sum to the final number.",
-            "Supply at least "
-            f"{MIN_TRAINING_ROWS} labelled historical shipments to train a model on your own "
-            "operation and replace this prior.",
-            "Expected delay is estimated as a quarter of planned duration, weighted by the delay "
-            "probability — a rough magnitude, not a prediction of arrival time. Use the ETA "
-            "engine for that.",
+            "Il s’agit d’une grille de score logistique calibrée, pas d’un modèle ajusté sur vos "
+            "données. Les coefficients traduisent des connaissances courantes du fret et sont "
+            "publiés dans la réponse.",
+            "L’ordonnée à l’origine place une expédition sans aucun facteur défavorable au taux "
+            f"de base du secteur, {BASE_LATE_RATE:.0%}.",
+            "Les contributions s’additionnent en logit (log-odds) : elles expliquent donc le score "
+            "exactement ; ce ne sont pas des probabilités et leur somme ne donne pas le chiffre "
+            "final.",
+            "Fournissez au moins "
+            f"{MIN_TRAINING_ROWS} expéditions historiques étiquetées pour entraîner un modèle sur "
+            "votre propre activité et remplacer cet a priori.",
+            "Le retard attendu est estimé à un quart de la durée prévue, pondéré par la "
+            "probabilité de retard — un ordre de grandeur, pas une prévision de l’heure "
+            "d’arrivée. Utilisez le moteur d’ETA pour cela.",
         ],
     )
 
@@ -193,39 +218,30 @@ def predict_scorecard(payload: dict) -> DelayPrediction:
 def _scorecard_reasons(
     contributions: Sequence[dict], probability: float, features: dict[str, float], intercept: float
 ) -> list[str]:
-    readable = {
-        "carrier_unreliability": "the carrier's on-time record",
-        "distance_scaled": "trip distance",
-        "traffic_congestion": "traffic congestion",
-        "weather_severity": "weather severity",
-        "route_incident_rate": "this corridor's incident history",
-        "unsocial_departure": "an evening or overnight departure",
-        "weekend_departure": "a weekend departure",
-        "speed_shortfall": "the vehicle already running below the plan's required speed",
-        "stops_scaled": "the number of intermediate stops",
-        "supplier_unreliability": "the supplier's reliability",
-    }
-
     reasons = [
-        f"Delay probability {probability:.1%} ({_risk_band(probability)} risk), from a baseline "
-        f"of {BASE_LATE_RATE:.0%} for an unremarkable shipment.",
+        f"Probabilité de retard de {probability:.1%} (risque "
+        f"{RISK_LABELS[_risk_band(probability)]}), pour un taux de base "
+        f"de {BASE_LATE_RATE:.0%} sur une expédition sans particularité.",
     ]
 
     material = [item for item in contributions if abs(item["contribution"]) > 0.05][:4]
     if material:
         for item in material:
-            direction = "raises" if item["contribution"] > 0 else "lowers"
+            direction = "augmente" if item["contribution"] > 0 else "diminue"
             reasons.append(
-                f"{readable.get(item['feature'], item['feature'])} {direction} the log-odds by "
+                f"{_feature_label(item['feature'])} {direction} le logit de "
                 f"{abs(item['contribution']):.2f}."
             )
     else:
-        reasons.append("No individual factor moves the estimate materially from the baseline.")
+        reasons.append(
+            "Aucun facteur pris isolément ne modifie sensiblement l’estimation par rapport au "
+            "taux de base."
+        )
 
     if features.get("speed_shortfall", 0) > 0.2:
         reasons.append(
-            "The vehicle is already behind the speed the plan requires — this is an observation, "
-            "not a forecast, and it is the strongest evidence in the set."
+            "Le véhicule roule déjà moins vite que ne l’exige le plan — c’est une observation, "
+            "pas une prévision, et c’est l’indice le plus solide de l’ensemble."
         )
 
     return reasons
@@ -244,8 +260,9 @@ def train_and_predict(
         prediction = predict_scorecard(payload)
         prediction.reasons.insert(
             0,
-            f"Only {len(labelled)} labelled shipment(s) supplied; at least {MIN_TRAINING_ROWS} "
-            "are needed before a model is fitted, so the scorecard prior was used.",
+            f"Seulement {len(labelled)} expédition(s) étiquetée(s) fournie(s) ; il en faut au moins "
+            f"{MIN_TRAINING_ROWS} avant d’ajuster un modèle, la grille de score a priori a donc "
+            "été utilisée.",
         )
         return prediction
 
@@ -255,8 +272,9 @@ def train_and_predict(
         prediction = predict_scorecard(payload)
         prediction.reasons.insert(
             0,
-            f"Training data is too imbalanced ({positives} late, {negatives} on time); at least "
-            f"{MIN_MINORITY_CLASS} of each class are needed. Scorecard prior used instead.",
+            f"Données d’entraînement trop déséquilibrées ({positives} en retard, {negatives} à "
+            f"l’heure) ; il faut au moins {MIN_MINORITY_CLASS} exemples de chaque classe. La "
+            "grille de score a priori a été utilisée à la place.",
         )
         return prediction
 
@@ -297,24 +315,26 @@ def train_and_predict(
         model_name="delay-gbdt",
         model_version="1.0.0",
         reasons=[
-            f"Delay probability {probability:.1%} ({_risk_band(probability)} risk), from a "
-            f"gradient-boosted model fitted on {len(labelled)} of your own shipments "
-            f"({positives} late, {negatives} on time).",
+            f"Probabilité de retard de {probability:.1%} (risque "
+            f"{RISK_LABELS[_risk_band(probability)]}), selon un modèle de gradient boosting "
+            f"ajusté sur {len(labelled)} de vos propres expéditions "
+            f"({positives} en retard, {negatives} à l’heure).",
         ]
         + [
-            f"{item['feature'].replace('_', ' ')} moves the estimate by "
+            f"{_feature_label(item['feature'])} fait varier l’estimation de "
             f"{item['contribution']:+.1%}."
             for item in contributions[:4]
             if abs(item["contribution"]) > 0.005
         ],
         assumptions=[
-            f"Fitted on {len(labelled)} labelled shipments supplied with this request; the model "
-            "is not persisted between calls.",
-            "Contributions are ablation deltas — the change in predicted probability when a "
-            "feature is reset to its benign value.",
-            "The model has seen only the operation represented by the training rows; a new "
-            "corridor or carrier is out of distribution and the estimate will be less reliable.",
-            "Expected delay is a quarter of planned duration weighted by probability — a "
-            "magnitude, not an arrival time.",
+            f"Ajusté sur les {len(labelled)} expéditions étiquetées fournies avec cette requête ; "
+            "le modèle n’est pas conservé d’un appel à l’autre.",
+            "Les contributions sont des écarts par ablation — la variation de la probabilité "
+            "prédite lorsqu’une variable est ramenée à sa valeur neutre.",
+            "Le modèle n’a vu que l’activité représentée par les lignes d’entraînement ; un "
+            "nouveau corridor ou un nouveau transporteur sort de sa distribution et l’estimation "
+            "sera moins fiable.",
+            "Le retard attendu vaut un quart de la durée prévue, pondéré par la probabilité — un "
+            "ordre de grandeur, pas une heure d’arrivée.",
         ],
     )

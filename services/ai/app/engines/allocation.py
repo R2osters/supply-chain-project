@@ -152,9 +152,9 @@ def allocate(
 ) -> AllocationResult:
     """Solve the allocation and explain the answer."""
     if demand_quantity <= 0:
-        raise ValueError("demand_quantity must be positive")
+        raise ValueError("demand_quantity doit être strictement positif")
     if not suppliers:
-        raise ValueError("at least one supplier option is required")
+        raise ValueError("au moins une option fournisseur est requise")
 
     started = time.perf_counter()
 
@@ -182,7 +182,8 @@ def allocate(
         demand_constraint.SetCoefficient(quantities[supplier.supplier_id], 1.0)
     demand_constraint.SetCoefficient(unmet, 1.0)
     constraints_described.append(
-        f"Total allocated + unmet must equal the demand of {demand_quantity:,.0f} units."
+        f"Le total réparti + la demande non couverte doit être égal à la demande de "
+        f"{demand_quantity:,.0f} unités."
     )
 
     # --- capacity and MOQ linking -----------------------------------------
@@ -202,12 +203,14 @@ def allocate(
             moq.SetCoefficient(x, 1.0)
             moq.SetCoefficient(y, -supplier.minimum_order_quantity)
             constraints_described.append(
-                f"{supplier.name}: order 0 or at least {supplier.minimum_order_quantity:,.0f} units "
-                f"(MOQ), and never more than {capacity:,.0f} (capacity)."
+                f"{supplier.name} : commander 0 ou au moins "
+                f"{supplier.minimum_order_quantity:,.0f} unités (MOQ), et jamais plus de "
+                f"{capacity:,.0f} (capacité)."
             )
         else:
             constraints_described.append(
-                f"{supplier.name}: capacity {capacity:,.0f} units, no minimum order quantity."
+                f"{supplier.name} : capacité de {capacity:,.0f} unités, pas de quantité minimale "
+                "de commande."
             )
 
     # --- budget ------------------------------------------------------------
@@ -215,7 +218,7 @@ def allocate(
         budget_constraint = solver.Constraint(0.0, budget, "budget")
         for supplier in suppliers:
             budget_constraint.SetCoefficient(quantities[supplier.supplier_id], supplier.unit_price)
-        constraints_described.append(f"Purchase spend must not exceed {budget:,.2f}.")
+        constraints_described.append(f"Les dépenses d’achat ne doivent pas dépasser {budget:,.2f}.")
 
     # --- concentration -----------------------------------------------------
     if max_supplier_share_percent is not None and 0 < max_supplier_share_percent < 1:
@@ -224,8 +227,8 @@ def allocate(
             share = solver.Constraint(0.0, cap, f"share_{supplier.supplier_id}")
             share.SetCoefficient(quantities[supplier.supplier_id], 1.0)
         constraints_described.append(
-            f"No single supplier may take more than {max_supplier_share_percent:.0%} of the "
-            "demand — a guard against single-source dependency."
+            f"Aucun fournisseur ne peut prendre plus de {max_supplier_share_percent:.0%} de la "
+            "demande — un garde-fou contre la dépendance à une source unique."
         )
 
     # --- objective ---------------------------------------------------------
@@ -275,9 +278,10 @@ def allocate(
             constraints=constraints_described,
             solver_wall_time_ms=wall_time_ms,
             reasons=[
-                "No allocation satisfies all constraints simultaneously. The usual cause is a "
-                "budget or concentration limit that cannot be met given the suppliers' minimum "
-                "order quantities — relax one and re-run.",
+                "Aucune répartition ne satisfait toutes les contraintes à la fois. La cause "
+                "habituelle est un budget ou une limite de concentration impossible à respecter "
+                "compte tenu des quantités minimales de commande des fournisseurs — assouplissez-en "
+                "une et relancez le calcul.",
             ],
             assumptions=_assumptions(required_within_days, max_supplier_share_percent),
         )
@@ -396,7 +400,9 @@ def _reasons(**kw) -> list[str]:
     reasons: list[str] = []
 
     if not lines:
-        reasons.append("The optimiser allocated nothing — every supplier was priced out of the plan.")
+        reasons.append(
+            "L’optimiseur n’a rien réparti — chaque fournisseur a été écarté du plan par son coût."
+        )
         return reasons
 
     cheapest = min(suppliers, key=lambda s: s.unit_price)
@@ -407,55 +413,59 @@ def _reasons(**kw) -> list[str]:
         supplier = by_id[line.supplier_id]
         notes = []
         if supplier.supplier_id == cheapest.supplier_id:
-            notes.append("lowest unit price")
+            notes.append("prix unitaire le plus bas")
         if supplier.supplier_id == fastest.supplier_id:
-            notes.append("shortest lead time")
+            notes.append("délai le plus court")
         if supplier.supplier_id == most_reliable.supplier_id:
-            notes.append(f"highest reliability at {supplier.reliability:.0%}")
+            notes.append(f"meilleure fiabilité ({supplier.reliability:.0%})")
         if supplier.minimum_order_quantity > 0 and abs(
             line.quantity - supplier.minimum_order_quantity
         ) < 1:
-            notes.append("sits exactly at its minimum order quantity")
+            notes.append("exactement à sa quantité minimale de commande")
         if abs(line.quantity - supplier.capacity_units) < 1:
-            notes.append("is capacity-constrained")
+            notes.append("limité par sa capacité")
 
         reasons.append(
-            f"{line.name}: {line.quantity:,.0f} units ({line.share_percent:.1f}%) at "
-            f"{line.unit_price:,.2f}/unit, {supplier.lead_time_days:.0f}-day lead time"
+            f"{line.name} : {line.quantity:,.0f} unités ({line.share_percent:.1f}%) à "
+            f"{line.unit_price:,.2f}/unité, délai d’approvisionnement de "
+            f"{supplier.lead_time_days:.0f} jours"
             + (f" — {', '.join(notes)}." if notes else ".")
         )
 
     total_cost = sum(kw["breakdown"].values())
     reasons.append(
-        f"Total modelled cost {total_cost:,.2f}: "
-        f"{kw['breakdown']['purchase']:,.2f} purchase, "
-        f"{kw['breakdown']['transport']:,.2f} transport, "
-        f"{kw['breakdown']['holding']:,.2f} holding, "
-        f"{kw['breakdown']['delayPenalty']:,.2f} delay penalty, "
-        f"{kw['breakdown']['riskPenalty']:,.2f} risk penalty, "
-        f"{kw['breakdown']['stockoutPenalty']:,.2f} stockout penalty."
+        f"Coût total modélisé {total_cost:,.2f} : "
+        f"{kw['breakdown']['purchase']:,.2f} d’achat, "
+        f"{kw['breakdown']['transport']:,.2f} de transport, "
+        f"{kw['breakdown']['holding']:,.2f} de possession, "
+        f"{kw['breakdown']['delayPenalty']:,.2f} de pénalité de retard, "
+        f"{kw['breakdown']['riskPenalty']:,.2f} de pénalité de risque, "
+        f"{kw['breakdown']['stockoutPenalty']:,.2f} de pénalité de rupture."
     )
 
     reasons.append(
-        f"Quantity-weighted lead time {kw['expected_lead_time']:.1f} days; expected shortfall "
-        f"{kw['stockout_risk']:.1%} of demand given the suppliers' reliability."
+        f"Délai d’approvisionnement pondéré par les quantités : {kw['expected_lead_time']:.1f} "
+        f"jours ; manque attendu de {kw['stockout_risk']:.1%} de la demande compte tenu de la "
+        "fiabilité des fournisseurs."
     )
 
     if kw["unmet"] > 0:
         reasons.append(
-            f"{kw['unmet']:,.0f} units could not be covered at all — combined supplier capacity "
-            "is short of the requirement. Add a supplier or reduce the order."
+            f"{kw['unmet']:,.0f} unités n’ont pas pu être couvertes du tout — la capacité cumulée "
+            "des fournisseurs est inférieure au besoin. Ajoutez un fournisseur ou réduisez la "
+            "commande."
         )
 
     if kw["concentration"] > 0.6:
         reasons.append(
-            f"Concentration index {kw['concentration']:.2f}: the plan leans heavily on one "
-            "supplier. Set maxSupplierSharePercent to force a split if that dependency is a concern."
+            f"Indice de concentration {kw['concentration']:.2f} : le plan repose fortement sur un "
+            "seul fournisseur. Fixez une part maximale par fournisseur (maxSupplierSharePercent) "
+            "pour imposer une répartition si cette dépendance vous préoccupe."
         )
     elif len(lines) > 1:
         reasons.append(
-            f"Concentration index {kw['concentration']:.2f} across {len(lines)} suppliers — the "
-            "split spreads supply risk."
+            f"Indice de concentration {kw['concentration']:.2f} sur {len(lines)} fournisseurs — "
+            "la répartition diversifie le risque d’approvisionnement."
         )
 
     if kw["required_within_days"] is not None:
@@ -466,11 +476,11 @@ def _reasons(**kw) -> list[str]:
         ]
         if late:
             reasons.append(
-                "Accepting a late portion was still cheaper than the alternatives: "
+                "Accepter une part en retard restait moins coûteux que les alternatives : "
                 + ", ".join(
-                    f"{line.name} arrives "
+                    f"{line.name} arrive "
                     f"{by_id[line.supplier_id].lead_time_days - kw['required_within_days']:.0f} "
-                    "day(s) after the deadline"
+                    "jour(s) après l’échéance"
                     for line in late
                 )
                 + "."
@@ -483,26 +493,34 @@ def _assumptions(
     required_within_days: float | None, max_supplier_share_percent: float | None
 ) -> list[str]:
     assumptions = [
-        "All cost terms are expressed in one currency and are directly additive.",
-        "Reliability is on-time rate × quality acceptance rate, treated as the probability that "
-        "a given unit arrives usable and on time.",
-        "The risk penalty prices each unit by its supplier's failure probability, which assumes "
-        "failures are independent per unit. A real supplier failure is usually all-or-nothing "
-        "for the whole order, so correlated risk is handled by the concentration limit instead.",
-        "Transport cost is linear in distance × units; it ignores vehicle fill and consolidation.",
-        "Holding cost accrues per unit per day of lead time — the capital tied up in transit.",
-        "Unmet demand is priced rather than forbidden, so an under-supplied market produces a "
-        "plan with a visible shortfall instead of an unhelpful 'infeasible'.",
+        "Tous les termes de coût sont exprimés dans une seule devise et s’additionnent "
+        "directement.",
+        "La fiabilité est le taux de ponctualité × le taux d’acceptation qualité, traitée comme la "
+        "probabilité qu’une unité donnée arrive utilisable et à l’heure.",
+        "La pénalité de risque valorise chaque unité selon la probabilité de défaillance de son "
+        "fournisseur, ce qui suppose des défaillances indépendantes d’une unité à l’autre. Une "
+        "vraie défaillance fournisseur touche en général toute la commande d’un coup ; le risque "
+        "corrélé est donc traité par la limite de concentration.",
+        "Le coût de transport est linéaire en distance × unités ; il ignore le taux de remplissage "
+        "des véhicules et la consolidation.",
+        "Le coût de possession court par unité et par jour de délai d’approvisionnement — le "
+        "capital immobilisé pendant le transport.",
+        "La demande non couverte est valorisée plutôt qu’interdite : un marché sous-approvisionné "
+        "donne un plan avec un manque visible au lieu d’un « infaisable » sans intérêt.",
     ]
     if required_within_days is None:
-        assumptions.append("No delivery deadline was supplied, so no delay penalty was applied.")
+        assumptions.append(
+            "Aucune échéance de livraison n’a été fournie, donc aucune pénalité de retard n’a été "
+            "appliquée."
+        )
     else:
         assumptions.append(
-            f"Delivery deadline is {required_within_days:.0f} days; lateness beyond it is "
-            "penalised per unit per day."
+            f"L’échéance de livraison est de {required_within_days:.0f} jours ; tout retard "
+            "au-delà est pénalisé par unité et par jour."
         )
     if max_supplier_share_percent is None:
         assumptions.append(
-            "No concentration limit was set, so the optimiser may single-source if that is cheapest."
+            "Aucune limite de concentration n’a été fixée : l’optimiseur peut tout confier à un "
+            "seul fournisseur si c’est le moins cher."
         )
     return assumptions

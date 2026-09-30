@@ -86,6 +86,37 @@ CONCENTRATION_THRESHOLD = 0.4
 #: engine only flags concentration in *one* country, which it can see from the data itself.
 COUNTRY_CONCENTRATION_THRESHOLD = 0.6
 
+#: French labels for the explanation text; the JSON keeps the codes.
+CATEGORY_LABELS: dict[str, str] = {
+    "STOCKOUT_RISK": "risque de rupture",
+    "SUPPLIER_RISK": "risque fournisseur",
+    "TRANSPORT_RISK": "risque transport",
+    "DEMAND_RISK": "risque lié à la demande",
+    "GEOPOLITICAL_RISK": "risque géopolitique",
+    "WEATHER_RISK": "risque météo",
+    "NATURAL_HAZARD": "danger naturel",
+}
+LEVEL_LABELS: dict[str, str] = {
+    "CRITICAL": "critique",
+    "HIGH": "élevé",
+    "MEDIUM": "moyen",
+    "LOW": "faible",
+}
+#: Hazard names used when the feed row carries no title. Same wording as the web UI.
+HAZARD_KIND_LABELS: dict[str, str] = {
+    "CYCLONE": "Cyclone tropical",
+    "SEVERE_WEATHER": "Météo sévère",
+    "FLOOD": "Inondation",
+    "DROUGHT": "Sécheresse",
+    "EARTHQUAKE": "Séisme",
+    "VOLCANO": "Éruption volcanique",
+    "FIRE": "Feu actif",
+}
+
+
+def _capitalised(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
 
 @dataclass
 class RiskFinding:
@@ -113,7 +144,10 @@ class RiskFinding:
             "subjectId": self.subject_id,
             "recommendedAction": self.recommended_action,
             "explanation": {
-                "summary": f"{self.category} on {self.subject}: score {self.score:.0f}/100.",
+                "summary": (
+                    f"{_capitalised(CATEGORY_LABELS.get(self.category, self.category))} — "
+                    f"{self.subject} : score {self.score:.0f}/100."
+                ),
                 "reasons": self.reasons,
                 "assumptions": self.assumptions,
             },
@@ -177,17 +211,19 @@ def analyse(
         health_breakdown={k: round(v, 2) for k, v in breakdown.items()},
         reasons=_reasons(findings, health, breakdown),
         assumptions=[
-            "Score = probability × impact normalised against the largest impact in this run. "
-            "Scores are comparable inside one analysis, not between analyses.",
-            "Impact is expressed in currency where the data allows (units at risk × unit cost) "
-            "and as a relative magnitude otherwise.",
-            "The health score starts at 100 and subtracts a weighted penalty per category, so "
-            "one catastrophic category cannot be diluted by four healthy ones.",
-            "Stockout probability comes from the same normal lead-time-demand model as the "
-            "inventory engine and inherits its assumptions.",
+            "Score = probabilité × impact normalisé par rapport au plus grand impact de cette "
+            "analyse. Les scores sont comparables au sein d’une même analyse, pas d’une analyse "
+            "à l’autre.",
+            "L’impact est exprimé en valeur monétaire quand les données le permettent (unités à "
+            "risque × coût unitaire), et en ordre de grandeur relatif sinon.",
+            "Le score de santé part de 100 et soustrait une pénalité pondérée par catégorie, de "
+            "sorte qu’une catégorie catastrophique ne puisse pas être diluée par quatre "
+            "catégories saines.",
+            "La probabilité de rupture provient du même modèle normal de demande pendant le "
+            "délai d’approvisionnement que le moteur de stock, et en hérite les hypothèses.",
             _hazard_assumption(hazards),
-            "Geopolitical risk is only assessed from data present in the request; it reflects "
-            "sourcing concentration, not live events.",
+            "Le risque géopolitique n’est évalué qu’à partir des données présentes dans la "
+            "requête ; il reflète la concentration des approvisionnements, pas l’actualité.",
         ],
     )
 
@@ -195,14 +231,14 @@ def analyse(
 def _hazard_assumption(hazards: Sequence[dict] | None) -> str:
     if hazards is None:
         return (
-            "No live hazard feed was supplied with this request, so weather and natural-hazard "
-            "risk reflect nothing external."
+            "Aucun flux de dangers en direct n’a été fourni avec cette requête : les risques "
+            "météo et les dangers naturels ne reflètent donc aucun élément extérieur."
         )
     return (
-        "Weather and natural-hazard risk come from live public feeds (NOAA NHC cyclones, USGS "
-        "earthquakes, NASA FIRMS fires, Open-Meteo weather) matched to asset locations by the "
-        f"API; {len(hazards)} hazard exposure(s) were supplied. NHC covers the Atlantic and "
-        "eastern/central Pacific only."
+        "Les risques météo et les dangers naturels proviennent de flux publics en direct "
+        "(cyclones NOAA NHC, séismes USGS, incendies NASA FIRMS, météo Open-Meteo), rapprochés "
+        f"de la position des sites par l’API. Expositions à un danger fournies : {len(hazards)}. "
+        "Le NHC ne couvre que l’Atlantique et le Pacifique est et central."
     )
 
 
@@ -239,25 +275,29 @@ def _stockout_findings(products: Sequence[dict]) -> list[RiskFinding]:
                 impact=impact,
                 score=0.0,
                 level="LOW",
-                subject=product.get("sku", product.get("productId", "unknown")),
+                subject=product.get("sku", product.get("productId", "inconnu")),
                 subject_type="PRODUCT",
                 subject_id=str(product.get("productId", "")),
                 recommended_action=(
-                    f"Order at least {units_at_risk:,.0f} units, or expedite the "
-                    f"{incoming:,.0f} already on order."
+                    f"Commandez au moins {units_at_risk:,.0f} unités, ou accélérez les "
+                    f"{incoming:,.0f} déjà en commande."
                     if units_at_risk > 0
-                    else "Monitor; cover is thin but the position still meets expected demand."
+                    else "Surveillez : la couverture est faible, mais la position couvre encore "
+                    "la demande attendue."
                 ),
                 reasons=[
-                    f"{current:,.0f} on hand plus {incoming:,.0f} incoming against expected "
-                    f"demand of {demand * lead_time:,.0f} over a {lead_time:.0f}-day lead time.",
-                    f"{days_of_cover:.1f} days of cover remaining at current demand.",
-                    f"Probability of stocking out before replenishment: {probability:.1%}.",
-                    f"Roughly {units_at_risk:,.0f} units at risk, worth {impact:,.0f}.",
+                    f"{current:,.0f} en stock plus {incoming:,.0f} en stock entrant, face à une "
+                    f"demande attendue de {demand * lead_time:,.0f} sur un délai "
+                    f"d’approvisionnement de {lead_time:.0f} jours.",
+                    f"{days_of_cover:.1f} jours de couverture restants au rythme actuel de la "
+                    "demande.",
+                    f"Probabilité de rupture avant réapprovisionnement : {probability:.1%}.",
+                    f"Environ {units_at_risk:,.0f} unités à risque, pour une valeur de {impact:,.0f}.",
                 ],
                 assumptions=[
-                    "Lead-time demand is approximated as normal.",
-                    "Incoming stock is assumed to arrive within the lead time.",
+                    "La demande pendant le délai d’approvisionnement est approchée par une loi "
+                    "normale.",
+                    "Le stock entrant est supposé arriver dans le délai d’approvisionnement.",
                 ],
             )
         )
@@ -281,29 +321,36 @@ def _supplier_findings(suppliers: Sequence[dict]) -> list[RiskFinding]:
         # Impact scales with how much of the business depends on this supplier.
         impact = share * 100.0 * max(failure_probability, 0.05) * 10
         reasons = [
-            f"On-time rate {on_time:.1%}, quality acceptance {quality:.1%} — combined failure "
-            f"probability {failure_probability:.1%}.",
-            f"This supplier carries {share:.1%} of the relevant spend.",
+            f"Taux de ponctualité {on_time:.1%}, taux d’acceptation qualité {quality:.1%} — "
+            f"probabilité de défaillance combinée {failure_probability:.1%}.",
+            f"Ce fournisseur représente {share:.1%} des dépenses concernées.",
         ]
 
-        action = "Monitor performance."
+        action = "Surveillez ses performances."
         if share >= CONCENTRATION_THRESHOLD and failure_probability >= 0.1:
             action = (
-                "Qualify a second source. This supplier is both unreliable and heavily relied on "
-                "— the two together are what turns a delay into an outage."
+                "Qualifiez un second fournisseur. Celui-ci est à la fois peu fiable et très "
+                "sollicité — c’est la combinaison des deux qui transforme un retard en rupture "
+                "d’approvisionnement."
             )
             reasons.append(
-                "Concentration and unreliability compound: a failure here has no fallback."
+                "Concentration et manque de fiabilité se cumulent : une défaillance ici n’a "
+                "aucune solution de repli."
             )
         elif share >= CONCENTRATION_THRESHOLD:
-            action = "Qualify a second source to reduce single-supplier dependency."
+            action = (
+                "Qualifiez un second fournisseur pour réduire la dépendance à un fournisseur "
+                "unique."
+            )
         elif failure_probability >= 0.2:
-            action = "Raise the reliability issue with the supplier or shift volume elsewhere."
+            action = (
+                "Signalez le problème de fiabilité au fournisseur ou reportez du volume ailleurs."
+            )
 
         if lead_std > 3:
             reasons.append(
-                f"Lead time varies by ±{lead_std:.1f} days, which forces a larger safety stock "
-                "across every product this supplier serves."
+                f"Le délai d’approvisionnement varie de ±{lead_std:.1f} jours, ce qui impose un "
+                "stock de sécurité plus élevé sur tous les produits que livre ce fournisseur."
             )
 
         findings.append(
@@ -313,15 +360,15 @@ def _supplier_findings(suppliers: Sequence[dict]) -> list[RiskFinding]:
                 impact=impact,
                 score=0.0,
                 level="LOW",
-                subject=supplier.get("name", "unknown supplier"),
+                subject=supplier.get("name", "fournisseur inconnu"),
                 subject_type="SUPPLIER",
                 subject_id=str(supplier.get("supplierId", "")),
                 recommended_action=action,
                 reasons=reasons,
                 assumptions=[
-                    "Failure probability is 1 − (on-time × quality acceptance), which treats the "
-                    "two as independent.",
-                    "Share of spend is supplied by the caller and is not recomputed here.",
+                    "La probabilité de défaillance vaut 1 − (ponctualité × acceptation qualité), "
+                    "ce qui traite les deux comme indépendantes.",
+                    "La part des dépenses est fournie par l’appelant et n’est pas recalculée ici.",
                 ],
             )
         )
@@ -350,21 +397,23 @@ def _transport_findings(shipments: Sequence[dict]) -> list[RiskFinding]:
             impact=total_value,
             score=0.0,
             level="LOW",
-            subject=f"{len(at_risk)} shipment(s) in transit",
+            subject=f"{len(at_risk)} expédition(s) en transit",
             subject_type="SHIPMENT",
             subject_id=str(at_risk[0].get("shipmentId", "")),
             recommended_action=(
-                f"Review the {len(at_risk)} at-risk shipment(s); expedite or re-plan the ones "
-                "feeding products with thin cover."
+                f"Examinez les {len(at_risk)} expédition(s) à risque ; accélérez ou replanifiez "
+                "celles qui alimentent des produits à faible couverture."
             ),
             reasons=[
-                f"{len(at_risk)} shipment(s) carry a delay probability of 40 % or more.",
-                f"Mean delay probability across them is {mean_probability:.1%}.",
-                f"Combined cargo value at risk: {total_value:,.0f}.",
+                f"{len(at_risk)} expédition(s) présentent une probabilité de retard de 40 % ou "
+                "plus.",
+                f"Leur probabilité de retard moyenne est de {mean_probability:.1%}.",
+                f"Valeur totale des marchandises à risque : {total_value:,.0f}.",
             ],
             assumptions=[
-                "Delay probability is taken from the shipment record as supplied.",
-                "Value at risk is the cargo value, not the downstream cost of the delay.",
+                "La probabilité de retard est reprise telle quelle de la fiche de l’expédition.",
+                "La valeur à risque est celle des marchandises, pas le coût induit du retard en "
+                "aval.",
             ],
         )
     )
@@ -398,22 +447,25 @@ def _demand_findings(products: Sequence[dict]) -> list[RiskFinding]:
                 impact=impact,
                 score=0.0,
                 level="LOW",
-                subject=product.get("sku", "unknown"),
+                subject=product.get("sku", "inconnu"),
                 subject_type="PRODUCT",
                 subject_id=str(product.get("productId", "")),
                 recommended_action=(
-                    "Raise the service level or shorten the replenishment cycle. Erratic demand "
-                    "cannot be forecast away — it has to be buffered or ordered more often."
+                    "Relevez le niveau de service ou raccourcissez le cycle de réapprovisionnement. "
+                    "Une demande erratique ne disparaît pas avec une meilleure prévision — il faut "
+                    "l’absorber par du stock ou commander plus souvent."
                 ),
                 reasons=[
-                    f"Coefficient of variation {cv:.2f} (σ {demand_std:,.1f} on a mean of "
-                    f"{demand:,.1f}/day) — above 0.5, demand is classed as erratic.",
-                    "A forecast on this series will have wide intervals however good the model is; "
-                    "the fix is inventory policy, not a better model.",
+                    f"Coefficient de variation {cv:.2f} (σ {demand_std:,.1f} pour une moyenne de "
+                    f"{demand:,.1f}/jour) — au-delà de 0.5, la demande est considérée comme "
+                    "erratique.",
+                    "Une prévision sur cette série aura des intervalles larges, quelle que soit la "
+                    "qualité du modèle ; la solution est la politique de stock, pas un meilleur "
+                    "modèle.",
                 ],
                 assumptions=[
-                    "Coefficient of variation above 0.5 is the conventional erratic-demand "
-                    "threshold.",
+                    "Un coefficient de variation supérieur à 0.5 est le seuil conventionnel de "
+                    "demande erratique.",
                 ],
             )
         )
@@ -449,21 +501,22 @@ def _geopolitical_findings(suppliers: Sequence[dict]) -> list[RiskFinding]:
             impact=concentration * 1000,
             score=0.0,
             level="LOW",
-            subject=f"Sourcing concentrated in {country}",
+            subject=f"Approvisionnement concentré dans le pays {country}",
             subject_type="COMPANY",
             subject_id=country,
             recommended_action=(
-                f"Qualify suppliers outside {country}. A border closure, strike or currency shock "
-                "there currently affects most of your inbound supply at once."
+                f"Qualifiez des fournisseurs hors du pays {country}. Une fermeture de frontière, "
+                "une grève ou un choc monétaire dans ce pays toucherait aujourd’hui la plupart de "
+                "vos approvisionnements entrants en même temps."
             ),
             reasons=[
-                f"{concentration:.0%} of supplier spend originates in {country}.",
-                "Single-country sourcing correlates risks that would otherwise be independent: "
-                "one event hits every supplier simultaneously.",
+                f"{concentration:.0%} des dépenses fournisseurs proviennent du pays {country}.",
+                "S’approvisionner dans un seul pays corrèle des risques qui seraient sinon "
+                "indépendants : un seul événement touche tous les fournisseurs à la fois.",
             ],
             assumptions=[
-                "No live geopolitical feed is configured, so this reflects concentration only, "
-                "not current events in that country.",
+                "Aucun flux géopolitique en direct n’est configuré : ce constat reflète "
+                "uniquement la concentration, pas l’actualité de ce pays.",
             ],
         )
     ]
@@ -506,15 +559,18 @@ def _hazard_findings(hazards: Sequence[dict], reference_impact: float) -> list[R
         spread = min(1.0 + 0.25 * (len(subjects) - 1), 2.0)
         impact = HAZARD_LEVEL_IMPACT.get(level, 0.1) * spread * reference
 
+        title = closest.get("title", HAZARD_KIND_LABELS.get(kind, kind.title()))
+        label = closest.get("subjectLabel")
+        target = f"de {label}" if label else "d’un site suivi"
         reasons = [
-            f"{closest.get('title', kind.title())} ({level}) is {distance:,.0f} km from "
-            f"{closest.get('subjectLabel', 'an asset')}.",
-            f"Estimated chance it disrupts that asset: {probability:.0%}.",
+            f"{title} (niveau {LEVEL_LABELS.get(level, level)}) se trouve à {distance:,.0f} km "
+            f"{target}.",
+            f"Probabilité estimée d’une perturbation de ce site : {probability:.0%}.",
         ]
         if len(subjects) > 1:
             others = ", ".join(subjects[1:6])
-            more = f" and {len(subjects) - 6} more" if len(subjects) > 6 else ""
-            reasons.append(f"Also within reach: {others}{more}.")
+            more = f" et {len(subjects) - 6} autre(s)" if len(subjects) > 6 else ""
+            reasons.append(f"Également à portée : {others}{more}.")
 
         findings.append(
             RiskFinding(
@@ -523,17 +579,19 @@ def _hazard_findings(hazards: Sequence[dict], reference_impact: float) -> list[R
                 impact=impact,
                 score=0.0,
                 level="LOW",
-                subject=str(closest.get("subjectLabel", "unknown asset")),
+                subject=str(closest.get("subjectLabel", "site inconnu")),
                 subject_type=str(closest.get("subjectType", "COMPANY")),
                 subject_id=str(closest.get("subjectId", "")),
                 recommended_action=_hazard_action(kind),
                 reasons=reasons,
                 assumptions=[
-                    "Hazard position and severity come from the live feed as supplied by the API.",
-                    "Distance is to the hazard's centre or, for a cyclone, its nearest forecast "
-                    "track point; real footprints are irregular.",
-                    "Impact is relative to the largest other impact in this analysis, not a cost "
-                    "estimate.",
+                    "La position et la gravité du danger proviennent du flux en direct, telles que "
+                    "transmises par l’API.",
+                    "La distance est mesurée jusqu’au centre du danger ou, pour un cyclone, "
+                    "jusqu’au point le plus proche de sa trajectoire prévue ; les zones réellement "
+                    "touchées sont irrégulières.",
+                    "L’impact est relatif au plus grand autre impact de cette analyse ; ce n’est "
+                    "pas une estimation de coût.",
                 ],
             )
         )
@@ -545,35 +603,39 @@ def _hazard_findings(hazards: Sequence[dict], reference_impact: float) -> list[R
 def _hazard_action(kind: str) -> str:
     return {
         "CYCLONE": (
-            "Follow the official advisory (NHC, or the regional centre outside the Atlantic and "
-            "eastern Pacific). Reroute or hold shipments crossing the storm's path, move stock "
-            "that can be moved, and secure the site before landfall."
+            "Suivez l’avis officiel (NHC, ou le centre régional hors de l’Atlantique et du "
+            "Pacifique est). Déroutez ou retenez les expéditions qui croisent la trajectoire de la "
+            "tempête, déplacez le stock qui peut l’être et sécurisez le site avant que la tempête "
+            "ne touche terre."
         ),
         "SEVERE_WEATHER": (
-            "Hold or reroute departures through the affected area until conditions ease, and "
-            "warn drivers already on the road."
+            "Retenez ou déroutez les départs qui traversent la zone touchée jusqu’à ce que les "
+            "conditions s’améliorent, et prévenez les chauffeurs déjà sur la route."
         ),
         "FLOOD": (
-            "Check which roads and river crossings are closed, move stock off the ground floor, "
-            "and reroute or hold shipments through the flooded area."
+            "Vérifiez quelles routes et quels franchissements de cours d’eau sont fermés, "
+            "surélevez le stock posé au rez-de-chaussée, et déroutez ou retenez les expéditions "
+            "qui traversent la zone inondée."
         ),
         "DROUGHT": (
-            "Expect lower river levels and water restrictions: check barge and inland-port "
-            "capacity, crop-dependent suppliers, and build buffer stock on affected lanes."
+            "Attendez-vous à des niveaux de rivière plus bas et à des restrictions d’eau : "
+            "vérifiez la capacité des barges et des ports fluviaux ainsi que les fournisseurs "
+            "dépendant des récoltes, et constituez un stock tampon sur les axes concernés."
         ),
         "EARTHQUAKE": (
-            "Confirm staff and the site are safe, inspect for damage, and check road and port "
-            "status before dispatching."
+            "Vérifiez que le personnel et le site sont en sécurité, inspectez les dégâts, et "
+            "contrôlez l’état des routes et des ports avant toute expédition."
         ),
         "VOLCANO": (
-            "Follow the civil-protection and aviation ash advisories: expect airport closures "
-            "and road restrictions downwind, and move air freight to other routes."
+            "Suivez les avis de la protection civile et les avis aéronautiques sur les cendres : "
+            "attendez-vous à des fermetures d’aéroports et à des restrictions routières sous le "
+            "vent, et basculez le fret aérien sur d’autres itinéraires."
         ),
         "FIRE": (
-            "Watch the fire's spread, prepare to move stock, and reroute shipments around "
-            "closed roads."
+            "Surveillez la progression du feu, préparez-vous à déplacer le stock, et déroutez les "
+            "expéditions pour contourner les routes fermées."
         ),
-    }.get(kind, "Monitor the hazard.")
+    }.get(kind, "Surveillez le danger.")
 
 
 def _health_breakdown(findings: Sequence[RiskFinding]) -> dict[str, float]:
@@ -598,30 +660,33 @@ def _reasons(
 ) -> list[str]:
     if not findings:
         return [
-            "No risk above the reporting threshold was found. Health score 100.",
+            "Aucun risque au-dessus du seuil de signalement n’a été détecté. Score de santé 100.",
         ]
 
     verdict = (
-        "healthy" if health >= 80 else "strained" if health >= 55 else "under serious pressure"
+        "saine" if health >= 80 else "tendue" if health >= 55 else "sous forte pression"
     )
     reasons = [
-        f"Supply chain health {health:.0f}/100 — {verdict}.",
-        f"{len(findings)} finding(s); "
-        f"{sum(1 for f in findings if f.level == 'HIGH')} high, "
-        f"{sum(1 for f in findings if f.level == 'MEDIUM')} medium.",
+        f"Santé de la supply chain {health:.0f}/100 — situation {verdict}.",
+        f"{len(findings)} constat(s) ; "
+        f"{sum(1 for f in findings if f.level == 'HIGH')} élevé(s), "
+        f"{sum(1 for f in findings if f.level == 'MEDIUM')} moyen(s).",
     ]
 
     worst_category = max(breakdown, key=lambda c: breakdown[c]) if breakdown else None
     if worst_category and breakdown[worst_category] > 0:
+        category_label = _capitalised(CATEGORY_LABELS.get(worst_category, worst_category))
         reasons.append(
-            f"{worst_category.replace('_', ' ').title()} costs the most points "
-            f"({breakdown[worst_category]:.1f} of a possible {HEALTH_WEIGHTS[worst_category]:.0f})."
+            f"La catégorie « {category_label} » coûte le plus de points "
+            f"({breakdown[worst_category]:.1f} sur un maximum de "
+            f"{HEALTH_WEIGHTS[worst_category]:.0f})."
         )
 
     for finding in findings[:3]:
         reasons.append(
-            f"{finding.level} — {finding.category} on {finding.subject} "
-            f"(score {finding.score:.0f}): {finding.recommended_action}"
+            f"{_capitalised(LEVEL_LABELS.get(finding.level, finding.level))} — "
+            f"{CATEGORY_LABELS.get(finding.category, finding.category)} pour {finding.subject} "
+            f"(score {finding.score:.0f}) : {finding.recommended_action}"
         )
 
     return reasons

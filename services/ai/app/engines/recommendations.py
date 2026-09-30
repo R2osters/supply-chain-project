@@ -133,16 +133,17 @@ def generate(
         recommendations=recommendations,
         reasons=_overall_reasons(recommendations, products),
         assumptions=[
-            "Recommendations are generated from the snapshot supplied; they do not re-query the "
-            "database and will be stale if the position has moved since.",
-            "Order quantities come from the same inventory model as /inventory/optimize and "
-            "inherit its normality assumption.",
-            "Supplier splits come from the MILP allocator and respect minimum order quantity, "
-            "capacity and any concentration limit.",
-            "Cost deltas are modelled, not quoted: they exclude negotiated discounts, contract "
-            "terms and anything the optimiser cannot see.",
-            "Priority is driven by time pressure first and money second — an imminent stockout "
-            "outranks a larger but slower inefficiency.",
+            "Les recommandations sont calculées à partir de l’instantané fourni ; elles "
+            "n’interrogent pas à nouveau la base de données et seront périmées si la position a "
+            "évolué depuis.",
+            "Les quantités à commander viennent du même modèle de stock que /inventory/optimize et "
+            "héritent de son hypothèse de normalité.",
+            "Les répartitions entre fournisseurs viennent de l’optimiseur MILP et respectent la "
+            "quantité minimale de commande, la capacité et toute limite de concentration.",
+            "Les écarts de coût sont modélisés, pas issus de devis : ils excluent les remises "
+            "négociées, les conditions contractuelles et tout ce que l’optimiseur ne voit pas.",
+            "La priorité dépend d’abord de l’urgence, ensuite de l’argent en jeu — une rupture "
+            "imminente passe avant une inefficacité plus coûteuse mais plus lente.",
         ],
     )
 
@@ -224,19 +225,20 @@ def _for_product(
             cost_delta = allocation.cost_breakdown.get("purchase", quantity * unit_cost)
             rec_type = "SPLIT_ORDER" if len(allocation.lines) > 1 else "ORDER_NOW"
             title = (
-                f"Order {quantity:,.0f} units of {sku} — split across "
-                f"{len(allocation.lines)} suppliers"
+                f"Commander {quantity:,.0f} unités de {sku} — réparties entre "
+                f"{len(allocation.lines)} fournisseurs"
                 if len(allocation.lines) > 1
-                else f"Order {quantity:,.0f} units of {sku} from {allocation.lines[0].name}"
+                else f"Commander {quantity:,.0f} unités de {sku} auprès de {allocation.lines[0].name}"
             )
         else:
             cost_delta = quantity * unit_cost
             rec_type = "ORDER_NOW"
-            title = f"Order {quantity:,.0f} units of {sku}"
+            title = f"Commander {quantity:,.0f} unités de {sku}"
             if not candidates:
                 reasons.append(
-                    "No supplier is linked to this product, so no split could be computed. "
-                    "Link a supplier price list to get a costed allocation."
+                    "Aucun fournisseur n’est lié à ce produit, donc aucune répartition n’a pu être "
+                    "calculée. Liez une grille tarifaire fournisseur pour obtenir une répartition "
+                    "chiffrée."
                 )
 
         recommendations.append(
@@ -281,8 +283,8 @@ def _for_product(
                 type="INCREASE_SAFETY_STOCK",
                 priority="MEDIUM",
                 title=(
-                    f"Raise safety stock for {sku} by {extra_units:,.0f} units "
-                    f"({service_level:.0%} → {target_service:.0%} service level)"
+                    f"Relever le stock de sécurité de {sku} de {extra_units:,.0f} unités "
+                    f"(niveau de service {service_level:.0%} → {target_service:.0%})"
                 ),
                 subject_type="PRODUCT",
                 subject_id=product_id,
@@ -295,12 +297,12 @@ def _for_product(
                     "serviceLevel": target_service,
                 },
                 reasons=[
-                    f"Stockout probability is {policy.stockout_probability:.1%} even though the "
-                    "position is still above the reorder point — the buffer is undersized for "
-                    "the observed variability.",
-                    f"Raising the target from {service_level:.0%} to {target_service:.0%} adds "
-                    f"{extra_units:,.0f} units of buffer, costing about "
-                    f"{extra_units * unit_cost * 0.25:,.0f} per year to hold.",
+                    f"La probabilité de rupture est de {policy.stockout_probability:.1%} alors que "
+                    "la position est encore au-dessus du point de commande — le stock tampon est "
+                    "sous-dimensionné pour la variabilité observée.",
+                    f"Relever l’objectif de {service_level:.0%} à {target_service:.0%} ajoute "
+                    f"{extra_units:,.0f} unités de stock tampon, pour un coût de possession "
+                    f"d’environ {extra_units * unit_cost * 0.25:,.0f} par an.",
                 ]
                 + policy.reasons[:3],
                 assumptions=stronger.assumptions,
@@ -324,7 +326,10 @@ def _for_product(
                 Recommendation(
                     type="REDUCE_INVENTORY",
                     priority="LOW",
-                    title=f"{sku} holds {policy.days_of_cover_remaining:.0f} days of cover — release capital",
+                    title=(
+                        f"{sku} représente {policy.days_of_cover_remaining:.0f} jours de couverture "
+                        "— libérer de la trésorerie"
+                    ),
                     subject_type="PRODUCT",
                     subject_id=product_id,
                     payload={
@@ -334,18 +339,21 @@ def _for_product(
                         "suggestedMaxStock": round(demand * OVERSTOCK_COVER_DAYS, 2),
                     },
                     reasons=[
-                        f"{current:,.0f} units on hand against {demand:,.1f}/day of demand — "
-                        f"{policy.days_of_cover_remaining:.0f} days of cover.",
-                        f"Roughly {excess_units:,.0f} units beyond a {OVERSTOCK_COVER_DAYS:.0f}-day "
-                        f"target, tying up {tied_up:,.0f} in working capital.",
-                        f"At a 25 %/year carrying cost that is about {tied_up * 0.25:,.0f} a year.",
-                        "Stop reordering, run the stock down, or transfer it to a location that "
-                        "is short.",
+                        f"{current:,.0f} unités en stock pour une demande de {demand:,.1f}/jour — "
+                        f"{policy.days_of_cover_remaining:.0f} jours de couverture.",
+                        f"Environ {excess_units:,.0f} unités au-delà d’un objectif de "
+                        f"{OVERSTOCK_COVER_DAYS:.0f} jours, soit {tied_up:,.0f} immobilisés en "
+                        "fonds de roulement.",
+                        f"Avec un coût de possession de 25 %/an, cela représente environ "
+                        f"{tied_up * 0.25:,.0f} par an.",
+                        "Suspendez les réapprovisionnements, écoulez le stock ou transférez-le vers "
+                        "un site en manque.",
                     ],
                     assumptions=[
-                        f"{OVERSTOCK_COVER_DAYS:.0f} days is used as the overstock threshold; "
-                        "seasonal or long-lead-time items may legitimately exceed it.",
-                        "Carrying cost taken as 25 %/year of unit cost.",
+                        f"Le seuil de surstock retenu est de {OVERSTOCK_COVER_DAYS:.0f} jours ; les "
+                        "articles saisonniers ou à long délai d’approvisionnement peuvent "
+                        "légitimement le dépasser.",
+                        "Coût de possession pris à 25 %/an du coût unitaire.",
                     ],
                     cost_delta=-tied_up * 0.25,
                 )
@@ -404,14 +412,14 @@ def _supplier_recommendations(suppliers: Sequence[dict], today: date) -> list[Re
         on_time = float(supplier.get("onTimeDeliveryRate", 1) or 1)
         quality = float(supplier.get("qualityAcceptanceRate", 1) or 1)
         share = float(supplier.get("sharePercent", 0) or 0)
-        name = supplier.get("name", "unknown supplier")
+        name = supplier.get("name", "fournisseur inconnu")
 
         if on_time < 0.75 and share > 0.15:
             recommendations.append(
                 Recommendation(
                     type="CHANGE_SUPPLIER",
                     priority="HIGH" if share > 0.4 else "MEDIUM",
-                    title=f"Shift volume away from {name} — {on_time:.0%} on-time",
+                    title=f"Réduire le volume confié à {name} — {on_time:.0%} de ponctualité",
                     subject_type="SUPPLIER",
                     subject_id=str(supplier.get("supplierId", "")),
                     payload={
@@ -420,16 +428,16 @@ def _supplier_recommendations(suppliers: Sequence[dict], today: date) -> list[Re
                         "suggestedSharePercent": round(min(share, 0.2), 4),
                     },
                     reasons=[
-                        f"{name} delivers on time only {on_time:.0%} of the time and quality "
-                        f"acceptance is {quality:.0%}.",
-                        f"They currently carry {share:.0%} of spend, so their unreliability "
-                        "propagates into every product they serve.",
-                        "Late and rejected deliveries are what force safety stock up across the "
-                        "board — the cost of this supplier is not just their price.",
+                        f"{name} ne livre à l’heure que dans {on_time:.0%} des cas et son taux "
+                        f"d’acceptation qualité est de {quality:.0%}.",
+                        f"Ce fournisseur porte actuellement {share:.0%} des dépenses : son manque "
+                        "de fiabilité se répercute sur chaque produit qu’il livre.",
+                        "Ce sont les livraisons en retard et refusées qui font gonfler le stock de "
+                        "sécurité partout — le coût de ce fournisseur ne se limite pas à son prix.",
                     ],
                     assumptions=[
-                        "Performance rates are as supplied by the caller and are shrunk toward a "
-                        "prior when the order count is small.",
+                        "Les taux de performance sont ceux fournis par l’appelant et sont ramenés "
+                        "vers une valeur a priori quand le nombre de commandes est faible.",
                     ],
                     risk_delta=-(1 - on_time) * share,
                 )
@@ -440,7 +448,7 @@ def _supplier_recommendations(suppliers: Sequence[dict], today: date) -> list[Re
                 Recommendation(
                     type="ADD_SUPPLIER",
                     priority="MEDIUM",
-                    title=f"Qualify a second source — {name} carries {share:.0%} of spend",
+                    title=f"Qualifier un second fournisseur — {name} porte {share:.0%} des dépenses",
                     subject_type="SUPPLIER",
                     subject_id=str(supplier.get("supplierId", "")),
                     payload={
@@ -449,16 +457,16 @@ def _supplier_recommendations(suppliers: Sequence[dict], today: date) -> list[Re
                         "targetMaxSharePercent": 0.5,
                     },
                     reasons=[
-                        f"{share:.0%} of spend sits with one supplier. Their reliability is "
-                        f"currently {on_time:.0%}, but concentration is a risk independent of "
-                        "performance — a strike, a fire or an insolvency does not care how good "
-                        "their record is.",
-                        "A qualified second source turns a single point of failure into a "
-                        "degraded-but-running state.",
+                        f"{share:.0%} des dépenses reposent sur un seul fournisseur. Sa fiabilité "
+                        f"est actuellement de {on_time:.0%}, mais la concentration est un risque "
+                        "indépendant de la performance — une grève, un incendie ou une faillite ne "
+                        "tiennent aucun compte de ses bons antécédents.",
+                        "Un second fournisseur qualifié transforme un point de défaillance unique "
+                        "en fonctionnement dégradé mais maintenu.",
                     ],
                     assumptions=[
-                        "Share of spend is supplied by the caller.",
-                        f"{CONCENTRATION_THRESHOLD:.0%} is used as the concentration threshold.",
+                        "La part des dépenses est fournie par l’appelant.",
+                        f"Le seuil de concentration retenu est de {CONCENTRATION_THRESHOLD:.0%}.",
                     ],
                 )
             )
@@ -501,8 +509,8 @@ def _shipment_recommendations(
                 type="EXPEDITE_SHIPMENT",
                 priority="CRITICAL" if worst_cover <= CRITICAL_COVER_DAYS else "HIGH",
                 title=(
-                    f"Expedite {shipment.get('trackingNumber', 'shipment')} — "
-                    f"{delay_probability:.0%} delay risk against {worst_cover:.1f} days of cover"
+                    f"Accélérer {shipment.get('trackingNumber', 'l’expédition')} — risque de "
+                    f"retard de {delay_probability:.0%} pour {worst_cover:.1f} jours de couverture"
                 ),
                 subject_type="SHIPMENT",
                 subject_id=str(shipment.get("shipmentId", "")),
@@ -513,17 +521,19 @@ def _shipment_recommendations(
                     "coverDays": round(worst_cover, 2),
                 },
                 reasons=[
-                    f"This shipment has a {delay_probability:.0%} probability of arriving late.",
-                    f"It carries {len(thin)} product(s) whose remaining cover is "
-                    f"{worst_cover:.1f} day(s) — the delay would turn into a stockout, not just "
-                    "a late delivery.",
-                    "Expediting, or raising a bridging order from a fast supplier, is cheaper "
-                    "than the stockout it prevents.",
+                    f"Cette expédition a une probabilité de {delay_probability:.0%} d’arriver en "
+                    "retard.",
+                    f"Elle transporte {len(thin)} produit(s) dont la couverture restante est de "
+                    f"{worst_cover:.1f} jour(s) — le retard se traduirait par une rupture, pas "
+                    "seulement par une livraison tardive.",
+                    "Accélérer l’expédition, ou passer une commande de dépannage auprès d’un "
+                    "fournisseur rapide, coûte moins cher que la rupture ainsi évitée.",
                 ],
                 assumptions=[
-                    "Delay probability is taken from the shipment record.",
-                    "Cover is computed from current stock and mean daily demand, ignoring other "
-                    "inbound orders not present in this snapshot.",
+                    "La probabilité de retard est reprise de la fiche de l’expédition.",
+                    "La couverture est calculée à partir du stock actuel et de la demande "
+                    "journalière moyenne, sans tenir compte des autres commandes entrantes "
+                    "absentes de cet instantané.",
                 ],
                 risk_delta=-delay_probability,
             )
@@ -537,7 +547,7 @@ def _overall_reasons(
 ) -> list[str]:
     if not recommendations:
         return [
-            f"Reviewed {len(products)} product(s) and found nothing that needs action right now.",
+            f"{len(products)} produit(s) examiné(s) : rien ne demande d’action pour le moment.",
         ]
 
     counts: dict[str, int] = {}
@@ -545,8 +555,8 @@ def _overall_reasons(
         counts[recommendation.priority] = counts.get(recommendation.priority, 0) + 1
 
     reasons = [
-        f"{len(recommendations)} recommendation(s) across {len(products)} product(s): "
-        + ", ".join(f"{count} {priority.lower()}" for priority, count in sorted(
+        f"{len(recommendations)} recommandation(s) sur {len(products)} produit(s) : "
+        + ", ".join(_priority_count(priority, count) for priority, count in sorted(
             counts.items(), key=lambda item: PRIORITY_ORDER.get(item[0], 9)
         ))
         + ".",
@@ -554,16 +564,27 @@ def _overall_reasons(
 
     urgent = [r for r in recommendations if r.priority in {"CRITICAL", "HIGH"}]
     if urgent:
-        reasons.append("Act first on: " + "; ".join(r.title for r in urgent[:3]) + ".")
+        reasons.append("À traiter en priorité : " + " ; ".join(r.title for r in urgent[:3]) + ".")
 
     total_spend = sum(r.cost_delta or 0 for r in recommendations if (r.cost_delta or 0) > 0)
     total_release = -sum(r.cost_delta or 0 for r in recommendations if (r.cost_delta or 0) < 0)
     if total_spend:
-        reasons.append(f"Acting on the ordering recommendations commits about {total_spend:,.0f}.")
+        reasons.append(
+            f"Appliquer les recommandations de commande engage environ {total_spend:,.0f}."
+        )
     if total_release:
         reasons.append(
-            f"The inventory-reduction recommendations would release about {total_release:,.0f} a "
-            "year in carrying cost."
+            f"Les recommandations de réduction de stock libéreraient environ {total_release:,.0f} "
+            "par an en coût de possession."
         )
 
     return reasons
+
+
+#: French priority labels for the overall summary; the ``priority`` field itself stays a code.
+PRIORITY_LABELS = {"CRITICAL": "critique", "HIGH": "haute", "MEDIUM": "moyenne", "LOW": "basse"}
+
+
+def _priority_count(priority: str, count: int) -> str:
+    label = PRIORITY_LABELS.get(priority, priority.lower())
+    return f"{count} {label}{'s' if count > 1 else ''}"

@@ -102,8 +102,8 @@ def z_for_service_level(service_level: float) -> float:
     """Standard normal quantile for a cycle service level."""
     if not MIN_SERVICE_LEVEL <= service_level <= MAX_SERVICE_LEVEL:
         raise ValueError(
-            f"service_level must be between {MIN_SERVICE_LEVEL} and {MAX_SERVICE_LEVEL}, "
-            f"got {service_level}"
+            f"service_level doit être compris entre {MIN_SERVICE_LEVEL} et {MAX_SERVICE_LEVEL} "
+            f"(reçu : {service_level})"
         )
     return float(stats.norm.ppf(service_level))
 
@@ -246,13 +246,16 @@ def optimize_inventory(
 
     if eoq is not None:
         order_quantity = max(eoq, rop - position)
-        quantity_basis = f"EOQ of {eoq:.0f} units, raised if needed to clear the reorder point"
+        quantity_basis = (
+            f"de la quantité économique de commande (EOQ) de {eoq:.0f} unités, relevée si "
+            "nécessaire pour repasser au-dessus du point de commande"
+        )
     else:
         # No economic inputs: order enough to reach the reorder point plus one lead time of cover.
         order_quantity = max(rop - position + average_daily_demand * lead_time_days, 0.0)
         quantity_basis = (
-            "gap to the reorder point plus one lead time of cover "
-            "(no ordering/holding cost supplied, so no EOQ was computed)"
+            "de l’écart au point de commande, plus la couverture d’un délai d’approvisionnement "
+            "(aucun coût de commande ni de possession fourni, donc pas de calcul d’EOQ)"
         )
 
     order_quantity = max(order_quantity, 0.0) if reorder_required else 0.0
@@ -311,14 +314,14 @@ def optimize_inventory(
 
 def _reasons(**kw) -> list[str]:
     reasons = [
-        f"Inventory position is {kw['position']:.0f} units "
-        f"({kw['free_stock']:.0f} free on hand + {kw['incoming']:.0f} already on order) "
-        f"against a reorder point of {kw['rop']:.0f}.",
-        f"Safety stock {kw['buffer']:.0f} = z({kw['service_level']:.0%}) × σ_LTD "
+        f"La position de stock est de {kw['position']:.0f} unités "
+        f"({kw['free_stock']:.0f} disponibles en stock + {kw['incoming']:.0f} déjà en commande) "
+        f"pour un point de commande de {kw['rop']:.0f}.",
+        f"Stock de sécurité {kw['buffer']:.0f} = z({kw['service_level']:.0%}) × σ_LTD "
         f"= {kw['z']:.3f} × {kw['sigma_ltd']:.1f}.",
-        f"σ_LTD combines demand variability (σ_d = {kw['demand_std']:.1f}/day over "
-        f"{kw['lead_time_days']:.1f} days) with lead-time variability "
-        f"(σ_L = {kw['lead_time_std_days']:.1f} days at {kw['average_daily_demand']:.1f} units/day).",
+        f"σ_LTD combine la variabilité de la demande (σ_d = {kw['demand_std']:.1f}/jour sur "
+        f"{kw['lead_time_days']:.1f} jours) et celle du délai d’approvisionnement "
+        f"(σ_L = {kw['lead_time_std_days']:.1f} jours à {kw['average_daily_demand']:.1f} unités/jour).",
     ]
 
     demand_term = kw["lead_time_days"] * kw["demand_std"] ** 2
@@ -326,71 +329,82 @@ def _reasons(**kw) -> list[str]:
     if lead_term > demand_term and lead_term > 0:
         share = lead_term / (demand_term + lead_term)
         reasons.append(
-            f"Lead-time variability drives {share:.0%} of the required buffer — stabilising the "
-            "supplier would cut more stock than improving the demand forecast."
+            f"La variabilité du délai d’approvisionnement explique {share:.0%} du stock tampon "
+            "nécessaire — fiabiliser le fournisseur réduirait davantage le stock qu’améliorer la "
+            "prévision de la demande."
         )
     elif demand_term > 0:
         share = demand_term / (demand_term + lead_term)
         reasons.append(
-            f"Demand variability drives {share:.0%} of the required buffer — a better forecast "
-            "is the cheaper lever here."
+            f"La variabilité de la demande explique {share:.0%} du stock tampon nécessaire — une "
+            "meilleure prévision est ici le levier le moins coûteux."
         )
 
     if math.isfinite(kw["days_of_cover"]):
-        reasons.append(f"Free stock covers {kw['days_of_cover']:.1f} day(s) at current demand.")
+        reasons.append(
+            f"Le stock disponible couvre {kw['days_of_cover']:.1f} jour(s) au rythme actuel de la "
+            "demande."
+        )
 
     reasons.append(
-        f"Probability of running out before replenishment arrives: {kw['risk']:.1%}."
+        f"Probabilité de rupture avant l’arrivée du réapprovisionnement : {kw['risk']:.1%}."
     )
 
     if kw["reorder_required"]:
         reasons.append(
-            f"Order now: {kw['order_quantity']:.0f} units, sized from the {kw['quantity_basis']}."
+            f"Commander maintenant : {kw['order_quantity']:.0f} unités, quantité calculée à partir "
+            f"{kw['quantity_basis']}."
         )
     else:
-        reasons.append("No order needed yet — the position is still above the reorder point.")
+        reasons.append(
+            "Pas de commande nécessaire pour l’instant — la position est encore au-dessus du point "
+            "de commande."
+        )
 
     return reasons
 
 
 def _assumptions(**kw) -> list[str]:
     assumptions = [
-        "Demand over the lead time is approximated as normally distributed.",
-        "Demand and lead time are assumed independent; if supplier delays are themselves caused "
-        "by demand surges the two correlate and this buffer is an underestimate.",
-        f"Target is a {kw['service_level']:.0%} cycle service level — the probability of not "
-        "stocking out during a replenishment cycle, not the fraction of demand met.",
+        "La demande sur le délai d’approvisionnement est approchée par une loi normale.",
+        "La demande et le délai d’approvisionnement sont supposés indépendants ; si les retards "
+        "du fournisseur sont eux-mêmes causés par des pics de demande, les deux sont corrélés et "
+        "ce stock tampon est sous-estimé.",
+        f"L’objectif est un niveau de service par cycle de {kw['service_level']:.0%} — la "
+        "probabilité de ne pas tomber en rupture pendant un cycle de réapprovisionnement, et non "
+        "la part de la demande servie.",
     ]
 
     if kw["average_daily_demand"] < SLOW_MOVER_THRESHOLD:
         assumptions.append(
-            f"Mean demand is only {kw['average_daily_demand']:.2f} units/day. For such a slow "
-            "mover the normal approximation is weak; a Poisson or empirical model would size the "
-            "buffer better."
+            f"La demande moyenne n’est que de {kw['average_daily_demand']:.2f} unités/jour. Pour "
+            "un article à rotation aussi lente, l’approximation normale est fragile ; un modèle de "
+            "Poisson ou empirique dimensionnerait mieux le stock tampon."
         )
 
     if kw["review_period_days"] > 0:
         assumptions.append(
-            f"Periodic review every {kw['review_period_days']:.0f} day(s), so the buffer also "
-            "covers the blind interval between reviews."
+            f"Révision périodique tous les {kw['review_period_days']:.0f} jour(s) : le stock "
+            "tampon couvre donc aussi l’intervalle sans visibilité entre deux révisions."
         )
     else:
-        assumptions.append("Continuous review: the position is checked on every movement.")
+        assumptions.append("Révision continue : la position est contrôlée à chaque mouvement.")
 
     if kw["holding_derived"]:
         assumptions.append(
-            "Holding cost was not supplied and was taken as 25 %/year of unit cost — the "
-            "conventional carrying-cost rule of thumb. Override it for a real EOQ."
+            "Le coût de possession n’a pas été fourni et a été pris à 25 %/an du coût unitaire — "
+            "la règle empirique usuelle. Renseignez-le pour obtenir une véritable EOQ."
         )
 
     if kw["incoming"] > 0:
         arrival = kw["incoming_arrival_days"]
         assumptions.append(
-            f"{kw['incoming']:.0f} incoming units are counted in the position"
+            f"{kw['incoming']:.0f} unités entrantes sont comptées dans la position"
             + (
-                f" and are assumed to land in {arrival:.0f} day(s)."
+                f" et sont supposées arriver sous {arrival:.0f} jour(s)."
                 if arrival is not None
-                else ", with no arrival date supplied — they are assumed to arrive within the lead time."
+                else ", sans date d’arrivée fournie — elles sont supposées arriver dans le délai "
+                "d’approvisionnement."
             )
         )
 

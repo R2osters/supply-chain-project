@@ -45,6 +45,20 @@ CRITERIA = tuple(DEFAULT_WEIGHTS.keys())
 #: Criteria where a *lower* raw value is better and the normalisation must be inverted.
 LOWER_IS_BETTER = {"price", "lead_time", "distance"}
 
+#: French labels used when a criterion is named in an explanation; the keys stay codes.
+CRITERION_LABELS: dict[str, str] = {
+    "price": "prix",
+    "reliability": "fiabilité",
+    "lead_time": "délai",
+    "quality": "qualité",
+    "capacity": "capacité",
+    "distance": "distance",
+}
+
+
+def _label(criterion: str) -> str:
+    return CRITERION_LABELS.get(criterion, criterion.replace("_", " "))
+
 
 @dataclass
 class ScoredSupplier:
@@ -109,12 +123,14 @@ def score_suppliers(
     weights: dict[str, float] | None = None,
 ) -> ScoringResult:
     if not suppliers:
-        raise ValueError("at least one supplier is required")
+        raise ValueError("au moins un fournisseur est requis")
 
     used = {**DEFAULT_WEIGHTS, **(weights or {})}
     total_weight = sum(used.values())
     if total_weight <= 0:
-        raise ValueError("supplier scoring weights must sum to a positive number")
+        raise ValueError(
+            "la somme des pondérations de notation des fournisseurs doit être strictement positive"
+        )
 
     raw = [_raw_values(s) for s in suppliers]
 
@@ -150,15 +166,18 @@ def score_suppliers(
         weights_used={k: round(v / total_weight, 4) for k, v in used.items()},
         reasons=_overall_reasons(scored, used, total_weight),
         assumptions=[
-            "Criteria are min-max normalised across the supplied candidates only — a score is a "
-            "comparison within this set, not an absolute rating, and adding a candidate changes "
-            "everyone's score.",
-            "Price, lead time and distance are inverted so that higher is always better.",
-            "A criterion on which every candidate is identical is neutralised to 1.0 for all, so "
-            "it drops out of the comparison instead of dividing by a zero range.",
-            "A supplier with no recorded distance is scored at the midpoint rather than "
-            "penalised, so missing master data does not masquerade as a disadvantage.",
-            "Weights are normalised to sum to 1, so passing unnormalised weights is safe.",
+            "Les critères sont normalisés min-max sur les seuls candidats fournis — un score est "
+            "une comparaison au sein de cet ensemble, pas une note absolue, et ajouter un candidat "
+            "modifie le score de tous.",
+            "Le prix, le délai d’approvisionnement et la distance sont inversés pour qu’une valeur "
+            "plus haute soit toujours meilleure.",
+            "Un critère sur lequel tous les candidats sont identiques est neutralisé à 1.0 pour "
+            "tous : il sort de la comparaison au lieu de provoquer une division par un écart nul.",
+            "Un fournisseur sans distance enregistrée est noté au point médian plutôt que "
+            "pénalisé, pour que des données de référence manquantes ne passent pas pour un "
+            "désavantage.",
+            "Les pondérations sont normalisées pour que leur somme fasse 1 : transmettre des "
+            "pondérations non normalisées ne pose donc aucun problème.",
         ],
     )
 
@@ -170,20 +189,20 @@ def _supplier_reasons(
     weakest = min(weighted, key=lambda c: weighted[c])
 
     reasons = [
-        f"Unit price {raw['price']:,.2f} normalises to {normalized['price']:.2f} "
-        f"(1.00 = cheapest in this set).",
-        f"Lead time {raw['lead_time']:.0f} days normalises to {normalized['lead_time']:.2f} "
-        f"(1.00 = fastest in this set).",
-        f"Reliability {raw['reliability']:.1%}, quality acceptance {raw['quality']:.1%}.",
-        f"Strongest contribution: {strongest.replace('_', ' ')} "
-        f"({weighted[strongest]:.3f} of the weighted total).",
-        f"Weakest contribution: {weakest.replace('_', ' ')} ({weighted[weakest]:.3f}).",
+        f"Le prix unitaire {raw['price']:,.2f} se normalise à {normalized['price']:.2f} "
+        f"(1.00 = le moins cher de cet ensemble).",
+        f"Le délai d’approvisionnement de {raw['lead_time']:.0f} jours se normalise à "
+        f"{normalized['lead_time']:.2f} (1.00 = le plus rapide de cet ensemble).",
+        f"Fiabilité {raw['reliability']:.1%}, acceptation qualité {raw['quality']:.1%}.",
+        f"Contribution la plus forte : {_label(strongest)} "
+        f"({weighted[strongest]:.3f} du total pondéré).",
+        f"Contribution la plus faible : {_label(weakest)} ({weighted[weakest]:.3f}).",
     ]
 
     if supplier.minimum_order_quantity and supplier.minimum_order_quantity > 0:
         reasons.append(
-            f"Minimum order quantity {supplier.minimum_order_quantity:,.0f} units — not part of "
-            "the score, but a hard constraint in allocation."
+            f"Quantité minimale de commande de {supplier.minimum_order_quantity:,.0f} unités — "
+            "hors score, mais contrainte stricte dans la répartition."
         )
     return reasons
 
@@ -196,9 +215,9 @@ def _overall_reasons(
 
     best = scored[0]
     reasons = [
-        f"{best.name} ranks first with {best.score:.1f}/100.",
-        "Weights applied: "
-        + ", ".join(f"{c.replace('_', ' ')} {weights[c] / total:.0%}" for c in CRITERIA)
+        f"{best.name} arrive en tête avec {best.score:.1f}/100.",
+        "Pondérations appliquées : "
+        + ", ".join(f"{_label(c)} {weights[c] / total:.0%}" for c in CRITERIA)
         + ".",
     ]
 
@@ -206,11 +225,12 @@ def _overall_reasons(
         runner_up = scored[1]
         gap = best.score - runner_up.score
         reasons.append(
-            f"{runner_up.name} is second at {runner_up.score:.1f}"
+            f"{runner_up.name} est deuxième avec {runner_up.score:.1f}"
             + (
-                f", only {gap:.1f} points behind — the ranking is sensitive to the weights."
+                f", à seulement {gap:.1f} points du premier — le classement est sensible aux "
+                "pondérations."
                 if gap < 5
-                else f", {gap:.1f} points behind."
+                else f", à {gap:.1f} points du premier."
             )
         )
     return reasons

@@ -427,7 +427,7 @@ class TestDelay:
         ).json()
 
         assert body["model"]["name"] == "delay-scorecard"
-        assert "at least" in body["explanation"]["reasons"][0]
+        assert "au moins" in body["explanation"]["reasons"][0]
 
 
 class TestAnomaly:
@@ -575,7 +575,7 @@ class TestRouting:
 
         assert body["status"] == "FEASIBLE"
         assert len(body["unassignedStops"]) > 0
-        assert any("Could not serve" in reason for reason in body["explanation"]["reasons"])
+        assert any("Impossible de desservir" in reason for reason in body["explanation"]["reasons"])
 
 
 class TestScenario:

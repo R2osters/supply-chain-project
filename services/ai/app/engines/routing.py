@@ -140,7 +140,7 @@ def build_distance_matrix(
 def optimize_routes(
     *,
     depot: tuple[float, float],
-    depot_name: str = "Depot",
+    depot_name: str = "Dépôt",
     stops: Sequence[RouteStop],
     vehicles: Sequence[RouteVehicle],
     fuel_price_per_liter: float = 1.35,
@@ -148,9 +148,9 @@ def optimize_routes(
     solver_time_limit_seconds: int = DEFAULT_TIME_LIMIT_SECONDS,
 ) -> RoutingResult:
     if not stops:
-        raise ValueError("at least one stop is required")
+        raise ValueError("au moins un arrêt est requis")
     if not vehicles:
-        raise ValueError("at least one vehicle is required")
+        raise ValueError("au moins un véhicule est requis")
 
     started = time.perf_counter()
 
@@ -195,7 +195,7 @@ def optimize_routes(
         demand_index, 0, capacities, True, "Capacity"
     )
     constraints_described.append(
-        "Each vehicle's load must not exceed its capacity: "
+        "La charge de chaque véhicule ne doit pas dépasser sa capacité : "
         + ", ".join(f"{v.name} {v.capacity_units:,.0f}" for v in vehicles)
         + "."
     )
@@ -239,7 +239,8 @@ def optimize_routes(
     for vehicle_index, vehicle in enumerate(vehicles):
         if vehicle.max_driving_minutes is not None:
             constraints_described.append(
-                f"{vehicle.name} may not exceed {vehicle.max_driving_minutes} minutes on the road."
+                f"{vehicle.name} ne peut pas dépasser {vehicle.max_driving_minutes} minutes sur "
+                "la route."
             )
         # Anchor each route's start at t=0 so reported arrival times are minutes from the
         # start of the planning horizon.
@@ -256,12 +257,12 @@ def optimize_routes(
             end = stop.window_end_minutes if stop.window_end_minutes is not None else 24 * 60
             if end < start:
                 raise ValueError(
-                    f"stop {stop.name}: window end ({end}) is before window start ({start})"
+                    f"arrêt {stop.name} : la fin de la fenêtre ({end}) précède son début ({start})"
                 )
             time_dimension.CumulVar(manager.NodeToIndex(node)).SetRange(int(start), int(end))
         constraints_described.append(
-            f"{sum(1 for s in stops if s.window_start_minutes is not None)} stop(s) have a "
-            "delivery time window; a vehicle may wait up to 3 hours for one to open."
+            f"{sum(1 for s in stops if s.window_start_minutes is not None)} arrêt(s) avec une "
+            "fenêtre de livraison ; un véhicule peut attendre jusqu’à 3 heures qu’elle s’ouvre."
         )
 
     # --- allow dropping stops ---------------------------------------------
@@ -270,8 +271,8 @@ def optimize_routes(
     for node in range(1, len(points)):
         routing.AddDisjunction([manager.NodeToIndex(node)], DROP_PENALTY_M)
     constraints_described.append(
-        "A stop may be left unassigned at a heavy penalty, so an over-subscribed fleet still "
-        "produces a plan rather than failing outright."
+        "Un arrêt peut rester non affecté moyennant une forte pénalité, afin qu’une flotte "
+        "insuffisante produise quand même un plan au lieu d’échouer purement et simplement."
     )
 
     # --- search ------------------------------------------------------------
@@ -299,9 +300,9 @@ def optimize_routes(
             constraints=constraints_described,
             solver_wall_time_ms=wall_time_ms,
             reasons=[
-                "No routing satisfied the constraints. The usual causes are time windows that "
-                "cannot all be reached, or a maximum driving time shorter than the distances "
-                "involved."
+                "Aucune tournée ne respecte les contraintes. Les causes habituelles sont des "
+                "fenêtres horaires impossibles à toutes atteindre, ou une durée de conduite "
+                "maximale trop courte pour les distances en jeu."
             ],
             assumptions=_assumptions(road_winding_factor, has_windows, solver_time_limit_seconds),
         )
@@ -410,32 +411,33 @@ def _reasons(
     total_cost: float,
 ) -> list[str]:
     reasons = [
-        f"{len(stops) - len(unassigned)} of {len(stops)} stops served by "
-        f"{len(routes)} of {len(vehicles)} vehicles.",
-        f"Total {total_distance:,.1f} km at an estimated cost of {total_cost:,.2f}.",
+        f"{len(stops) - len(unassigned)} arrêt(s) sur {len(stops)} desservi(s) par "
+        f"{len(routes)} véhicule(s) sur {len(vehicles)}.",
+        f"Total {total_distance:,.1f} km pour un coût estimé de {total_cost:,.2f}.",
     ]
 
     for route in routes:
         names = " → ".join(step["name"] for step in route.sequence)
         reasons.append(
-            f"{route.vehicle_name}: {names} "
+            f"{route.vehicle_name} : {names} "
             f"({route.distance_km:,.1f} km, {route.duration_minutes:,.0f} min, "
-            f"{route.load_units:,.0f} units, {route.fuel_liters:,.1f} L)."
+            f"{route.load_units:,.0f} unités, {route.fuel_liters:,.1f} L)."
         )
 
     idle = len(vehicles) - len(routes)
     if idle > 0:
         reasons.append(
-            f"{idle} vehicle(s) were left idle — using them would add fixed distance without "
-            "reducing the total."
+            f"{idle} véhicule(s) laissé(s) inutilisé(s) — les mobiliser ajouterait de la distance "
+            "fixe sans réduire le total."
         )
 
     if unassigned:
         by_id = {stop.id: stop for stop in stops}
         reasons.append(
-            "Could not serve: "
+            "Impossible de desservir : "
             + ", ".join(by_id[i].name for i in unassigned if i in by_id)
-            + ". Capacity, driving time or the delivery windows made them unreachable."
+            + ". La capacité, la durée de conduite ou les fenêtres de livraison les ont rendus "
+            "inaccessibles."
         )
 
     return reasons
@@ -445,19 +447,22 @@ def _assumptions(
     road_winding_factor: float, has_windows: bool, time_limit_seconds: int
 ) -> list[str]:
     assumptions = [
-        f"Distances are great-circle × {road_winding_factor} to approximate road distance. "
-        "Set OSRM_URL on the API to replace this with a real road matrix.",
-        "Travel time is distance ÷ the vehicle's average speed; congestion is not modelled here "
-        "(the ETA engine handles that for shipments actually in motion).",
-        "Arrival times are minutes from the start of the planning horizon, not clock times.",
-        f"Vehicle routing is NP-hard. The solver runs guided local search for up to "
-        f"{time_limit_seconds}s and returns the best plan found — good, not provably optimal, "
-        "which is why the status is FEASIBLE.",
-        "Cost is distance × cost-per-km plus fuel; it excludes driver wages, tolls and loading.",
+        f"Les distances sont à vol d’oiseau (orthodromie) × {road_winding_factor} pour approcher "
+        "la distance routière. Définissez OSRM_URL sur l’API pour les remplacer par une vraie "
+        "matrice routière.",
+        "Le temps de trajet vaut distance ÷ vitesse moyenne du véhicule ; la congestion n’est pas "
+        "modélisée ici (le moteur d’ETA s’en charge pour les expéditions effectivement en route).",
+        "Les heures d’arrivée sont exprimées en minutes depuis le début de l’horizon de "
+        "planification, pas en heures d’horloge.",
+        "Le routage de véhicules est un problème NP-difficile. Le solveur exécute une recherche "
+        f"locale guidée pendant au plus {time_limit_seconds} s et renvoie le meilleur plan "
+        "trouvé — bon, mais pas optimal de façon prouvée, d’où le statut FEASIBLE.",
+        "Le coût vaut distance × coût au km plus carburant ; il exclut les salaires des "
+        "chauffeurs, les péages et le chargement.",
     ]
     if has_windows:
         assumptions.append(
-            "A vehicle arriving before a delivery window opens may wait up to 3 hours; waiting "
-            "time counts against its maximum driving time."
+            "Un véhicule arrivant avant l’ouverture d’une fenêtre de livraison peut attendre "
+            "jusqu’à 3 heures ; ce temps d’attente compte dans sa durée de conduite maximale."
         )
     return assumptions

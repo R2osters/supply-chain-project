@@ -312,9 +312,9 @@ def simulate(
     random_seed: int | None = 42,
 ) -> ScenarioResult:
     if horizon_days <= 0:
-        raise ValueError("horizon_days must be positive")
+        raise ValueError("horizon_days doit être strictement positif")
     if baseline.average_daily_demand < 0:
-        raise ValueError("average_daily_demand cannot be negative")
+        raise ValueError("average_daily_demand ne peut pas être négative")
 
     iterations = max(100, min(iterations, MAX_ITERATIONS))
     applied = levers or Levers()
@@ -353,22 +353,28 @@ def simulate(
         iterations=iterations,
         reasons=_reasons(cases, applied, horizon_days),
         assumptions=[
-            "Daily demand is drawn from a normal distribution truncated at zero; for a slow "
-            "mover a Poisson draw would be more faithful.",
-            "Demand variability scales with the demand level, so a bigger market is noisier in "
-            "absolute units rather than proportionally quieter.",
-            "Lead time is drawn per order and never falls below one third of its mean.",
-            "One order may be in flight at a time — a single-outstanding-order (s, S) policy.",
-            "The reorder policy is sized once from the baseline and held fixed across all three "
-            "cases. Re-optimising per case would let the worst case quietly adopt a better-tuned "
-            "policy than the base, which is the opposite of the question a what-if asks.",
-            f"Best and worst cases stretch each supplied lever by ±{CASE_STRETCH:.0%} of its own "
-            "magnitude, so the spread reflects how uncertain the inputs actually are rather than "
-            "an invented range. A lever left at zero produces no spread.",
-            "Fuel price is treated as roughly 40 % of transport cost.",
-            f"{iterations:,} iterations, seeded — the same question returns the same answer.",
-            "Costs cover purchase, ordering, transport, holding and stockout penalty. They "
-            "exclude fixed overhead and are therefore comparable between cases, not absolute.",
+            "La demande journalière est tirée d’une loi normale tronquée à zéro ; pour un produit "
+            "à faible rotation, un tirage de Poisson serait plus fidèle.",
+            "La variabilité de la demande suit son niveau : un marché plus grand est plus bruité "
+            "en unités absolues, et non proportionnellement plus calme.",
+            "Le délai d’approvisionnement est tiré pour chaque commande et ne descend jamais sous "
+            "le tiers de sa moyenne.",
+            "Une seule commande peut être en cours à la fois — politique (s, S) avec une seule "
+            "commande en attente.",
+            "La politique de réapprovisionnement est dimensionnée une fois à partir de la base, "
+            "puis figée pour les trois cas. La réoptimiser pour chaque cas laisserait le pire cas "
+            "adopter discrètement une politique mieux réglée que la base, soit l’inverse de la "
+            "question posée par une simulation « et si ».",
+            "Le meilleur et le pire cas étirent chaque levier fourni de "
+            f"±{CASE_STRETCH:.0%} de sa propre amplitude, de sorte que l’écart reflète "
+            "l’incertitude réelle des données d’entrée plutôt qu’une fourchette inventée. Un "
+            "levier laissé à zéro ne produit aucun écart.",
+            "Le prix du carburant est considéré comme environ 40 % du coût de transport.",
+            f"{iterations:,} itérations, avec une graine fixe — la même question renvoie la même "
+            "réponse.",
+            "Les coûts couvrent l’achat, la passation de commande, le transport, le stockage et la "
+            "pénalité de rupture. Ils excluent les frais fixes et sont donc comparables d’un cas à "
+            "l’autre, pas absolus.",
         ],
     )
 
@@ -378,40 +384,43 @@ def _reasons(cases: list[CaseResult], levers: Levers, horizon_days: int) -> list
     best = next(c for c in cases if c.name == "BEST_CASE")
     worst = next(c for c in cases if c.name == "WORST_CASE")
 
+    # Lever names as the web UI labels them.
     active = {
-        "demand": levers.demand_change_percent,
-        "fuel price": levers.fuel_price_change_percent,
-        "transport cost": levers.transport_cost_change_percent,
-        "stock level": levers.stock_level_change_percent,
-        "lead time": levers.lead_time_change_percent,
-        "unit price": levers.unit_price_change_percent,
+        "demande": levers.demand_change_percent,
+        "prix du carburant": levers.fuel_price_change_percent,
+        "coût de transport": levers.transport_cost_change_percent,
+        "stock initial": levers.stock_level_change_percent,
+        "délai d’approvisionnement": levers.lead_time_change_percent,
+        "prix unitaire": levers.unit_price_change_percent,
     }
     described = [f"{name} {value:+.0%}" for name, value in active.items() if value]
     if levers.supplier_delay_days:
-        described.append(f"supplier delay {levers.supplier_delay_days:+.0f} days")
+        described.append(f"retard fournisseur {levers.supplier_delay_days:+.0f} jours")
 
     reasons = [
-        f"Simulated {horizon_days} days"
-        + (f" with {', '.join(described)}." if described else " with no levers applied."),
-        f"Base case: cost {base.total_cost:,.0f} (90 % of runs between "
-        f"{base.total_cost_p05:,.0f} and {base.total_cost_p95:,.0f}), stockout risk "
-        f"{base.stockout_risk:.1%}, fill rate {base.fill_rate:.1%}.",
-        f"Worst case: cost {worst.total_cost:,.0f} ({_delta(base.total_cost, worst.total_cost)}), "
-        f"stockout risk {worst.stockout_risk:.1%}.",
-        f"Best case: cost {best.total_cost:,.0f} ({_delta(base.total_cost, best.total_cost)}), "
-        f"stockout risk {best.stockout_risk:.1%}.",
+        f"Simulation sur {horizon_days} jours"
+        + (f" avec {', '.join(described)}." if described else " sans aucun levier appliqué."),
+        f"Cas de base : coût {base.total_cost:,.0f} (90 % des tirages entre "
+        f"{base.total_cost_p05:,.0f} et {base.total_cost_p95:,.0f}), risque de rupture "
+        f"{base.stockout_risk:.1%}, taux de service {base.fill_rate:.1%}.",
+        f"Pire cas : coût {worst.total_cost:,.0f} ({_delta(base.total_cost, worst.total_cost)}), "
+        f"risque de rupture {worst.stockout_risk:.1%}.",
+        f"Meilleur cas : coût {best.total_cost:,.0f} "
+        f"({_delta(base.total_cost, best.total_cost)}), "
+        f"risque de rupture {best.stockout_risk:.1%}.",
     ]
 
     if worst.stockout_risk > 0.25 and base.stockout_risk <= 0.25:
         reasons.append(
-            "The downside is where this breaks: stockout risk crosses 25 % under the worst case "
-            "while the base case looks safe. Size the buffer for the worst case, not the mean."
+            "C’est dans le scénario défavorable que tout casse : le risque de rupture dépasse "
+            "25 % dans le pire cas alors que le cas de base paraît sûr. Dimensionnez le stock "
+            "tampon pour le pire cas, pas pour la moyenne."
         )
 
     if base.orders_placed > 0:
         reasons.append(
-            f"Base case places {base.orders_placed:.1f} order(s) over the horizon and holds "
-            f"{base.average_inventory_units:,.0f} units on average."
+            f"Le cas de base passe {base.orders_placed:.1f} commande(s) sur l’horizon et détient "
+            f"en moyenne {base.average_inventory_units:,.0f} unités."
         )
 
     return reasons
@@ -419,6 +428,6 @@ def _reasons(cases: list[CaseResult], levers: Levers, horizon_days: int) -> list
 
 def _delta(base: float, other: float) -> str:
     if base == 0:
-        return "no baseline to compare"
+        return "aucune base de comparaison"
     change = (other - base) / base
-    return f"{change:+.1%} versus base"
+    return f"{change:+.1%} par rapport à la base"

@@ -95,7 +95,7 @@ class TestFeasibility:
 
         assert result.status == "OPTIMAL"
         assert result.unmet_demand == pytest.approx(11_000, abs=1.0)
-        assert any("could not be covered" in reason for reason in result.reasons)
+        assert any("n’ont pas pu être couvertes" in reason for reason in result.reasons)
 
     def test_every_result_carries_an_explanation(self):
         result = allocate(
@@ -281,5 +281,5 @@ class TestInputValidation:
             allocate(demand_quantity=0, suppliers=[supplier_a()])
 
     def test_rejects_an_empty_supplier_list(self):
-        with pytest.raises(ValueError, match="at least one supplier"):
+        with pytest.raises(ValueError, match="au moins une option fournisseur"):
             allocate(demand_quantity=100, suppliers=[])

@@ -93,7 +93,11 @@ class TestHazardFindings:
         scores = {f.reasons[0]: f.score for f in report.findings}
         critical_near, low_near, critical_far = (
             next(s for r, s in scores.items() if marker in r)
-            for marker in ("(CRITICAL) is 5 km", "(LOW) is 5 km", "(CRITICAL) is 240 km")
+            for marker in (
+                "(niveau critique) se trouve à 5 km",
+                "(niveau faible) se trouve à 5 km",
+                "(niveau critique) se trouve à 240 km",
+            )
         )
         assert critical_near > critical_far > 0
         assert critical_near > low_near
@@ -110,7 +114,7 @@ class TestHazardFindings:
         assert by_title["Flood in Guinea"].category == "WEATHER_RISK"
         assert by_title["Drought — Europe-2026"].category == "WEATHER_RISK"
         assert by_title["Eruption Etna"].category == "NATURAL_HAZARD"
-        assert "ash" in by_title["Eruption Etna"].recommended_action
+        assert "cendres" in by_title["Eruption Etna"].recommended_action
 
     def test_unknown_kinds_are_ignored(self):
         assert analyse([exposure(kind="METEORITE")]).findings == []
@@ -118,8 +122,8 @@ class TestHazardFindings:
     def test_assumptions_say_whether_a_feed_was_supplied(self):
         without = " ".join(analyse(None).assumptions)
         with_feed = " ".join(analyse([]).assumptions)
-        assert "No live hazard feed" in without
-        assert "0 hazard exposure(s) were supplied" in with_feed
+        assert "Aucun flux de dangers en direct" in without
+        assert "Expositions à un danger fournies : 0" in with_feed
 
 
 class TestRiskEndpointWithHazards:
@@ -151,7 +155,10 @@ class TestRiskEndpointWithHazards:
     def test_still_works_without_hazards(self, client: TestClient):
         response = client.post("/risk/analyze", json={"companyId": "c1"})
         assert response.status_code == 200
-        assert any("No live hazard feed" in a for a in response.json()["explanation"]["assumptions"])
+        assert any(
+            "Aucun flux de dangers en direct" in a
+            for a in response.json()["explanation"]["assumptions"]
+        )
 
     def test_rejects_a_malformed_hazard(self, client: TestClient):
         response = client.post(

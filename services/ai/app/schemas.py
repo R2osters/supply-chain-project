@@ -118,7 +118,7 @@ class InventoryOptimizeRequest(Wire):
     def reserved_within_stock(cls, value: float, info) -> float:
         current = info.data.get("current_stock")
         if current is not None and value > current:
-            raise ValueError("reservedStock cannot exceed currentStock")
+            raise ValueError("reservedStock ne peut pas dépasser currentStock")
         return value
 
 
@@ -350,7 +350,7 @@ class RouteVehicleIn(Wire):
 
 class RouteOptimizeRequest(Wire):
     depot: LatLngIn
-    depot_name: str = "Depot"
+    depot_name: str = "Dépôt"
     stops: list[RouteStopIn] = Field(min_length=1)
     vehicles: list[RouteVehicleIn] = Field(min_length=1)
     fuel_price_per_liter: float = Field(default=1.35, ge=0)

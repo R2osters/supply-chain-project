@@ -58,6 +58,16 @@ from .schemas import (
 logger = logging.getLogger("scip.ai")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
+# French labels for codes quoted in a human-readable summary come from the engines that own the
+# codes. The response fields themselves keep the codes; an unknown code falls back to itself.
+DELAY_RISK_LABELS = delay_engine.RISK_LABELS
+ANOMALY_TYPE_LABELS = anomaly_engine.TYPE_LABELS
+SEVERITY_LABELS = anomaly_engine.SEVERITY_LABELS
+
+
+def _label(labels: dict[str, str], code: str) -> str:
+    return labels.get(code, code)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -97,7 +107,7 @@ def require_token(request: Request) -> None:
     if not hmac.compare_digest(presented, settings.ai_service_token):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing AI service token",
+            detail="Jeton du service IA invalide ou manquant",
         )
 
 
@@ -169,15 +179,18 @@ async def forecast(request: ForecastRequest) -> ForecastResponse:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
-                "message": "Demand history failed data-quality validation; no forecast produced.",
+                "message": (
+                    "L’historique de demande n’a pas passé le contrôle de qualité des données ; "
+                    "aucune prévision produite."
+                ),
                 "dataQuality": quality,
             },
         )
 
     summary = (
-        f"{request.sku}: {request.horizon_days}-day forecast using {result.selected_model}, "
-        f"selected from {len([e for e in result.evaluations if e.skipped_reason is None])} "
-        "validated candidate(s)."
+        f"{request.sku} : prévision sur {request.horizon_days} jours avec {result.selected_model}, "
+        f"retenu parmi {len([e for e in result.evaluations if e.skipped_reason is None])} "
+        "candidat(s) validé(s)."
     )
 
     return ForecastResponse(
@@ -225,13 +238,14 @@ async def optimize_inventory(request: InventoryOptimizeRequest) -> InventoryOpti
     )
 
     summary = (
-        f"{request.sku}: order {policy.recommended_order_quantity:,.0f} units now "
-        f"(reorder point {policy.reorder_point:,.0f}, safety stock {policy.safety_stock:,.0f})."
+        f"{request.sku} : commander {policy.recommended_order_quantity:,.0f} unités maintenant "
+        f"(point de commande {policy.reorder_point:,.0f}, stock de sécurité "
+        f"{policy.safety_stock:,.0f})."
         if policy.reorder_required
         else (
-            f"{request.sku}: no order needed yet — "
-            f"{policy.days_of_cover_remaining:.1f} days of cover against a reorder point of "
-            f"{policy.reorder_point:,.0f}."
+            f"{request.sku} : pas de commande nécessaire pour l’instant — "
+            f"{policy.days_of_cover_remaining:.1f} jours de couverture pour un point de commande "
+            f"de {policy.reorder_point:,.0f}."
         )
     )
 
@@ -267,7 +281,7 @@ async def score_suppliers(request: SupplierScoreRequest) -> SupplierScoreRespons
                 "normalized": entry.normalized,
                 "weighted": entry.weighted,
                 "explanation": {
-                    "summary": f"{entry.name} ranks #{entry.rank} with {entry.score:.1f}/100.",
+                    "summary": f"{entry.name} se classe n° {entry.rank} avec {entry.score:.1f}/100.",
                     "reasons": entry.reasons,
                     "assumptions": result.assumptions,
                 },
@@ -277,8 +291,8 @@ async def score_suppliers(request: SupplierScoreRequest) -> SupplierScoreRespons
         weights_used=SupplierScoringWeights(**result.weights_used),
         explanation=Explanation(
             summary=(
-                f"Scored {len(result.results)} supplier(s); "
-                f"{result.results[0].name} ranks first."
+                f"{len(result.results)} fournisseur(s) noté(s) ; "
+                f"{result.results[0].name} arrive en tête."
             ),
             reasons=result.reasons,
             assumptions=result.assumptions,
@@ -330,11 +344,11 @@ async def allocate_order(request: AllocationRequest) -> AllocationResponse:
     if result.lines:
         split = ", ".join(f"{line.name} {line.quantity:,.0f}" for line in result.lines)
         summary = (
-            f"Allocate {request.demand_quantity:,.0f} units as {split} — total modelled cost "
-            f"{result.objective_value:,.0f}, expected shortfall {result.stockout_risk:.1%}."
+            f"Répartir {request.demand_quantity:,.0f} unités ainsi : {split} — coût total modélisé "
+            f"{result.objective_value:,.0f}, manque attendu {result.stockout_risk:.1%}."
         )
     else:
-        summary = "No feasible allocation was found for the constraints supplied."
+        summary = "Aucune répartition réalisable n’a été trouvée pour les contraintes fournies."
 
     return AllocationResponse(
         status=payload["status"],
@@ -377,8 +391,9 @@ async def predict_delay(request: DelayPredictRequest) -> DelayPredictResponse:
         **prediction.to_dict(),
         explanation=Explanation(
             summary=(
-                f"Delay probability {prediction.delay_probability:.1%} "
-                f"({prediction.risk} risk) from {prediction.model_name}."
+                f"Probabilité de retard {prediction.delay_probability:.1%} "
+                f"(risque {_label(DELAY_RISK_LABELS, prediction.risk)}) selon "
+                f"{prediction.model_name}."
             ),
             reasons=prediction.reasons,
             assumptions=prediction.assumptions,
@@ -402,7 +417,9 @@ async def detect_anomaly(request: AnomalyDetectRequest) -> AnomalyDetectResponse
         try:
             recorded_at = datetime.fromisoformat(position.recorded_at.replace("Z", "+00:00"))
         except ValueError as exc:
-            raise ValueError(f"recordedAt '{position.recorded_at}' is not a valid ISO datetime") from exc
+            raise ValueError(
+                f"recordedAt « {position.recorded_at} » n’est pas une date-heure ISO valide"
+            ) from exc
         samples.append(
             anomaly_engine.GpsSample(
                 latitude=position.latitude,
@@ -440,10 +457,11 @@ async def detect_anomaly(request: AnomalyDetectRequest) -> AnomalyDetectResponse
 
     highest = report.anomalies[0] if report.anomalies else None
     summary = (
-        f"{len(report.anomalies)} anomaly(ies) across {report.positions_analysed} fixes; "
-        f"most severe: {highest.type} ({highest.severity})."
+        f"{len(report.anomalies)} anomalie(s) sur {report.positions_analysed} positions ; "
+        f"la plus grave : {_label(ANOMALY_TYPE_LABELS, highest.type)} "
+        f"(gravité {_label(SEVERITY_LABELS, highest.severity)})."
         if highest
-        else f"No anomaly across {report.positions_analysed} fixes."
+        else f"Aucune anomalie sur {report.positions_analysed} positions."
     )
 
     return AnomalyDetectResponse(
@@ -502,9 +520,9 @@ async def optimize_route(request: RouteOptimizeRequest) -> RouteOptimizeResponse
 
     payload = result.to_dict()
     summary = (
-        f"{len(result.routes)} route(s) covering "
-        f"{len(request.stops) - len(result.unassigned_stops)} of {len(request.stops)} stops, "
-        f"{result.total_distance_km:,.0f} km, estimated cost {result.total_cost:,.0f}."
+        f"{len(result.routes)} tournée(s) couvrant "
+        f"{len(request.stops) - len(result.unassigned_stops)} arrêt(s) sur {len(request.stops)}, "
+        f"{result.total_distance_km:,.0f} km, coût estimé {result.total_cost:,.0f}."
     )
 
     return RouteOptimizeResponse(
@@ -550,9 +568,9 @@ async def simulate_scenario(request: ScenarioSimulateRequest) -> ScenarioSimulat
         iterations=result.iterations,
         explanation=Explanation(
             summary=(
-                f"{request.sku}: base cost {base.total_cost:,.0f} with "
-                f"{base.stockout_risk:.0%} stockout risk; worst case "
-                f"{worst.total_cost:,.0f} with {worst.stockout_risk:.0%}."
+                f"{request.sku} : coût du cas de base {base.total_cost:,.0f} avec un risque de "
+                f"rupture de {base.stockout_risk:.0%} ; pire cas "
+                f"{worst.total_cost:,.0f} avec {worst.stockout_risk:.0%}."
             ),
             reasons=result.reasons,
             assumptions=result.assumptions,
@@ -590,8 +608,8 @@ async def analyze_risk(request: RiskAnalyzeRequest) -> RiskAnalyzeResponse:
         health_breakdown=report.health_breakdown,
         explanation=Explanation(
             summary=(
-                f"Supply chain health {report.health_score:.0f}/100 with "
-                f"{len(report.findings)} finding(s)."
+                f"Santé de la chaîne d’approvisionnement : {report.health_score:.0f}/100, "
+                f"{len(report.findings)} constat(s)."
             ),
             reasons=report.reasons,
             assumptions=report.assumptions,
@@ -629,7 +647,8 @@ async def generate_recommendations(
         recommendations=[r.to_dict() for r in result.recommendations],
         explanation=Explanation(
             summary=(
-                f"{len(result.recommendations)} recommendation(s), {urgent} needing attention now."
+                f"{len(result.recommendations)} recommandation(s), dont {urgent} à traiter "
+                "maintenant."
             ),
             reasons=result.reasons,
             assumptions=result.assumptions,

@@ -389,7 +389,7 @@ def evaluate_models(
                 ModelEvaluation(
                     name,
                     skipped_reason=(
-                        f"needs at least {required} observations, series has {n}"
+                        f"nécessite au moins {required} observations, la série en compte {n}"
                     ),
                 )
             )
@@ -399,7 +399,7 @@ def evaluate_models(
             evaluations.append(
                 ModelEvaluation(
                     name,
-                    skipped_reason="series too short to hold out a validation fold",
+                    skipped_reason="série trop courte pour réserver une fenêtre de validation",
                 )
             )
             continue
@@ -424,7 +424,9 @@ def evaluate_models(
             fold_predictions.append(predicted)
 
         if not fold_actuals:
-            evaluations.append(ModelEvaluation(name, skipped_reason="no usable validation fold"))
+            evaluations.append(
+                ModelEvaluation(name, skipped_reason="aucune fenêtre de validation exploitable")
+            )
             continue
 
         actual_all = np.concatenate(fold_actuals)
@@ -517,7 +519,10 @@ def forecast_demand(
             evaluations=[],
             residual_std=float("nan"),
             cleaned=cleaned,
-            reasons=["Forecast refused: the demand history failed data-quality validation."],
+            reasons=[
+                "Prévision refusée : l’historique de demande n’a pas passé le contrôle de qualité "
+                "des données."
+            ],
             assumptions=[],
         )
 
@@ -684,33 +689,35 @@ def _build_reasons(
     if scored:
         best = next(e for e in scored if e.model == winner)
         reasons.append(
-            f"{winner} was selected on walk-forward validation with WAPE {best.wape:.2f}% "
-            f"over {best.folds} fold(s)."
+            f"{winner} a été retenu par validation glissante avec un WAPE de {best.wape:.2f} % "
+            f"sur {best.folds} fenêtre(s) de validation."
         )
         runners = sorted(
             (e for e in scored if e.model != winner), key=lambda e: e.wape
         )[:2]
         for runner in runners:
-            reasons.append(f"{runner.model} scored WAPE {runner.wape:.2f}% and was not selected.")
+            reasons.append(
+                f"{runner.model} a obtenu un WAPE de {runner.wape:.2f} % et n’a pas été retenu."
+            )
     else:
         reasons.append(
-            f"No model could be validated on this series; falling back to {winner}. "
-            "Treat the numbers as indicative until more history accumulates."
+            f"Aucun modèle n’a pu être validé sur cette série ; repli sur {winner}. Considérez "
+            "les chiffres comme indicatifs tant que l’historique ne s’est pas étoffé."
         )
 
     skipped = [e for e in evaluations if e.skipped_reason]
     if skipped:
         reasons.append(
-            "Not evaluated: "
-            + "; ".join(f"{e.model} ({e.skipped_reason})" for e in skipped)
+            "Non évalués : "
+            + " ; ".join(f"{e.model} ({e.skipped_reason})" for e in skipped)
             + "."
         )
 
     daily_mean = float(series.mean())
     if daily_mean > 0:
         reasons.append(
-            f"Mean historical demand {daily_mean:.1f}/day with a one-step residual spread of "
-            f"{residual_std:.1f} units."
+            f"Demande historique moyenne de {daily_mean:.1f}/jour, avec une dispersion "
+            f"résiduelle à un pas de {residual_std:.1f} unités."
         )
     return reasons
 
@@ -719,25 +726,28 @@ def _build_assumptions(
     winner: ModelName, period: int, horizon: int, cleaned: CleanedSeries
 ) -> list[str]:
     assumptions = [
-        "History is treated as a daily series; missing days are zero demand, not interpolated.",
-        f"Seasonality is assumed to have a period of {period} days.",
-        f"Prediction intervals are {INTERVAL_CONFIDENCE_PERCENT}% bands built from the "
-        "one-step-ahead residual spread, widened by the square root of the horizon.",
-        f"The forecast extends {horizon} day(s); no exogenous driver (price, promotion, holiday) "
-        "is used unless it is already reflected in the historical demand.",
+        "L’historique est traité comme une série journalière ; les jours manquants valent une "
+        "demande nulle, sans interpolation.",
+        f"La saisonnalité est supposée avoir une période de {period} jours.",
+        f"Les intervalles de prévision sont des bandes à {INTERVAL_CONFIDENCE_PERCENT} % "
+        "construites à partir de la dispersion résiduelle à un pas, élargies selon la racine "
+        "carrée de l’horizon.",
+        f"La prévision couvre {horizon} jour(s) ; aucun facteur externe (prix, promotion, jour "
+        "férié) n’est utilisé, sauf s’il se reflète déjà dans la demande historique.",
     ]
     if winner == "GRADIENT_BOOSTING":
         assumptions.append(
-            "Boosted forecasts are produced recursively, so an early error propagates into "
-            "later days of the horizon."
+            "Les prévisions par gradient boosting sont produites de façon récursive : une erreur "
+            "précoce se propage aux jours suivants de l’horizon."
         )
     if winner == "SEASONAL_NAIVE":
         assumptions.append(
-            "Seasonal naive assumes next week repeats last week; a level shift will not be "
-            "picked up until it has been observed for a full period."
+            "Le modèle saisonnier naïf suppose que la semaine prochaine répète la précédente ; un "
+            "changement de niveau ne sera pris en compte qu’après avoir été observé sur une "
+            "période complète."
         )
     assumptions.extend(
-        f"Data quality: {issue.message}"
+        f"Qualité des données : {issue.message}"
         for issue in cleaned.report.issues
         if issue.severity != "INFO"
     )
