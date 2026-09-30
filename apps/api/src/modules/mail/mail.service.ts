@@ -46,7 +46,7 @@ export class MailService {
 
   async send(message: MailMessage): Promise<{ sent: boolean; error?: string }> {
     if (!this.transporter) {
-      return { sent: false, error: 'Mail is disabled (no SMTP server configured)' };
+      return { sent: false, error: 'L’envoi d’e-mails est désactivé (aucun serveur SMTP configuré)' };
     }
     try {
       await this.transporter.sendMail({

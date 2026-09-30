@@ -118,10 +118,10 @@ export function computeEta(inputs: EtaInputs): EtaResult {
 
   if (inputs.routePolyline && inputs.routePolyline.length >= 2) {
     remainingKm = remainingDistanceAlongPolylineMeters(position, inputs.routePolyline) / 1000;
-    distanceBasis = 'remaining length of the planned route polyline';
+    distanceBasis = 'longueur restante de la polyligne de l’itinéraire prévu';
   } else {
     remainingKm = haversineKm(position, inputs.destination) * roadFactor;
-    distanceBasis = `great-circle distance × road-winding factor ${roadFactor}`;
+    distanceBasis = `distance orthodromique × facteur de sinuosité routière ${roadFactor}`;
   }
   remainingKm = Math.max(remainingKm, 0);
 
@@ -189,27 +189,27 @@ export function computeEta(inputs: EtaInputs): EtaResult {
   /* --------------------------------------------------------- narrative */
 
   const assumptions = [
-    `Distance basis: ${distanceBasis}.`,
-    `Speed prior ${prior.toFixed(1)} km/h${
+    `Base de distance : ${distanceBasis}.`,
+    `Vitesse a priori ${prior.toFixed(1)} km/h${
       observationWeight > 0
-        ? `, blended with ${(inputs.observedAverageSpeedKmh ?? 0).toFixed(1)} km/h observed over ${samples} GPS sample(s) at weight ${(observationWeight * 100).toFixed(0)}%`
-        : ' (no trip observations yet)'
+        ? `, combinée à ${(inputs.observedAverageSpeedKmh ?? 0).toFixed(1)} km/h observés sur ${samples} ${samples > 1 ? 'échantillons' : 'échantillon'} GPS, avec un poids de ${(observationWeight * 100).toFixed(0)} %`
+        : ' (aucune observation sur ce trajet pour l’instant)'
     }.`,
-    `Traffic multiplier ${trafficFactor.toFixed(3)} from congestion ${congestion.toFixed(2)}; full gridlock is modelled as a ${(MAX_TRAFFIC_PENALTY * 100).toFixed(0)}% speed loss.`,
-    `Weather multiplier ${weatherFactor.toFixed(3)} from severity ${weather.toFixed(2)}.`,
+    `Multiplicateur de trafic ${trafficFactor.toFixed(3)} pour une congestion de ${congestion.toFixed(2)} : un embouteillage total est modélisé comme une perte de vitesse de ${(MAX_TRAFFIC_PENALTY * 100).toFixed(0)} %.`,
+    `Multiplicateur météo ${weatherFactor.toFixed(3)} pour une sévérité de ${weather.toFixed(2)}.`,
     nightFactor === 1
-      ? 'Daytime driving; no night adjustment.'
-      : `Night driving multiplier ${NIGHT_FACTOR}.`,
-    `Arrival window is an ${WINDOW_CONFIDENCE_PERCENT}% interval (z = ${WINDOW_Z}) built from a relative speed error of ${(effectiveError * 100).toFixed(1)}%.`,
+      ? 'Conduite de jour : aucun ajustement de nuit.'
+      : `Multiplicateur de conduite de nuit ${NIGHT_FACTOR}.`,
+    `La fenêtre d’arrivée est un intervalle à ${WINDOW_CONFIDENCE_PERCENT} % (z = ${WINDOW_Z}) construit à partir d’une erreur relative de vitesse de ${(effectiveError * 100).toFixed(1)} %.`,
   ];
 
   const reasons = [
-    `${remainingKm.toFixed(1)} km remaining at an effective ${effectiveSpeedKmh.toFixed(1)} km/h.`,
-    `Driving time ${(drivingSeconds / 3600).toFixed(2)} h${stopSeconds > 0 ? ` plus ${(stopSeconds / 60).toFixed(0)} min of planned stops` : ''}.`,
+    `${remainingKm.toFixed(1)} km restants à une vitesse effective de ${effectiveSpeedKmh.toFixed(1)} km/h.`,
+    `Temps de conduite ${(drivingSeconds / 3600).toFixed(2)} h${stopSeconds > 0 ? `, plus ${(stopSeconds / 60).toFixed(0)} min d’arrêts prévus` : ''}.`,
     observationWeight > 0.5
-      ? 'The estimate is driven mainly by this trip’s observed speed.'
-      : 'The estimate leans on the vehicle/carrier speed prior — few or no trip observations yet.',
-    `Confidence ${(confidenceScore * 100).toFixed(0)}% — ${horizonHours > 6 ? 'long horizon widens the window' : 'short horizon keeps the window tight'}.`,
+      ? 'L’estimation repose principalement sur la vitesse observée sur ce trajet.'
+      : 'L’estimation s’appuie sur la vitesse a priori du véhicule ou du transporteur — peu ou pas d’observations sur ce trajet pour l’instant.',
+    `Confiance ${(confidenceScore * 100).toFixed(0)} % — ${horizonHours > 6 ? 'un horizon lointain élargit la fenêtre' : 'un horizon court garde la fenêtre resserrée'}.`,
   ];
 
   return {

@@ -9,6 +9,19 @@ import { PurchaseOrdersService } from '../purchase-orders/purchase-orders.servic
 /** The note on every purchase order raised by accepting a recommendation. */
 export const RECOMMENDATION_ORDER_NOTE = 'Raised from an accepted SCIP recommendation';
 
+/** French names of the recommendation statuses, for error texts. Agreed with « recommandation ». */
+const STATUS_LABELS: Record<string, string> = {
+  OPEN: 'ouverte',
+  ACCEPTED: 'acceptée',
+  EXECUTED: 'exécutée',
+  REJECTED: 'écartée',
+  EXPIRED: 'expirée',
+};
+
+function statusLabel(status: string): string {
+  return STATUS_LABELS[status] ?? status;
+}
+
 /**
  * Recommendations, and the machinery that makes them executable.
  *
@@ -69,7 +82,7 @@ export class RecommendationsService {
       where: { id, ...companyFilter(user) },
       include: { decidedBy: { select: { id: true, firstName: true, lastName: true } } },
     });
-    if (!recommendation) throw new NotFoundException('Recommendation not found');
+    if (!recommendation) throw new NotFoundException('Recommandation introuvable');
 
     // The event trail that led here — this is what "explainable" means in practice: not just
     // the model's reasons, but the facts that triggered the analysis in the first place.
@@ -97,7 +110,7 @@ export class RecommendationsService {
 
     if (recommendation.status !== 'OPEN') {
       throw new BadRequestException(
-        `This recommendation is already ${recommendation.status}; it cannot be accepted again.`,
+        `Cette recommandation est déjà ${statusLabel(recommendation.status)} : elle ne peut pas être acceptée à nouveau.`,
       );
     }
     if (recommendation.expiresAt && recommendation.expiresAt.getTime() < Date.now()) {
@@ -106,7 +119,7 @@ export class RecommendationsService {
         data: { status: 'EXPIRED' },
       });
       throw new BadRequestException(
-        'This recommendation has expired. Regenerate recommendations to get a current one.',
+        'Cette recommandation a expiré. Régénérez les recommandations pour en obtenir une à jour.',
       );
     }
 
@@ -151,8 +164,8 @@ export class RecommendationsService {
       executed,
       message: executed
         ? executed.description
-        : 'Recorded as accepted. This recommendation type has no automatic action — it is a ' +
-          'commercial or operational decision to carry out directly.',
+        : 'Enregistrée comme acceptée. Ce type de recommandation n’a pas d’action automatique : ' +
+          'c’est une décision commerciale ou opérationnelle à mettre en œuvre directement.',
     };
   }
 
@@ -165,7 +178,7 @@ export class RecommendationsService {
       | undefined;
 
     if (!productId) {
-      throw new BadRequestException('This recommendation has no productId to order against');
+      throw new BadRequestException('Cette recommandation n’indique aucun produit (productId) à commander');
     }
 
     if (lines?.length) {
@@ -191,19 +204,23 @@ export class RecommendationsService {
       }
 
       if (created.length === 0) {
-        throw new BadRequestException('The recommendation contained no orderable quantity');
+        throw new BadRequestException('La recommandation ne contenait aucune quantité à commander');
       }
 
       return {
         type: 'PURCHASE_ORDER',
         id: created.join(','),
-        description: `Created ${created.length} draft purchase order(s): ${created.join(', ')}. Review and confirm them.`,
+        description:
+          created.length === 1
+            ? `Bon de commande brouillon créé : ${created[0]}. Vérifiez-le et confirmez-le.`
+            : `${created.length} bons de commande brouillons créés : ${created.join(', ')}. ` +
+              'Vérifiez-les et confirmez-les.',
       };
     }
 
     // No supplier split was computed — fall back to the preferred supplier for the product.
     const quantity = Number(payload.quantity ?? 0);
-    if (quantity <= 0) throw new BadRequestException('The recommendation has no quantity to order');
+    if (quantity <= 0) throw new BadRequestException('La recommandation n’indique aucune quantité à commander');
 
     const offer = await this.prisma.supplierProduct.findFirst({
       where: { productId, validUntil: null, supplier: { isActive: true } },
@@ -212,8 +229,8 @@ export class RecommendationsService {
     });
     if (!offer) {
       throw new BadRequestException(
-        'No active supplier carries this product, so no purchase order could be raised. ' +
-          'Add a supplier price list first.',
+        'Aucun fournisseur actif ne propose ce produit : aucun bon de commande n’a pu être émis. ' +
+          'Ajoutez d’abord une liste de prix fournisseur.',
       );
     }
 
@@ -227,7 +244,7 @@ export class RecommendationsService {
     return {
       type: 'PURCHASE_ORDER',
       id: order.id,
-      description: `Created draft purchase order ${order.orderNumber} with ${offer.supplier.name}. Review and confirm it.`,
+      description: `Bon de commande brouillon ${order.orderNumber} créé auprès de ${offer.supplier.name}. Vérifiez-le et confirmez-le.`,
     };
   }
 
@@ -240,7 +257,7 @@ export class RecommendationsService {
 
     if (!productId || !warehouseId) {
       throw new BadRequestException(
-        'This recommendation is missing the product or warehouse to apply the policy to',
+        'Il manque à cette recommandation le produit ou l’entrepôt auquel appliquer la politique de stock',
       );
     }
 
@@ -252,7 +269,7 @@ export class RecommendationsService {
     return {
       type: 'INVENTORY_POLICY',
       id: row.id,
-      description: `Safety stock set to ${safetyStock.toFixed(0)} and reorder point to ${reorderPoint.toFixed(0)}.`,
+      description: `Stock de sécurité fixé à ${safetyStock.toFixed(0)} et point de commande à ${reorderPoint.toFixed(0)}.`,
     };
   }
 
@@ -262,7 +279,7 @@ export class RecommendationsService {
     const suggestedMax = Number(payload.suggestedMaxStock ?? 0);
 
     if (!productId || suggestedMax <= 0) {
-      throw new BadRequestException('This recommendation has no usable maximum stock level');
+      throw new BadRequestException('Cette recommandation n’a pas de niveau de stock maximum exploitable');
     }
 
     const companyId = requireCompanyId(user);
@@ -274,14 +291,16 @@ export class RecommendationsService {
     return {
       type: 'INVENTORY_POLICY',
       id: productId,
-      description: `Maximum stock capped at ${suggestedMax.toFixed(0)} across ${result.count} warehouse(s); overstock will now raise an alert.`,
+      description:
+        `Stock maximum plafonné à ${suggestedMax.toFixed(0)} dans ${result.count} ` +
+        `${result.count > 1 ? 'entrepôts' : 'entrepôt'} : un surstock déclenchera désormais une alerte.`,
     };
   }
 
   async reject(user: AuthenticatedUser, id: string, note?: string) {
     const recommendation = await this.findOne(user, id);
     if (recommendation.status !== 'OPEN') {
-      throw new BadRequestException(`This recommendation is already ${recommendation.status}`);
+      throw new BadRequestException(`Cette recommandation est déjà ${statusLabel(recommendation.status)}`);
     }
 
     return this.prisma.recommendation.update({

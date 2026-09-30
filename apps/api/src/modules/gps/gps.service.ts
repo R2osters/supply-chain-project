@@ -44,7 +44,7 @@ export class GpsService {
     const vehicle = await this.prisma.vehicle.findFirst({
       where: { id: dto.vehicleId, companyId },
     });
-    if (!vehicle) throw new NotFoundException('Vehicle not found in your company');
+    if (!vehicle) throw new NotFoundException('Véhicule introuvable dans votre entreprise');
 
     // A DRIVER may only post telemetry for a vehicle on one of their own shipments.
     if (user.role === 'DRIVER') {
@@ -57,7 +57,7 @@ export class GpsService {
         select: { id: true },
       });
       if (!own) {
-        throw new BadRequestException('You are not assigned to an active shipment on this vehicle');
+        throw new BadRequestException('Vous n’êtes affecté à aucune expédition active sur ce véhicule');
       }
     }
 
@@ -83,11 +83,11 @@ export class GpsService {
       const at = new Date(fix.recordedAt).getTime();
 
       if (!Number.isFinite(at)) {
-        rejected.push({ recordedAt: fix.recordedAt, reason: 'unparseable timestamp' });
+        rejected.push({ recordedAt: fix.recordedAt, reason: 'horodatage illisible' });
         continue;
       }
       if (at > now + MAX_FUTURE_SKEW_MS) {
-        rejected.push({ recordedAt: fix.recordedAt, reason: 'timestamp is in the future' });
+        rejected.push({ recordedAt: fix.recordedAt, reason: 'horodatage situé dans le futur' });
         continue;
       }
 
@@ -103,18 +103,18 @@ export class GpsService {
           if (impliedSpeed > IMPLAUSIBLE_SPEED_KMH) {
             rejected.push({
               recordedAt: fix.recordedAt,
-              reason: `implied speed ${impliedSpeed.toFixed(0)} km/h from the previous fix is not physically plausible`,
+              reason: `la vitesse implicite de ${impliedSpeed.toFixed(0)} km/h depuis la position précédente n’est pas physiquement plausible`,
             });
             continue;
           }
         } else if (hours === 0 && distanceKm * 1000 > MIN_FIX_SEPARATION_M) {
-          rejected.push({ recordedAt: fix.recordedAt, reason: 'two positions at the same instant' });
+          rejected.push({ recordedAt: fix.recordedAt, reason: 'deux positions au même instant' });
           continue;
         }
 
         if (distanceKm * 1000 < MIN_FIX_SEPARATION_M && hours * 3600 < 30) {
           // Parked vehicle jitter. Not an error, just not worth storing.
-          rejected.push({ recordedAt: fix.recordedAt, reason: 'below the minimum movement threshold' });
+          rejected.push({ recordedAt: fix.recordedAt, reason: 'déplacement inférieur au seuil minimal' });
           continue;
         }
       }
@@ -130,7 +130,7 @@ export class GpsService {
         accepted: 0,
         rejected: rejected.length,
         rejectedDetail: rejected,
-        message: 'No fix in this batch passed validation',
+        message: 'Aucune position de ce lot n’a passé la validation',
       };
     }
 
@@ -207,9 +207,9 @@ export class GpsService {
         where: { id: dto.shipmentId, companyId },
         select: { id: true, vehicleId: true },
       });
-      if (!shipment) throw new NotFoundException('Shipment not found in your company');
+      if (!shipment) throw new NotFoundException('Expédition introuvable dans votre entreprise');
       if (shipment.vehicleId && shipment.vehicleId !== dto.vehicleId) {
-        throw new BadRequestException('That shipment is assigned to a different vehicle');
+        throw new BadRequestException('Cette expédition est affectée à un autre véhicule');
       }
       return shipment.id;
     }
@@ -233,7 +233,7 @@ export class GpsService {
       where: { id: vehicleId, ...companyFilter(user) },
       select: { id: true },
     });
-    if (!vehicle) throw new NotFoundException('Vehicle not found in your company');
+    if (!vehicle) throw new NotFoundException('Véhicule introuvable dans votre entreprise');
 
     return this.prisma.gpsPosition.findMany({
       where: {

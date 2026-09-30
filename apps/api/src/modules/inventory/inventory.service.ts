@@ -206,7 +206,7 @@ export class InventoryService {
         warehouseId: dto.warehouseId,
         type: dto.type,
         quantity: dto.quantity,
-        reason: dto.reason ?? 'Manual movement',
+        reason: dto.reason ?? 'Mouvement manuel',
         batchNumber: dto.batchNumber ?? null,
         performedById: user.id,
       }),
@@ -221,11 +221,11 @@ export class InventoryService {
     await this.assertProductAndWarehouse(companyId, dto.productId, dto.warehouseId, false);
 
     if (dto.maxStock !== undefined && dto.maxStock < dto.reorderPoint) {
-      throw new BadRequestException('maxStock cannot be below the reorder point');
+      throw new BadRequestException('Le stock maximum (maxStock) ne peut pas être inférieur au point de commande');
     }
     if (dto.reorderPoint < dto.safetyStock) {
       throw new BadRequestException(
-        'The reorder point must be at least the safety stock — ordering only once the buffer is gone guarantees a stockout during the lead time',
+        'Le point de commande doit être au moins égal au stock de sécurité — ne commander qu’une fois la réserve épuisée garantit une rupture pendant le délai d’approvisionnement',
       );
     }
 
@@ -260,8 +260,8 @@ export class InventoryService {
       this.prisma.product.findFirst({ where: { id: productId, companyId } }),
       this.prisma.warehouse.findFirst({ where: { id: warehouseId, companyId } }),
     ]);
-    if (!product) throw new NotFoundException('Product not found in your company');
-    if (!warehouse) throw new NotFoundException('Warehouse not found in your company');
+    if (!product) throw new NotFoundException('Produit introuvable dans votre entreprise');
+    if (!warehouse) throw new NotFoundException('Entrepôt introuvable dans votre entreprise');
 
     if (requireExistingRow) {
       const row = await this.prisma.inventory.findUnique({
@@ -269,7 +269,7 @@ export class InventoryService {
       });
       if (!row) {
         throw new NotFoundException(
-          `${product.sku} has no inventory record in ${warehouse.code}. Receive stock or set a policy first.`,
+          `${product.sku} n’a pas de fiche de stock dans ${warehouse.code}. Réceptionnez du stock ou définissez d’abord une politique de stock.`,
         );
       }
     }
@@ -307,7 +307,7 @@ export class InventoryService {
         type: 'OUT_OF_STOCK',
         active: available <= 0,
         severity: 'CRITICAL',
-        message: `${row.product.sku} is out of stock`,
+        message: `${row.product.sku} est en rupture de stock`,
         threshold: 0,
       },
       {
@@ -315,14 +315,14 @@ export class InventoryService {
         type: 'LOW_STOCK',
         active: available > 0 && reorderPoint > 0 && available < reorderPoint,
         severity: 'HIGH',
-        message: `${row.product.sku} is below its reorder point (${available} < ${reorderPoint})`,
+        message: `${row.product.sku} est sous son point de commande (${available} < ${reorderPoint})`,
         threshold: reorderPoint,
       },
       {
         type: 'OVERSTOCK',
         active: maxStock !== null && available > maxStock,
         severity: 'LOW',
-        message: `${row.product.sku} exceeds its maximum stock level (${available} > ${maxStock})`,
+        message: `${row.product.sku} dépasse son stock maximum (${available} > ${maxStock})`,
         threshold: maxStock ?? 0,
       },
     ];
@@ -402,7 +402,10 @@ export class InventoryService {
           warehouseId: batch.warehouseId,
           type: 'EXPIRING_SOON',
           severity: daysLeft <= 7 ? 'HIGH' : 'MEDIUM',
-          message: `${batch.product.sku} batch ${batch.batchNumber} expires in ${daysLeft} day(s)`,
+          // The batch number must stay in this text: the lookup above dedupes on it.
+          message:
+            `${batch.product.sku} : le lot ${batch.batchNumber} expire dans ${daysLeft} ` +
+            `${Math.abs(daysLeft) > 1 ? 'jours' : 'jour'}`,
           currentValue: Number(batch.quantity),
           threshold: horizonDays,
           isDemoData: batch.isDemoData,

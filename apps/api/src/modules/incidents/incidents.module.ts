@@ -108,6 +108,29 @@ export class UpdateIncidentDto {
   estimatedCost?: number;
 }
 
+/* ---------------------------------------------------------------------- labels */
+
+/** French names of the incident types, for texts written into timelines and alerts. */
+const INCIDENT_TYPE_LABELS: Record<IncidentType, string> = {
+  DELAY: 'Retard',
+  ACCIDENT: 'Accident',
+  VEHICLE_BREAKDOWN: 'Panne de véhicule',
+  DAMAGED_CARGO: 'Marchandise endommagée',
+  LOST_CARGO: 'Marchandise perdue',
+  WRONG_ROUTE: 'Mauvais itinéraire',
+  CUSTOMS_DELAY: 'Retard en douane',
+  WEATHER: 'Météo',
+  OTHER: 'Autre',
+};
+
+/** Severity as an adjective of « gravité », as the UI words it (« Gravité élevée »). */
+const INCIDENT_SEVERITY_LABELS: Record<IncidentSeverity, string> = {
+  LOW: 'faible',
+  MEDIUM: 'moyenne',
+  HIGH: 'élevée',
+  CRITICAL: 'critique',
+};
+
 /* --------------------------------------------------------------------- service */
 
 @Injectable()
@@ -165,7 +188,7 @@ export class IncidentsService {
         assignedTo: { select: { id: true, firstName: true, lastName: true, email: true } },
       },
     });
-    if (!incident) throw new NotFoundException('Incident not found');
+    if (!incident) throw new NotFoundException('Incident introuvable');
     return incident;
   }
 
@@ -177,7 +200,7 @@ export class IncidentsService {
         where: { id: dto.shipmentId, companyId },
         select: { id: true },
       });
-      if (!shipment) throw new NotFoundException('Shipment not found in your company');
+      if (!shipment) throw new NotFoundException('Expédition introuvable dans votre entreprise');
     }
 
     const incident = await this.prisma.$transaction(async (tx) => {
@@ -204,7 +227,7 @@ export class IncidentsService {
           data: {
             shipmentId: dto.shipmentId,
             type: 'INCIDENT',
-            description: `${dto.type}: ${dto.title}`,
+            description: `${INCIDENT_TYPE_LABELS[dto.type] ?? dto.type} : ${dto.title}`,
             latitude: dto.latitude ?? null,
             longitude: dto.longitude ?? null,
             metadata: { incidentId: created.id, severity: created.severity } as Prisma.InputJsonValue,
@@ -219,7 +242,9 @@ export class IncidentsService {
       companyId,
       type: 'INCIDENT_CREATED',
       severity: incident.severity === 'CRITICAL' ? 'CRITICAL' : 'WARNING',
-      title: `${incident.severity} incident: ${incident.title}`,
+      title: `Incident de gravité ${
+        INCIDENT_SEVERITY_LABELS[incident.severity as IncidentSeverity] ?? incident.severity
+      } : ${incident.title}`,
       body: incident.description,
       target: { entity: 'incident', id: incident.id },
       channels: incident.severity === 'CRITICAL' ? ['DASHBOARD', 'EMAIL'] : ['DASHBOARD'],
@@ -234,7 +259,7 @@ export class IncidentsService {
     const closing = dto.status === 'RESOLVED' || dto.status === 'CLOSED';
     if (closing && !dto.resolution && !incident.resolution) {
       throw new NotFoundException(
-        'A resolution is required before an incident can be resolved or closed',
+        'Une résolution est requise avant de pouvoir résoudre ou clore un incident',
       );
     }
 
@@ -243,7 +268,7 @@ export class IncidentsService {
         where: { id: dto.assignedToId, companyId: incident.companyId, isActive: true },
         select: { id: true },
       });
-      if (!assignee) throw new NotFoundException('Assignee not found in your company');
+      if (!assignee) throw new NotFoundException('Responsable introuvable dans votre entreprise');
     }
 
     const updated = await this.prisma.incident.update({
@@ -262,8 +287,8 @@ export class IncidentsService {
       await this.notifications.notify({
         companyId: incident.companyId,
         type: 'INCIDENT_RESOLVED',
-        title: `Incident resolved: ${incident.title}`,
-        body: dto.resolution ?? incident.resolution ?? 'Resolved.',
+        title: `Incident résolu : ${incident.title}`,
+        body: dto.resolution ?? incident.resolution ?? 'Résolu.',
         target: { entity: 'incident', id },
       });
     }

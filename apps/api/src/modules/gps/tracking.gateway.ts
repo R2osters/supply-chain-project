@@ -17,7 +17,7 @@ import type { JwtAccessPayload } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /** Deliberately vague: a precise reason tells an attacker which half of the token to fix. */
-const INVALID_TOKEN = 'Invalid or expired access token';
+const INVALID_TOKEN = 'Jeton d’accès invalide ou expiré';
 
 /**
  * Live tracking channel.
@@ -62,7 +62,7 @@ export class TrackingGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       (client.handshake.auth?.token as string | undefined) ??
       (client.handshake.headers.authorization?.replace(/^Bearer\s+/i, '') || undefined);
 
-    if (!token) return this.refuse(client, 'Missing access token');
+    if (!token) return this.refuse(client, 'Jeton d’accès manquant');
 
     let payload: JwtAccessPayload;
     try {
@@ -80,18 +80,22 @@ export class TrackingGateway implements OnGatewayInit, OnGatewayConnection, OnGa
       return undefined;
     });
     if (account === undefined) {
-      return this.refuse(client, 'Live tracking is unavailable, try again shortly');
+      return this.refuse(client, 'Le suivi en direct est indisponible, réessayez dans un instant');
     }
     if (!account?.isActive || (account.lockedUntil && account.lockedUntil.getTime() > Date.now())) {
       return this.refuse(client, INVALID_TOKEN);
     }
     if (account.mustChangePassword) {
-      return this.refuse(client, 'Choose a new password before following the live fleet', PASSWORD_CHANGE_REQUIRED);
+      return this.refuse(
+        client,
+        'Choisissez un nouveau mot de passe avant de suivre la flotte en direct',
+        PASSWORD_CHANGE_REQUIRED,
+      );
     }
     // The stored role, not the token's: a downgrade applies now, not when the token expires.
     const role = account.role as UserRole;
     if (!roleHasPermission(role, 'gps:read')) {
-      return this.refuse(client, 'This account cannot follow the live fleet', 'forbidden');
+      return this.refuse(client, 'Ce compte ne peut pas suivre la flotte en direct', 'forbidden');
     }
     // The browser may have left while the account was being read.
     if (client.disconnected) return;
@@ -119,16 +123,16 @@ export class TrackingGateway implements OnGatewayInit, OnGatewayConnection, OnGa
   async subscribeShipment(client: Socket, payload: { shipmentId?: string }) {
     // Messages can arrive while the handshake is still reading the account.
     if (client.data.verified !== true) {
-      return { ok: false, error: 'Not authenticated' };
+      return { ok: false, error: 'Non authentifié' };
     }
     const shipmentId = typeof payload?.shipmentId === 'string' ? payload.shipmentId : '';
     if (!shipmentId) {
-      return { ok: false, error: 'shipmentId is required' };
+      return { ok: false, error: 'shipmentId est obligatoire' };
     }
     const companyId = client.data.companyId as string | null;
     const superAdmin = client.data.role === 'SUPER_ADMIN';
     if (!companyId && !superAdmin) {
-      return { ok: false, error: 'Not attached to a company' };
+      return { ok: false, error: 'Compte rattaché à aucune entreprise' };
     }
     const shipment = await this.prisma.shipment.findFirst({
       where: superAdmin ? { id: shipmentId } : { id: shipmentId, companyId: companyId as string },
@@ -136,7 +140,7 @@ export class TrackingGateway implements OnGatewayInit, OnGatewayConnection, OnGa
     });
     // Same answer for "does not exist" and "belongs to someone else": ids are not an oracle.
     if (!shipment) {
-      return { ok: false, error: 'Shipment not found' };
+      return { ok: false, error: 'Expédition introuvable' };
     }
     await client.join(`shipment:${shipment.id}`);
     return { ok: true, room: `shipment:${shipment.id}` };

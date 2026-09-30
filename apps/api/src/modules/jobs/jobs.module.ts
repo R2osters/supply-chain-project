@@ -75,8 +75,8 @@ export class ScheduledTasksService {
           await this.notifications.notify({
             companyId: company.id,
             type: 'SHIPMENT_ARRIVING',
-            title: `${vehicle.plateNumber} arriving at ${vehicle.warehouseName} in ~${minutesAway.toFixed(0)} min`,
-            body: `${vehicle.distanceKm.toFixed(1)} km out at ${vehicle.speedKmh.toFixed(0)} km/h.`,
+            title: `${vehicle.plateNumber} arrive à ${vehicle.warehouseName} dans ~${minutesAway.toFixed(0)} min`,
+            body: `À ${vehicle.distanceKm.toFixed(1)} km, roulant à ${vehicle.speedKmh.toFixed(0)} km/h.`,
             target: { entity: 'vehicle', id: vehicle.id },
           });
         }

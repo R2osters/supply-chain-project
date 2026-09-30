@@ -27,7 +27,7 @@ describe('computeEta — distance', () => {
 
     // Distances are reported rounded to 3 dp, so compare at 2 dp.
     expect(wound.remainingDistanceKm).toBeCloseTo(plain.remainingDistanceKm * 1.5, 2);
-    expect(wound.assumptions.join(' ')).toContain('road-winding factor 1.5');
+    expect(wound.assumptions.join(' ')).toContain('facteur de sinuosité routière 1.5');
   });
 
   it('follows the planned polyline when one is supplied', () => {
@@ -39,7 +39,7 @@ describe('computeEta — distance', () => {
     );
 
     expect(viaWaypoint.remainingDistanceKm).toBeGreaterThan(direct.remainingDistanceKm);
-    expect(viaWaypoint.assumptions.join(' ')).toContain('planned route polyline');
+    expect(viaWaypoint.assumptions.join(' ')).toContain('polyligne de l’itinéraire prévu');
   });
 
   it('reports zero remaining distance once the vehicle is at the destination', () => {

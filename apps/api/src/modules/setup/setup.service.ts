@@ -52,10 +52,12 @@ export class SetupService {
   }
 
   async loadDemo(): Promise<void> {
-    if (!this.seedScript) throw new ServiceUnavailableException('Demo data is not part of this build');
+    if (!this.seedScript) {
+      throw new ServiceUnavailableException('Les données de démonstration ne font pas partie de cette version');
+    }
     // Concurrent clicks share one run instead of racing two seeds against each other.
     if (this.seeding) return this.seeding;
-    if (!(await this.isEmpty())) throw new ConflictException('SCIP is already set up');
+    if (!(await this.isEmpty())) throw new ConflictException('SCIP est déjà configuré');
 
     this.seeding = this.runSeed(this.seedScript).finally(() => {
       this.seeding = null;

@@ -17,13 +17,19 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
+import { validationExceptionFactory } from '../src/common/validation/validation-messages';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { AuditInterceptor } from '../src/common/interceptors/audit.interceptor';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { DOMAIN_EVENTS } from '../src/modules/events/domain-events.service';
 import { ShipmentsService } from '../src/modules/shipments/shipments.service';
 import { RECOMMENDATION_ORDER_NOTE } from '../src/modules/recommendations/recommendations.service';
-import { DELAYED_PROMISE_MS, stagedArrival, stagedRouteKm } from '../src/modules/setup/demo-rehearsal.service';
+import {
+  DELAYED_PROMISE_MS,
+  REHEARSAL_STOCK_REASON,
+  stagedArrival,
+  stagedRouteKm,
+} from '../src/modules/setup/demo-rehearsal.service';
 
 // The seed's demo accounts (prisma/seed.ts).
 const DEMO_PASSWORD = 'DemoPassw0rd!2026';
@@ -47,7 +53,14 @@ describe('POST /setup/demo/rehearse (e2e, demo database)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api/v1');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        exceptionFactory: validationExceptionFactory,
+      }),
+    );
     app.useGlobalFilters(new AllExceptionsFilter());
     // As main.ts does: the route's audit trail is part of what is tested.
     app.useGlobalInterceptors(new AuditInterceptor(app.get(Reflector), app.get(PrismaService)));
@@ -167,7 +180,7 @@ describe('POST /setup/demo/rehearse (e2e, demo database)', () => {
     expect(Number(stock.incomingStock)).toBe(0);
     expect(
       await prisma.stockMovement.count({
-        where: { productId: sku.id, warehouseId: warehouse.id, reason: 'Demo rehearsal: two days of demand on hand' },
+        where: { productId: sku.id, warehouseId: warehouse.id, reason: REHEARSAL_STOCK_REASON },
       }),
     ).toBeGreaterThanOrEqual(1);
 

@@ -202,7 +202,7 @@ export class DevicesController {
     const deviceId = await this.devices.authenticatePhone(dto.identifier, dto.secret);
     if (!deviceId) {
       // Deliberately vague: a precise reason tells someone probing which half to fix.
-      return { accepted: 0, rejected: dto.fixes.length, error: 'Device not recognised' };
+      return { accepted: 0, rejected: dto.fixes.length, error: 'Balise non reconnue' };
     }
 
     const result = await this.devices.ingestPhoneBatch(

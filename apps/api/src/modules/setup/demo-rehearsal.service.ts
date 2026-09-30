@@ -44,6 +44,11 @@ const MAIN_WAREHOUSE = 'WH-ACC';
 /** Two days of the seed's demand for SKU-006 (310 a day). */
 const SHORT_SKU_STOCK = 620;
 
+/** Why the ledger shows SKU-006 jumping back: read on the stock history, and by the e2e test. */
+export const REHEARSAL_STOCK_REASON = 'Répétition de la démo : deux jours de demande en stock';
+/** Why an order accepted in a previous rehearsal was cancelled. */
+export const REHEARSAL_CANCELLATION_REASON = 'Répétition de la démo';
+
 /** Length of the route the simulator and the ETA engine both follow, in km. */
 export function stagedRouteKm(route: { polyline: unknown } | null, plannedDistanceKm: number): number {
   const polyline = route?.polyline;
@@ -144,14 +149,16 @@ export class DemoRehearsalService {
 
   private async demoCompanyOf(user: AuthenticatedUser): Promise<string> {
     const { demoAccounts } = await this.setup.status();
-    if (!demoAccounts) throw new ConflictException('The demo can only be rehearsed on a demo install');
+    if (!demoAccounts) {
+      throw new ConflictException('La démo ne peut être répétée que sur une installation de démonstration');
+    }
 
     const admin = await this.prisma.user.findUnique({
       where: { email: DEMO_ADMIN_EMAIL },
       select: { companyId: true },
     });
     if (!admin?.companyId || user.role !== 'COMPANY_ADMIN' || user.companyId !== admin.companyId) {
-      throw new ConflictException('Only the demo company administrator can rehearse the demo');
+      throw new ConflictException('Seul l’administrateur de l’entreprise de démonstration peut répéter la démo');
     }
     return admin.companyId;
   }
@@ -223,7 +230,7 @@ export class DemoRehearsalService {
         data: {
           shipmentId: shipment.id,
           type: 'STATUS_CHANGED',
-          description: `Demo rehearsal: leaving ${shipment.originName} again`,
+          description: `Répétition de la démo : nouveau départ de ${shipment.originName}`,
           fromStatus: shipment.status,
           toStatus: 'IN_TRANSIT',
           metadata: { rehearsal: true, plannedArrival: plannedArrivalAt.toISOString() },
@@ -273,7 +280,7 @@ export class DemoRehearsalService {
     for (const order of orders) {
       await tx.purchaseOrder.update({
         where: { id: order.id },
-        data: { status: 'CANCELLED', cancelledAt: now, cancellationReason: 'Demo rehearsal' },
+        data: { status: 'CANCELLED', cancelledAt: now, cancellationReason: REHEARSAL_CANCELLATION_REASON },
       });
       // Same rule as a normal cancellation: a confirmed order stops counting as incoming stock.
       if (order.warehouseId && INCOMING_STOCK_STATUSES.includes(order.status)) {
@@ -307,7 +314,7 @@ export class DemoRehearsalService {
       warehouseId: warehouse.id,
       type: 'ADJUSTMENT',
       quantity: SHORT_SKU_STOCK,
-      reason: 'Demo rehearsal: two days of demand on hand',
+      reason: REHEARSAL_STOCK_REASON,
       performedById: user.id,
       isDemoData: true,
     });

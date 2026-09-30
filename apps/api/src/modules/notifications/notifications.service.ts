@@ -118,14 +118,14 @@ export class NotificationsService {
         const result = await this.mail.send({
           to: recipient.email,
           subject: `[SCIP${severity === 'CRITICAL' ? ' — URGENT' : ''}] ${input.title}`,
-          text: `${recipient.firstName},\n\n${input.body}\n\n— SCIP`,
+          text: `Bonjour ${recipient.firstName},\n\n${input.body}\n\n— SCIP`,
         });
         if (result.sent) {
           emailed += 1;
         } else {
           await this.prisma.notification.updateMany({
             where: { userId: recipient.id, type: input.type, sentAt: null },
-            data: { deliveryError: result.error?.slice(0, 500) ?? 'unknown error' },
+            data: { deliveryError: result.error?.slice(0, 500) ?? 'erreur inconnue' },
           });
         }
       }
@@ -166,7 +166,7 @@ export class NotificationsService {
     const notification = await this.prisma.notification.findFirst({
       where: { id, userId: user.id },
     });
-    if (!notification) throw new NotFoundException('Notification not found');
+    if (!notification) throw new NotFoundException('Notification introuvable');
 
     return this.prisma.notification.update({
       where: { id },

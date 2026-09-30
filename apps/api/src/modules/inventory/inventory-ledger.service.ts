@@ -46,7 +46,7 @@ export class InventoryLedgerService {
   /** Applies a movement inside the caller's transaction. */
   async apply(tx: TxClient, input: MovementInput) {
     if (!Number.isFinite(input.quantity) || input.quantity <= 0) {
-      throw new BadRequestException('Movement quantity must be a positive number');
+      throw new BadRequestException('La quantité du mouvement doit être un nombre positif');
     }
 
     switch (input.type) {
@@ -59,7 +59,7 @@ export class InventoryLedgerService {
       case 'TRANSFER':
         return this.applyTransfer(tx, input);
       default:
-        throw new BadRequestException(`Unsupported movement type ${input.type as string}`);
+        throw new BadRequestException(`Type de mouvement non pris en charge : ${input.type as string}`);
     }
   }
 
@@ -115,7 +115,7 @@ export class InventoryLedgerService {
         select: { availableStock: true },
       });
       throw new BadRequestException(
-        `Insufficient stock: requested ${input.quantity}, available ${Number(current?.availableStock ?? 0)}`,
+        `Stock insuffisant : quantité demandée ${input.quantity}, disponible ${Number(current?.availableStock ?? 0)}`,
       );
     }
 
@@ -145,7 +145,7 @@ export class InventoryLedgerService {
       tx,
       {
         ...input,
-        reason: input.reason ?? `Stock count correction (${delta >= 0 ? '+' : ''}${delta})`,
+        reason: input.reason ?? `Correction après inventaire (${delta >= 0 ? '+' : ''}${delta})`,
       },
       Number(updated.availableStock),
       input.warehouseId,
@@ -155,22 +155,22 @@ export class InventoryLedgerService {
   /** Moves stock between two warehouses as one OUT + one IN, both recorded. */
   private async applyTransfer(tx: TxClient, input: MovementInput) {
     if (!input.toWarehouseId) {
-      throw new BadRequestException('toWarehouseId is required for a TRANSFER');
+      throw new BadRequestException('toWarehouseId est obligatoire pour un transfert (TRANSFER)');
     }
     if (input.toWarehouseId === input.warehouseId) {
-      throw new BadRequestException('Cannot transfer a product to the warehouse it is already in');
+      throw new BadRequestException('Impossible de transférer un produit vers l’entrepôt où il se trouve déjà');
     }
 
     const out = await this.applyOut(tx, {
       ...input,
       type: 'OUT',
-      reason: input.reason ?? `Transfer out to ${input.toWarehouseId}`,
+      reason: input.reason ?? `Transfert sortant vers ${input.toWarehouseId}`,
     });
     const incoming = await this.applyIn(tx, {
       ...input,
       type: 'IN',
       warehouseId: input.toWarehouseId,
-      reason: input.reason ?? `Transfer in from ${input.warehouseId}`,
+      reason: input.reason ?? `Transfert entrant depuis ${input.warehouseId}`,
     });
 
     return { out, in: incoming };
@@ -220,7 +220,7 @@ export class InventoryLedgerService {
 
     if (result === 0) {
       throw new BadRequestException(
-        'Cannot reserve: not enough unreserved stock in that warehouse',
+        'Réservation impossible : stock non réservé insuffisant dans cet entrepôt',
       );
     }
   }

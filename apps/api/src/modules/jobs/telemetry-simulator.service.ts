@@ -263,7 +263,7 @@ export class TelemetrySimulatorService {
         data: {
           shipmentId: shipment.id,
           type: 'ARRIVED',
-          description: 'Vehicle reached the destination (simulated telemetry)',
+          description: 'Véhicule arrivé à destination (télémétrie simulée)',
           fromStatus: current.status,
           toStatus: 'ARRIVED',
           isDemoData: true,

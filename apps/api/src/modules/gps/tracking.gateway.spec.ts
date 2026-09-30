@@ -94,7 +94,7 @@ describe('TrackingGateway handshake', () => {
     await gateway.handleConnection(client.socket);
     expect(client.state.disconnected).toBe(true);
     expect(client.rooms).toEqual([]);
-    expect(client.emitted[0]?.body).toEqual({ message: 'Invalid or expired access token' });
+    expect(client.emitted[0]?.body).toEqual({ message: 'Jeton d’accès invalide ou expiré' });
   });
 
   it('refuses an account that no longer exists', async () => {
@@ -197,7 +197,7 @@ describe('TrackingGateway shipment subscription', () => {
   it("refuses another company's shipment with the same answer as a missing one", async () => {
     const { gateway, client, findFirst } = await connected({ ...ACTIVE, companyId: 'company-b' });
     const answer = await gateway.subscribeShipment(client.socket, { shipmentId: 'shipment-a' });
-    expect(answer).toEqual({ ok: false, error: 'Shipment not found' });
+    expect(answer).toEqual({ ok: false, error: 'Expédition introuvable' });
     expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'shipment-a', companyId: 'company-b' } }));
     expect(client.rooms).not.toContain('shipment:shipment-a');
   });
@@ -206,7 +206,7 @@ describe('TrackingGateway shipment subscription', () => {
     const { gateway, findFirst } = setup();
     const client = fakeSocket(accessToken());
     const answer = await gateway.subscribeShipment(client.socket, { shipmentId: 'shipment-a' });
-    expect(answer).toEqual({ ok: false, error: 'Not authenticated' });
+    expect(answer).toEqual({ ok: false, error: 'Non authentifié' });
     expect(findFirst).not.toHaveBeenCalled();
   });
 
@@ -214,7 +214,7 @@ describe('TrackingGateway shipment subscription', () => {
     const { gateway, client } = await connected();
     await expect(gateway.subscribeShipment(client.socket, {})).resolves.toEqual({
       ok: false,
-      error: 'shipmentId is required',
+      error: 'shipmentId est obligatoire',
     });
   });
 });

@@ -15,6 +15,8 @@ import {
   IN_MOTION_STATUSES,
   SHIPMENT_TRANSITIONS,
   assertTransition,
+  quotedShipmentStatus,
+  shipmentStatusLabel,
 } from './shipment-status';
 import type {
   CreateShipmentDto,
@@ -119,7 +121,7 @@ export class ShipmentsService {
       },
     });
 
-    if (!shipment) throw new NotFoundException(`No shipment found with id ${id}`);
+    if (!shipment) throw new NotFoundException(`Aucune expédition trouvée avec l’identifiant ${id}`);
 
     return {
       ...shipment,
@@ -219,13 +221,13 @@ export class ShipmentsService {
     const route = dto.routeId
       ? await this.prisma.route.findFirst({ where: { id: dto.routeId, companyId } })
       : null;
-    if (dto.routeId && !route) throw new BadRequestException('Route not found in your company');
+    if (dto.routeId && !route) throw new BadRequestException('Itinéraire introuvable dans votre entreprise');
 
     const products = await this.prisma.product.findMany({
       where: { id: { in: dto.items.map((i) => i.productId) }, companyId },
     });
     if (products.length !== new Set(dto.items.map((i) => i.productId)).size) {
-      throw new BadRequestException('One or more products were not found in your company');
+      throw new BadRequestException('Un ou plusieurs produits sont introuvables dans votre entreprise');
     }
     const productById = new Map(products.map((p) => [p.id, p]));
 
@@ -256,7 +258,9 @@ export class ShipmentsService {
         );
 
     if (plannedArrivalAt.getTime() < plannedDepartureAt.getTime()) {
-      throw new BadRequestException('plannedArrivalAt cannot be before plannedDepartureAt');
+      throw new BadRequestException(
+        'L’arrivée prévue (plannedArrivalAt) ne peut pas précéder le départ prévu (plannedDepartureAt)',
+      );
     }
 
     const totals = dto.items.reduce(
@@ -273,7 +277,7 @@ export class ShipmentsService {
 
     if (vehicle && totals.units > Number(vehicle.capacityUnits)) {
       throw new BadRequestException(
-        `Load of ${totals.units} units exceeds vehicle capacity of ${Number(vehicle.capacityUnits)}`,
+        `Le chargement de ${totals.units} unités dépasse la capacité du véhicule, qui est de ${Number(vehicle.capacityUnits)}`,
       );
     }
 
@@ -322,7 +326,7 @@ export class ShipmentsService {
         data: {
           shipmentId: shipment.id,
           type: 'CREATED',
-          description: `Shipment ${trackingNumber} planned from ${origin.name} to ${destination.name}`,
+          description: `Expédition ${trackingNumber} planifiée de ${origin.name} à ${destination.name}`,
           toStatus: 'PLANNED',
           metadata: { plannedDistanceKm, plannedArrivalAt } as Prisma.InputJsonValue,
         },
@@ -337,7 +341,7 @@ export class ShipmentsService {
       const warehouse = await this.prisma.warehouse.findFirst({
         where: { id: dto.originWarehouseId, companyId },
       });
-      if (!warehouse) throw new BadRequestException('Origin warehouse not found in your company');
+      if (!warehouse) throw new BadRequestException('Entrepôt d’origine introuvable dans votre entreprise');
       return {
         name: dto.originName ?? warehouse.name,
         point: { latitude: warehouse.latitude, longitude: warehouse.longitude },
@@ -350,7 +354,7 @@ export class ShipmentsService {
       dto.originLongitude === undefined
     ) {
       throw new BadRequestException(
-        'Provide originWarehouseId, or all of originName, originLatitude and originLongitude',
+        'Indiquez originWarehouseId, ou bien originName, originLatitude et originLongitude ensemble',
       );
     }
     return {
@@ -365,7 +369,7 @@ export class ShipmentsService {
         where: { id: dto.destinationWarehouseId, companyId },
       });
       if (!warehouse) {
-        throw new BadRequestException('Destination warehouse not found in your company');
+        throw new BadRequestException('Entrepôt de destination introuvable dans votre entreprise');
       }
       return {
         name: dto.destinationName ?? warehouse.name,
@@ -377,10 +381,10 @@ export class ShipmentsService {
       const customer = await this.prisma.customer.findFirst({
         where: { id: dto.customerId, companyId },
       });
-      if (!customer) throw new BadRequestException('Customer not found in your company');
+      if (!customer) throw new BadRequestException('Client introuvable dans votre entreprise');
       if (customer.latitude === null || customer.longitude === null) {
         throw new BadRequestException(
-          `Customer ${customer.name} has no coordinates; set them or pass explicit destination coordinates`,
+          `Le client ${customer.name} n’a pas de coordonnées : renseignez-les ou indiquez explicitement les coordonnées de destination`,
         );
       }
       return {
@@ -395,7 +399,7 @@ export class ShipmentsService {
       dto.destinationLongitude === undefined
     ) {
       throw new BadRequestException(
-        'Provide destinationWarehouseId, customerId, or all of destinationName, destinationLatitude and destinationLongitude',
+        'Indiquez destinationWarehouseId, customerId, ou bien destinationName, destinationLatitude et destinationLongitude ensemble',
       );
     }
     return {
@@ -406,15 +410,15 @@ export class ShipmentsService {
 
   private async assertFleetBelongsToCompany(companyId: string, dto: CreateShipmentDto) {
     const checks: Array<[string | undefined, () => Promise<unknown>, string]> = [
-      [dto.carrierId, () => this.prisma.carrier.findFirst({ where: { id: dto.carrierId, companyId } }), 'Carrier'],
-      [dto.vehicleId, () => this.prisma.vehicle.findFirst({ where: { id: dto.vehicleId, companyId } }), 'Vehicle'],
-      [dto.driverId, () => this.prisma.driver.findFirst({ where: { id: dto.driverId, companyId } }), 'Driver'],
-      [dto.purchaseOrderId, () => this.prisma.purchaseOrder.findFirst({ where: { id: dto.purchaseOrderId, companyId } }), 'Purchase order'],
+      [dto.carrierId, () => this.prisma.carrier.findFirst({ where: { id: dto.carrierId, companyId } }), 'Transporteur'],
+      [dto.vehicleId, () => this.prisma.vehicle.findFirst({ where: { id: dto.vehicleId, companyId } }), 'Véhicule'],
+      [dto.driverId, () => this.prisma.driver.findFirst({ where: { id: dto.driverId, companyId } }), 'Chauffeur'],
+      [dto.purchaseOrderId, () => this.prisma.purchaseOrder.findFirst({ where: { id: dto.purchaseOrderId, companyId } }), 'Bon de commande'],
     ];
 
     for (const [id, find, label] of checks) {
       if (!id) continue;
-      if (!(await find())) throw new BadRequestException(`${label} not found in your company`);
+      if (!(await find())) throw new BadRequestException(`${label} introuvable dans votre entreprise`);
     }
   }
 
@@ -435,7 +439,7 @@ export class ShipmentsService {
       });
       if (!taken) return candidate;
     }
-    throw new BadRequestException('Could not allocate a tracking number; please retry');
+    throw new BadRequestException('Impossible d’attribuer un numéro de suivi. Veuillez réessayer.');
   }
 
   /* ---------------------------------------------------------------- update */
@@ -443,7 +447,9 @@ export class ShipmentsService {
   async update(user: AuthenticatedUser, id: string, dto: UpdateShipmentDto) {
     const shipment = await this.findOne(user, id);
     if (['DELIVERED', 'CANCELLED'].includes(shipment.status)) {
-      throw new BadRequestException(`A ${shipment.status} shipment can no longer be edited`);
+      throw new BadRequestException(
+        `Une expédition ${shipmentStatusLabel(shipment.status)} ne peut plus être modifiée`,
+      );
     }
 
     await this.assertFleetBelongsToCompany(shipment.companyId, dto as CreateShipmentDto);
@@ -494,7 +500,7 @@ export class ShipmentsService {
         data: {
           shipmentId: id,
           type: to === 'DEPARTED' ? 'DEPARTED' : to === 'ARRIVED' ? 'ARRIVED' : to === 'DELIVERED' ? 'DELIVERED' : 'STATUS_CHANGED',
-          description: note ?? `Status changed from ${from} to ${to}`,
+          description: note ?? `Statut passé de ${quotedShipmentStatus(from)} à ${quotedShipmentStatus(to)}`,
           fromStatus: from,
           toStatus: to,
           latitude: location?.latitude ?? null,
@@ -656,7 +662,9 @@ export class ShipmentsService {
           data: {
             shipmentId,
             type: 'DELAY_DETECTED',
-            description: `Projected ${lateness.minutesLate.toFixed(0)} minutes late; even the optimistic end of the arrival window misses the promise`,
+            description:
+              `Retard projeté de ${lateness.minutesLate.toFixed(0)} minutes : même la borne optimiste ` +
+              'de la fenêtre d’arrivée dépasse l’heure promise',
             fromStatus: shipment.status,
             toStatus: 'DELAYED',
             metadata: {
@@ -688,7 +696,7 @@ export class ShipmentsService {
     await this.findOne(user, id);
     const eta = await this.computeCurrentEta(id);
     if (!eta) {
-      throw new BadRequestException('This shipment is complete; there is no ETA to compute');
+      throw new BadRequestException('Cette expédition est terminée : il n’y a pas d’ETA à calculer');
     }
     return eta;
   }

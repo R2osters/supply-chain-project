@@ -26,6 +26,26 @@ const MAX_FUTURE_SKEW_MS = 5 * 60_000;
 /** Below this movement, a fix is parked-vehicle jitter and adds noise without information. */
 const MIN_FIX_SEPARATION_M = 8;
 
+/** French names for the alarms a tracker raises (GT06_ALARM in gt06-codec.ts). */
+const ALARM_LABELS: Record<string, string> = {
+  SOS: 'SOS',
+  POWER_CUT: 'Coupure d’alimentation',
+  VIBRATION: 'Vibration',
+  GEOFENCE_ENTER: 'Entrée dans une zone',
+  GEOFENCE_EXIT: 'Sortie de zone',
+  OVERSPEED: 'Excès de vitesse',
+  DISPLACEMENT: 'Déplacement du véhicule',
+  LOW_BATTERY: 'Batterie faible',
+  POWER_OFF: 'Balise éteinte',
+};
+
+/** The alarm as an operator reads it; a code the codec does not know keeps its number. */
+export function alarmLabel(alarm: string): string {
+  const unknown = /^UNKNOWN_(\d+)$/.exec(alarm);
+  if (unknown) return `Alarme inconnue (code ${unknown[1]})`;
+  return ALARM_LABELS[alarm] ?? alarm.replace(/_/g, ' ');
+}
+
 export interface IncomingFix {
   latitude: number;
   longitude: number;
@@ -90,7 +110,7 @@ export class DevicesService {
     if (input.kind === 'GT06' || input.kind === 'TELTONIKA') {
       if (!/^\d{15}$/.test(input.identifier)) {
         throw new BadRequestException(
-          'A hardware tracker is identified by its 15-digit IMEI, printed on the device and on its box.',
+          'Une balise matérielle s’identifie par son IMEI à 15 chiffres, imprimé sur l’appareil et sur sa boîte.',
         );
       }
     }
@@ -99,7 +119,7 @@ export class DevicesService {
       const vehicle = await this.prisma.vehicle.findFirst({
         where: { id: input.vehicleId, companyId },
       });
-      if (!vehicle) throw new BadRequestException('Vehicle not found in your company');
+      if (!vehicle) throw new BadRequestException('Véhicule introuvable dans votre entreprise');
     }
 
     const existing = await this.prisma.trackingDevice.findUnique({
@@ -110,8 +130,8 @@ export class DevicesService {
       // loudly rather than silently splitting its positions between them.
       throw new BadRequestException(
         existing.companyId === companyId
-          ? 'This device is already enrolled.'
-          : 'This identifier is already registered to another company. Check the IMEI.',
+          ? 'Cette balise est déjà enregistrée.'
+          : 'Cet identifiant est déjà enregistré par une autre entreprise. Vérifiez l’IMEI.',
       );
     }
 
@@ -146,30 +166,32 @@ export class DevicesService {
     switch (kind) {
       case 'PHONE':
         return [
-          'Send the driver the pairing link below. It opens /drive with the identifier and secret ' +
-            'already filled in, so nothing has to be typed.',
-          'On the phone, tap “Add to home screen”. It then opens full-screen in one tap.',
-          'Tap Start. The phone posts its position every 30 s and keeps recording through a ' +
-            'coverage gap, sending the backlog when signal returns.',
-          'The screen must stay on. A phone browser stops receiving positions once the page is ' +
-            'hidden — this is a browser rule, not a setting, so plug the phone in and leave the ' +
-            'page open.',
+          'Envoyez au chauffeur le lien d’appairage ci-dessous. Il ouvre /drive avec l’identifiant ' +
+            'et le code d’appairage déjà renseignés : il n’y a rien à saisir.',
+          'Sur le téléphone, touchez « Ajouter à l’écran d’accueil ». La page s’ouvre ensuite en ' +
+            'plein écran, en un geste.',
+          'Touchez « Démarrer le suivi ». Le téléphone envoie sa position toutes les 30 s et ' +
+            'continue d’enregistrer dans une zone sans réseau, puis envoie les positions en attente ' +
+            'au retour du signal.',
+          'L’écran doit rester allumé. Le navigateur d’un téléphone cesse de recevoir les positions ' +
+            'dès que la page est masquée — c’est une règle du navigateur, pas un réglage : branchez ' +
+            'le téléphone et laissez la page ouverte.',
         ];
       case 'GT06':
         return [
-          'Insert a data SIM with a small monthly bundle — 30 MB covers a month of tracking.',
-          `Text the tracker: APN#<your operator APN>#  (ask the SIM provider for the APN).`,
-          'Text the tracker: server#<your public host>#5023#',
-          'Text the tracker: timer#30#  to set a 30-second reporting interval.',
-          `The device will connect and identify itself as IMEI ${identifier}.`,
+          'Insérez une carte SIM data avec un petit forfait mensuel — 30 Mo couvrent un mois de suivi.',
+          `Envoyez ce SMS à la balise : APN#<APN de votre opérateur>#  (demandez l’APN au fournisseur de la SIM).`,
+          'Envoyez ce SMS à la balise : server#<votre hôte public>#5023#',
+          'Envoyez ce SMS à la balise : timer#30#  pour régler l’intervalle d’envoi à 30 secondes.',
+          `La balise se connectera et s’identifiera avec l’IMEI ${identifier}.`,
         ];
       case 'TELTONIKA':
         return [
-          'Teltonika Codec 8 is not decoded yet — the enum reserves the value.',
-          'Use the phone app or a GT06-compatible tracker for now.',
+          'Le Codec 8 de Teltonika n’est pas encore décodé — la valeur est seulement réservée.',
+          'Utilisez pour l’instant l’application téléphone ou une balise compatible GT06.',
         ];
       default:
-        return ['Positions for this device are entered manually through the API or the UI.'];
+        return ['Les positions de cette balise sont saisies manuellement, via l’API ou l’interface.'];
     }
   }
 
@@ -177,7 +199,7 @@ export class DevicesService {
     const device = await this.prisma.trackingDevice.findFirst({
       where: { id, ...companyFilter(user) },
     });
-    if (!device) throw new NotFoundException('Device not found');
+    if (!device) throw new NotFoundException('Balise introuvable');
 
     await this.prisma.trackingDevice.update({
       where: { id },
@@ -386,18 +408,19 @@ export class DevicesService {
 
     const label = device.vehicle?.plateNumber ?? device.label ?? identifier;
     const critical = alarm === 'SOS' || alarm === 'POWER_CUT';
+    const alarmName = alarmLabel(alarm);
 
     await this.notifications.notify({
       companyId: device.companyId,
       type: 'ANOMALY_DETECTED',
       severity: critical ? 'CRITICAL' : 'WARNING',
-      title: `${alarm.replace(/_/g, ' ')} on ${label}`,
+      title: `${alarmName} sur ${label}`,
       body:
         alarm === 'SOS'
-          ? 'The driver pressed the panic button on the tracker. Contact them now.'
+          ? 'Le chauffeur a appuyé sur le bouton d’urgence de la balise. Contactez-le immédiatement.'
           : alarm === 'POWER_CUT'
-            ? 'The tracker lost vehicle power. Either the battery was disconnected or the device was removed.'
-            : `The tracker reported ${alarm.replace(/_/g, ' ').toLowerCase()}.`,
+            ? 'La balise a perdu l’alimentation du véhicule : soit la batterie a été débranchée, soit la balise a été retirée.'
+            : `La balise a signalé l’alarme « ${alarmName} ».`,
       target: device.vehicleId ? { entity: 'vehicle', id: device.vehicleId } : {},
       channels: critical ? ['DASHBOARD', 'EMAIL'] : ['DASHBOARD'],
     });

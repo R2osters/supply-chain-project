@@ -21,6 +21,21 @@ const DELIVERY_TRANSITIONS: Record<string, string[]> = {
   FAILED: ['ASSIGNED'], // a failed attempt can be re-assigned for another try
 };
 
+/** French names of the delivery statuses, for error texts. Agreed with « livraison ». */
+const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  ASSIGNED: 'Assignée',
+  PICKED_UP: 'Enlevée',
+  IN_TRANSIT: 'En transit',
+  ARRIVED: 'Arrivée',
+  DELIVERED: 'Livrée',
+  FAILED: 'Échouée',
+};
+
+/** The status quoted as a label, e.g. « Arrivée ». Unknown values pass through. */
+function quotedDeliveryStatus(status: string): string {
+  return `« ${DELIVERY_STATUS_LABELS[status] ?? status} »`;
+}
+
 @Injectable()
 export class DeliveriesService {
   private readonly logger = new Logger(DeliveriesService.name);
@@ -77,7 +92,7 @@ export class DeliveriesService {
         proof: true,
       },
     });
-    if (!delivery) throw new NotFoundException('Delivery not found');
+    if (!delivery) throw new NotFoundException('Livraison introuvable');
 
     // Presign only on read of a single record — signing a URL per row in a list would be
     // wasteful and hand out capabilities nobody asked for.
@@ -104,7 +119,7 @@ export class DeliveriesService {
     const shipment = await this.prisma.shipment.findFirst({
       where: { id: shipmentId, companyId },
     });
-    if (!shipment) throw new NotFoundException('Shipment not found in your company');
+    if (!shipment) throw new NotFoundException('Expédition introuvable dans votre entreprise');
 
     const existing = await this.prisma.delivery.findUnique({ where: { shipmentId } });
     if (existing) return existing;
@@ -127,16 +142,17 @@ export class DeliveriesService {
     if (!allowed.includes(dto.status)) {
       throw new BadRequestException(
         allowed.length === 0
-          ? `${delivery.status} is a terminal delivery status`
-          : `Cannot move a delivery from ${delivery.status} to ${dto.status}. Allowed: ${allowed.join(', ')}`,
+          ? `${quotedDeliveryStatus(delivery.status)} est un statut de livraison final`
+          : `Impossible de faire passer une livraison de ${quotedDeliveryStatus(delivery.status)} à ` +
+              `${quotedDeliveryStatus(dto.status)}. Transitions autorisées : ${allowed.map(quotedDeliveryStatus).join(', ')}`,
       );
     }
     if (dto.status === 'FAILED' && !dto.failureReason) {
-      throw new BadRequestException('A failure reason is required');
+      throw new BadRequestException('Un motif d’échec est requis');
     }
     if (dto.status === 'DELIVERED') {
       throw new BadRequestException(
-        'Complete a delivery by capturing proof of delivery: POST /deliveries/:id/proof',
+        'Pour terminer une livraison, enregistrez la preuve de livraison : POST /deliveries/:id/proof',
       );
     }
 
@@ -170,17 +186,19 @@ export class DeliveriesService {
     const delivery = await this.findOne(user, id);
 
     if (delivery.status === 'DELIVERED') {
-      throw new BadRequestException('Proof of delivery has already been captured');
+      throw new BadRequestException('La preuve de livraison a déjà été enregistrée');
     }
     if (!['ARRIVED', 'IN_TRANSIT', 'PICKED_UP'].includes(delivery.status)) {
       throw new BadRequestException(
-        `A delivery in ${delivery.status} cannot be completed. Move it to ARRIVED first.`,
+        `Une livraison à l’état ${quotedDeliveryStatus(delivery.status)} ne peut pas être terminée. ` +
+          `Passez-la d’abord à ${quotedDeliveryStatus('ARRIVED')}.`,
       );
     }
     if ((dto.signatureBase64 || dto.photosBase64?.length) && !this.storage.isAvailable) {
       throw new BadRequestException(
-        'Object storage is unavailable, so the signature and photos cannot be stored. ' +
-          'Retry once it is back — the delivery has not been marked complete.',
+        'Le stockage d’objets est indisponible : la signature et les photos ne peuvent pas être ' +
+          'enregistrées. Réessayez une fois le service rétabli — la livraison n’a pas été marquée ' +
+          'comme terminée.',
       );
     }
 
@@ -249,7 +267,7 @@ export class DeliveriesService {
         data: {
           shipmentId: shipment.id,
           type: 'DELIVERED',
-          description: `Delivered to ${dto.receiverName}`,
+          description: `Livrée à ${dto.receiverName}`,
           latitude: dto.latitude ?? null,
           longitude: dto.longitude ?? null,
           metadata: {
@@ -268,13 +286,13 @@ export class DeliveriesService {
     // on-time rate and the vehicle's availability are updated by the same code path as always.
     if (!['DELIVERED', 'CANCELLED'].includes(shipment.status)) {
       if (shipment.status !== 'ARRIVED') {
-        await this.shipments.transition(user, shipment.id, 'ARRIVED', 'Arrived at destination');
+        await this.shipments.transition(user, shipment.id, 'ARRIVED', 'Arrivée à destination');
       }
       await this.shipments.transition(
         user,
         shipment.id,
         'DELIVERED',
-        `Proof of delivery captured for ${dto.receiverName}`,
+        `Preuve de livraison enregistrée pour ${dto.receiverName}`,
         dto.latitude !== undefined && dto.longitude !== undefined
           ? { latitude: dto.latitude, longitude: dto.longitude }
           : undefined,
@@ -295,8 +313,8 @@ export class DeliveriesService {
       distanceToDestinationM,
       suspicious,
       warning: suspicious
-        ? `Captured ${(distanceToDestinationM! / 1000).toFixed(1)} km from the declared ` +
-          'destination. Anomaly detection will flag this as a suspicious delivery.'
+        ? `Preuve enregistrée à ${(distanceToDestinationM! / 1000).toFixed(1)} km de la ` +
+          'destination déclarée. La détection d’anomalies signalera cette livraison comme suspecte.'
         : null,
     };
   }

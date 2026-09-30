@@ -290,8 +290,8 @@ export class DeviceGatewayService implements OnModuleInit, OnModuleDestroy {
       positionsStored: this.positionsStored,
       protocol: 'GT06 / Concox',
       howToPointADeviceHere: this.enabled
-        ? `Send the tracker this SMS: server#<your-public-host>#${this.port}#`
-        : 'Set DEVICE_GATEWAY_ENABLED=true and restart the API.',
+        ? `Envoyez ce SMS à la balise : server#<votre-hôte-public>#${this.port}#`
+        : 'Définissez DEVICE_GATEWAY_ENABLED=true et redémarrez l’API.',
     };
   }
 }

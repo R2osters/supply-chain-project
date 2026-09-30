@@ -4,6 +4,7 @@ import type { UserRole } from '@scip/shared';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiService } from '../ai/ai.service';
+import { anomalyLabel } from '../ai/anomaly-labels';
 import { DOMAIN_EVENTS, DomainEventsService } from '../events/domain-events.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -108,10 +109,10 @@ export class DomainEventWorker {
           companyId: event.companyId,
           type: 'SHIPMENT_DELAYED',
           severity: 'WARNING',
-          title: `Shipment ${payload.trackingNumber ?? ''} is running late`,
+          title: `L’expédition ${payload.trackingNumber ?? ''} est en retard`,
           body:
-            `Projected ${Number(payload.minutesLate ?? 0).toFixed(0)} minutes past the promised ` +
-            'arrival. Stock cover for the products on board is being reassessed.',
+            `Arrivée projetée ${Number(payload.minutesLate ?? 0).toFixed(0)} minutes après l’heure ` +
+            'promise. La couverture de stock des produits à bord est en cours de réévaluation.',
           target: { entity: 'shipment', id: event.subjectId },
           channels: ['DASHBOARD', 'EMAIL'],
         });
@@ -126,8 +127,10 @@ export class DomainEventWorker {
           companyId: event.companyId,
           type: 'ANOMALY_DETECTED',
           severity: 'WARNING',
-          title: `Anomaly on shipment ${payload.trackingNumber ?? ''}`,
-          body: `Detected: ${types.join(', ') || 'unspecified'}. Review the shipment's track.`,
+          title: `Anomalie sur l’expédition ${payload.trackingNumber ?? ''}`,
+          body:
+            `Détection : ${types.map(anomalyLabel).join(', ') || 'non précisée'}. ` +
+            'Consultez le tracé de l’expédition.',
           target: { entity: 'shipment', id: event.subjectId },
         });
         break;
@@ -164,12 +167,12 @@ export class DomainEventWorker {
           type: isOut ? 'OUT_OF_STOCK' : 'LOW_STOCK',
           severity: isOut ? 'CRITICAL' : 'WARNING',
           title: isOut
-            ? `${payload.sku ?? 'A product'} is out of stock`
-            : `${payload.sku ?? 'A product'} has fallen below its reorder point`,
+            ? `${payload.sku ?? 'Un produit'} est en rupture de stock`
+            : `${payload.sku ?? 'Un produit'} est passé sous son point de commande`,
           body: isOut
-            ? 'Sellable stock has reached zero. Any demand from now on is a lost sale.'
-            : `Available ${payload.available ?? '?'} against a reorder point of ` +
-              `${payload.reorderPoint ?? '?'}. An order recommendation is being prepared.`,
+            ? 'Le stock disponible est à zéro. Toute demande à partir de maintenant est une vente perdue.'
+            : `Disponible : ${payload.available ?? '?'} pour un point de commande de ` +
+              `${payload.reorderPoint ?? '?'}. Une recommandation de commande est en préparation.`,
           target: { entity: 'product', id: event.subjectId },
           channels: isOut ? ['DASHBOARD', 'EMAIL'] : ['DASHBOARD'],
         });
@@ -181,8 +184,8 @@ export class DomainEventWorker {
         await this.notifications.notify({
           companyId: event.companyId,
           type: 'PO_CONFIRMED',
-          title: `Purchase order ${payload.orderNumber ?? ''} confirmed`,
-          body: 'The supplier has confirmed. The quantity now counts as incoming stock.',
+          title: `Bon de commande ${payload.orderNumber ?? ''} confirmé`,
+          body: 'Le fournisseur a confirmé. La quantité compte désormais comme stock entrant.',
           target: { entity: 'purchase_order', id: event.subjectId },
         });
         break;
@@ -251,10 +254,13 @@ export class DomainEventWorker {
           await this.notifications.notify({
             companyId,
             type: 'RECOMMENDATION_CREATED',
-            title: `${result.newRecommendations} new recommendation(s)`,
+            title:
+              result.newRecommendations === 1
+                ? '1 nouvelle recommandation'
+                : `${result.newRecommendations} nouvelles recommandations`,
             body:
               result.explanation?.summary ??
-              'New supply-chain recommendations are waiting for review.',
+              'De nouvelles recommandations d’approvisionnement attendent votre examen.',
             target: { entity: 'recommendations' },
           });
         }

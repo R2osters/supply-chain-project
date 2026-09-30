@@ -37,18 +37,47 @@ export const ACTIVE_STATUSES: ShipmentStatus[] = [
   'ARRIVED',
 ];
 
+/**
+ * French names of the statuses, for texts people read (timeline, errors). The status values
+ * themselves stay English identifiers. Agreed with « expédition », as the shipment page shows them.
+ */
+export const SHIPMENT_STATUS_LABELS: Record<ShipmentStatus, string> = {
+  PLANNED: 'planifiée',
+  LOADING: 'en chargement',
+  DEPARTED: 'partie',
+  IN_TRANSIT: 'en transit',
+  DELAYED: 'en retard',
+  ARRIVED: 'arrivée',
+  DELIVERED: 'livrée',
+  CANCELLED: 'annulée',
+};
+
+/** The status inside a sentence, e.g. « Une expédition livrée… ». Unknown values pass through. */
+export function shipmentStatusLabel(status: string): string {
+  return SHIPMENT_STATUS_LABELS[status as ShipmentStatus] ?? status;
+}
+
+/** The status quoted as a label, e.g. « Livrée ». */
+export function quotedShipmentStatus(status: string): string {
+  const label = shipmentStatusLabel(status);
+  return `« ${label.charAt(0).toUpperCase()}${label.slice(1)} »`;
+}
+
 export function canTransition(from: ShipmentStatus, to: ShipmentStatus): boolean {
   return SHIPMENT_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
 export function assertTransition(from: ShipmentStatus, to: ShipmentStatus): void {
-  if (from === to) throw new BadRequestException(`Shipment is already ${from}`);
+  if (from === to) {
+    throw new BadRequestException(`L’expédition est déjà ${shipmentStatusLabel(from)}`);
+  }
   if (!canTransition(from, to)) {
     const allowed = SHIPMENT_TRANSITIONS[from];
     throw new BadRequestException(
       allowed.length === 0
-        ? `${from} is a terminal status; no further transitions are possible`
-        : `Cannot move a shipment from ${from} to ${to}. Allowed: ${allowed.join(', ')}`,
+        ? `${quotedShipmentStatus(from)} est un statut final : aucune autre transition n’est possible`
+        : `Impossible de faire passer une expédition de ${quotedShipmentStatus(from)} à ` +
+            `${quotedShipmentStatus(to)}. Transitions autorisées : ${allowed.map(quotedShipmentStatus).join(', ')}`,
     );
   }
 }

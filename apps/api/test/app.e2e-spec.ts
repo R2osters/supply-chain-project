@@ -20,6 +20,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
+import { validationExceptionFactory } from '../src/common/validation/validation-messages';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 
 const STRONG_PASSWORD = 'E2e-Passphrase!2026';
@@ -53,7 +54,12 @@ describe('SCIP API (e2e)', () => {
     // Mirror main.ts, or the tests would exercise a differently-configured app than production.
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+        exceptionFactory: validationExceptionFactory,
+      }),
     );
     app.useGlobalFilters(new AllExceptionsFilter());
     await app.init();
@@ -370,7 +376,7 @@ describe('SCIP API (e2e)', () => {
         .send({ supplierId, warehouseId, items: [{ productId: orphan.body.id, quantity: 100 }] })
         .expect(400);
 
-      expect(response.body.message).toContain('No price');
+      expect(response.body.message).toContain('Aucun prix');
     });
 
     it('enforces the state machine', async () => {
@@ -592,7 +598,7 @@ describe('SCIP API (e2e)', () => {
 
       expect(response.body.accepted).toBe(1);
       expect(response.body.rejected).toBe(1);
-      expect(response.body.rejectedDetail[0].reason).toContain('not physically plausible');
+      expect(response.body.rejectedDetail[0].reason).toContain('pas physiquement plausible');
     });
 
     it('exposes a tracking view with events and a downsampling stride', async () => {
