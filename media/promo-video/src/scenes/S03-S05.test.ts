@@ -1,12 +1,14 @@
-// src/scenes/S03-S05.test.ts — the timed logic of S03 (collision), S04 (logo flight, hops, stamps) and S05 (darkening,
-// freeze). Positions come from the cues; these tests pin the frames where the spec wants something exact.
+// src/scenes/S03-S05.test.ts — the timed logic of S03 (collision), S04 (logo flight, hops, stamps) and S05 (layout,
+// tone lane and stamp, darkening, freeze). Positions come from the cues; these tests pin the frames where the spec wants
+// something exact.
 import {interpolateColors} from 'remotion';
 import {cueLocal, sceneFrames, seriesLocal, sceneStart} from '../lib/timeline';
 import {palette} from '../theme/tokens';
 import {HUD_LOGO, HUD_LOGO_FROM, THEME_END_FRAMES} from '../components/Hud';
+import {SCREEN, TRACE} from '../components/Oscilloscope';
 import {DIVIDER_X, INNER_GAP, SQUASH_FROM, squash} from './S03DeuxQuestions';
 import {containerAt, FLIGHT, HOP_FRAMES, logoFlight, LOCKUP_LOGO, ROUTE, ROUTE_LABELS, stampStates} from './S04Relier';
-import {bgAt, darkness, motionFrame} from './S05FausseNote';
+import {bgAt, CARD, CARD_TOP, CLOCK_TOP, darkness, laneOn, motionFrame, stampOpacity} from './S05FausseNote';
 
 describe('S03 collision', () => {
   const end = sceneFrames('S03');
@@ -130,6 +132,33 @@ describe('S04 stamps', () => {
   it('settles at scale 1', () => {
     for (const x of stampStates(cues[3] + 60)) expect(x.scale).toBeCloseTo(1, 9);
     expect(stampStates(cues[0])[0].scale).toBeGreaterThan(1.1);
+  });
+});
+
+describe('S05 layout', () => {
+  it('gives both columns the height of the scope panel: the clock on its top line, the card on its bottom line', () => {
+    expect(CLOCK_TOP).toBe(SCREEN.y);
+    expect(CARD_TOP + CARD.height).toBe(SCREEN.y + SCREEN.height);
+    expect(SCREEN.y + SCREEN.height).toBe(762);
+  });
+
+  it('keeps the strip under both columns for the tone lane, then the stamp', () => {
+    expect(TRACE.y - TRACE.amp).toBeGreaterThan(CARD_TOP + CARD.height);
+    expect(TRACE.x0).toBe(96);
+    expect(TRACE.x1).toBe(1824);
+  });
+});
+
+describe('S05 tone lane and stamp', () => {
+  const stamp = cueLocal('S05', 'S05.stamp');
+
+  it('shows the lane until the stamp lands on it, and exactly one of the two on every frame', () => {
+    expect(laneOn(0)).toBe(true);
+    expect(laneOn(stamp)).toBe(true);
+    expect(stampOpacity(stamp)).toBe(0);
+    expect(laneOn(stamp + 1)).toBe(false);
+    expect(stampOpacity(stamp + 1)).toBe(1);
+    for (let m = 0; m <= sceneFrames('S05') + 15; m++) expect(laneOn(m)).toBe(stampOpacity(m) === 0);
   });
 });
 
