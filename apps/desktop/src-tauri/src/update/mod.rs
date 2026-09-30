@@ -6,7 +6,9 @@
 //! signature made with the publisher's private key, which never leaves the publisher's PC. A
 //! hijacked GitHub account alone cannot push code to the installed SCIPs.
 
+pub mod launch;
 pub mod manifest;
+pub mod updater;
 pub mod verify;
 pub mod version;
 
@@ -24,7 +26,7 @@ pub const PUBLIC_KEY_ENV: &str = "SCIP_UPDATE_PUBLIC_KEY";
 /// Written by `npm run release:keygen`; empty in a build made before the key existed.
 const EMBEDDED_PUBLIC_KEY: &str = include_str!("../../update-key.pub");
 
-#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
 pub enum UpdateError {
     #[error("{0}")]
     Manifest(String),

@@ -9,6 +9,9 @@ fn main() {
         "create_backup",
         "open_backups_folder",
         "schedule_restore",
+        "update_status",
+        "check_for_update",
+        "install_update",
     ]);
     tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))
         .expect("failed to run tauri-build");

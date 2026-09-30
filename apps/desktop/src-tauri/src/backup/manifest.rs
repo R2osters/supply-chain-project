@@ -12,7 +12,29 @@ pub const MANIFEST_NAME: &str = "manifest.json";
 pub const DUMP_NAME: &str = "database.dump";
 pub const FILES_DIR: &str = "files";
 const PREFIX: &str = "SCIP-sauvegarde-";
-const SAFETY_SUFFIX: &str = "-avant-restauration";
+
+/// Why a backup was taken: by hand, or automatically before a restore or an update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupKind {
+    Manual,
+    BeforeRestore,
+    BeforeUpdate,
+}
+
+impl BackupKind {
+    fn suffix(self) -> &'static str {
+        match self {
+            BackupKind::Manual => "",
+            BackupKind::BeforeRestore => "-avant-restauration",
+            BackupKind::BeforeUpdate => "-avant-mise-a-jour",
+        }
+    }
+
+    /// Taken by SCIP itself; shown as a safety backup in Settings.
+    pub fn is_automatic(self) -> bool {
+        self != BackupKind::Manual
+    }
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,9 +77,9 @@ pub struct BackupInfo {
     pub safety: bool,
 }
 
-/// `SCIP-sauvegarde-2026-09-30-141502.scip-backup`, or `…-avant-restauration.scip-backup`.
-pub fn file_name(stamp: &str, safety: bool) -> String {
-    format!("{PREFIX}{stamp}{}.{EXTENSION}", if safety { SAFETY_SUFFIX } else { "" })
+/// `SCIP-sauvegarde-2026-09-30-141502.scip-backup`, `…-avant-restauration…`, `…-avant-mise-a-jour…`.
+pub fn file_name(stamp: &str, kind: BackupKind) -> String {
+    format!("{PREFIX}{stamp}{}.{EXTENSION}", kind.suffix())
 }
 
 /// A bare file name of ours: no folder part, so a name from the UI cannot point elsewhere.
@@ -155,11 +177,16 @@ mod tests {
 
     #[test]
     fn names_carry_the_time_and_the_safety_suffix() {
-        assert_eq!(file_name("2026-09-30-141502", false), "SCIP-sauvegarde-2026-09-30-141502.scip-backup");
+        assert_eq!(file_name("2026-09-30-141502", BackupKind::Manual), "SCIP-sauvegarde-2026-09-30-141502.scip-backup");
         assert_eq!(
-            file_name("2026-09-30-141502", true),
+            file_name("2026-09-30-141502", BackupKind::BeforeRestore),
             "SCIP-sauvegarde-2026-09-30-141502-avant-restauration.scip-backup"
         );
+        assert_eq!(
+            file_name("2026-09-30-141502", BackupKind::BeforeUpdate),
+            "SCIP-sauvegarde-2026-09-30-141502-avant-mise-a-jour.scip-backup"
+        );
+        assert!(BackupKind::BeforeUpdate.is_automatic() && !BackupKind::Manual.is_automatic());
     }
 
     #[test]

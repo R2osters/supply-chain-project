@@ -14,6 +14,7 @@ use serde_json::{json, Value};
 use super::pending::{write_pending, PendingRestore};
 use super::run::{self, check_restorable, create_backup};
 use super::backups_dir;
+use super::manifest::BackupKind;
 use crate::events::{EventSink, SupervisorEvent};
 use crate::paths::DataDirs;
 use crate::services::{resolve_resources_root, RuntimeContext, RESOURCES_DIR_ENV};
@@ -113,7 +114,7 @@ fn execute(command: Command) -> Result<Value, String> {
         match &command {
             Command::Backup { out } => {
                 let dir: PathBuf = out.clone().unwrap_or_else(backups_dir);
-                let info = create_backup(&ctx, &dir, false).map_err(|e| e.to_string())?;
+                let info = create_backup(&ctx, &dir, BackupKind::Manual).map_err(|e| e.to_string())?;
                 Ok(json!({ "backup": info, "directory": dir }))
             }
             Command::Restore { archive } => restore(&supervisor, &ctx, sink.as_ref(), archive),
@@ -126,7 +127,7 @@ fn execute(command: Command) -> Result<Value, String> {
 fn restore(supervisor: &Supervisor, ctx: &RuntimeContext, sink: &JsonSink, archive: &Path) -> Result<Value, String> {
     check_restorable(ctx, archive).map_err(|e| e.to_string())?;
     let dir: PathBuf = backups_dir();
-    let safety = create_backup(ctx, &dir, true)
+    let safety = create_backup(ctx, &dir, BackupKind::BeforeRestore)
         .map_err(|e| format!("la sauvegarde de sécurité a échoué, restauration annulée : {e}"))?;
     write_pending(
         &ctx.dirs.root,

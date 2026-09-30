@@ -6,7 +6,7 @@ use std::process::Output;
 use serde::{Deserialize, Serialize};
 
 use super::archive::{extract_archive, write_archive};
-use super::manifest::{self, file_name, info, BackupInfo, Counts, Manifest, DUMP_NAME, FILES_DIR, FORMAT};
+use super::manifest::{self, file_name, info, BackupInfo, BackupKind, Counts, Manifest, DUMP_NAME, FILES_DIR, FORMAT};
 use super::pending::{clear_pending, read_pending};
 use super::BackupError;
 use crate::services::RuntimeContext;
@@ -81,7 +81,7 @@ pub fn parse_facts(line: &str) -> (Counts, Option<String>, Option<String>) {
 }
 
 /// A backup of the running embedded database and the delivery proofs, written to `dir`.
-pub fn create_backup(ctx: &RuntimeContext, dir: &Path, safety: bool) -> Result<BackupInfo, BackupError> {
+pub fn create_backup(ctx: &RuntimeContext, dir: &Path, kind: BackupKind) -> Result<BackupInfo, BackupError> {
     if ctx.is_external_database() {
         return Err(BackupError::Refused(
             "SCIP utilise une base PostgreSQL externe : sauvegardez-la avec les outils de ce serveur.".into(),
@@ -89,10 +89,10 @@ pub fn create_backup(ctx: &RuntimeContext, dir: &Path, safety: bool) -> Result<B
     }
     std::fs::create_dir_all(dir).map_err(|e| BackupError::io(format!("création de {}", dir.display()), e))?;
 
-    let mut name: String = file_name(&stamp(), safety);
+    let mut name: String = file_name(&stamp(), kind);
     let mut n = 2;
     while dir.join(&name).exists() {
-        name = file_name(&format!("{}-{n}", stamp()), safety);
+        name = file_name(&format!("{}-{n}", stamp()), kind);
         n += 1;
     }
     let dump: PathBuf = dir.join(format!(".{name}.dump"));
@@ -109,7 +109,7 @@ pub fn create_backup(ctx: &RuntimeContext, dir: &Path, safety: bool) -> Result<B
             latest_migration,
             counts,
             files: count_files(&ctx.dirs.files),
-            safety,
+            safety: kind.is_automatic(),
         };
         write_archive(&part, &manifest, &dump, &ctx.dirs.files)?;
         std::fs::rename(&part, dir.join(&name)).map_err(|e| BackupError::io("finalisation de la sauvegarde", e))?;
