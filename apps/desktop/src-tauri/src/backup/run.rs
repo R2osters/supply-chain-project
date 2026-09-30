@@ -190,7 +190,7 @@ pub fn finish_restore(ctx: &RuntimeContext, staged: &StagedRestore) {
             ok: true,
             archive: display_name(&staged.archive),
             at: now_rfc3339(),
-            message: format!("Sauvegarde du {} restaurée.", staged.manifest.created_at),
+            message: format!("Sauvegarde « {} » restaurée.", display_name(&staged.archive)),
         },
     );
     log::info!("restore of {} done", staged.archive.display());
@@ -215,8 +215,10 @@ pub fn prepare_rollback(ctx: &RuntimeContext, staged: &StagedRestore) -> Result<
     Ok(Some(rollback.join(DUMP_NAME)))
 }
 
-/// After a rollback (whatever its outcome): temporary folders go, the failure is recorded.
+/// After a rollback (whatever its outcome): temporary folders go, the failure is recorded. The
+/// technical reason goes to the log; the message says what the user needs to know.
 pub fn finish_rollback(ctx: &RuntimeContext, staged: &StagedRestore, reason: &str) {
+    log::error!("restore of {} rolled back: {reason}", staged.archive.display());
     let root: &Path = &ctx.dirs.root;
     let _ = std::fs::remove_dir_all(root.join(STAGING_DIR));
     let _ = std::fs::remove_dir_all(root.join(ROLLBACK_DIR));
@@ -226,7 +228,10 @@ pub fn finish_rollback(ctx: &RuntimeContext, staged: &StagedRestore, reason: &st
             ok: false,
             archive: display_name(&staged.archive),
             at: now_rfc3339(),
-            message: format!("La restauration a échoué ({reason}). SCIP a repris les données d'avant la restauration."),
+            message: format!(
+                "La restauration de « {} » a échoué : la sauvegarde est illisible ou incompatible. SCIP a repris les données d'avant la restauration.",
+                display_name(&staged.archive)
+            ),
         },
     );
 }
