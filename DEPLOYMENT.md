@@ -89,9 +89,33 @@ LAN (a local certificate) is the planned fix.
 
 ## Backup
 
-Everything is in `%LOCALAPPDATA%\com.scip.desktop`. With SCIP closed, copying that folder is a complete
-backup. To back up without stopping SCIP, use the bundled `pg_dump.exe` in
-`<install dir>\resources\postgres\bin`. Its port and password are in `config.json`.
+**Settings → Sauvegarde** (in SCIP's window, administrator): "Créer une sauvegarde" writes one file,
+`SCIP-sauvegarde-YYYY-MM-DD-HHMMSS.scip-backup`, into `Documents\SCIP\Sauvegardes`. It is a tar
+archive holding `manifest.json` (date, company, counts, schema version), `database.dump`
+(`pg_dump --format=custom` of the running database) and `files/` (proofs of delivery). It holds no
+secret of this install (`config.json`) nor the data-source keys (`settings.json`); it does hold every
+account with its hashed password, so keep it somewhere safe.
+
+**Restore:** pick a backup in the list (copy a backup from another PC into the folder first).
+SCIP checks it, refuses one made by a newer SCIP, takes a **safety backup**
+(`…-avant-restauration.scip-backup`), then restarts its services: the startup screen shows the
+database being dropped and rebuilt from the dump, the migrations bring an older backup up to date,
+and the interface reopens (sign in again). If rebuilding fails, SCIP restores the safety backup the
+same way and opens on the data it had; Settings shows what happened.
+
+**Without the window** (scripts, a PC whose window will not open), with SCIP closed:
+
+```
+scip-desktop.exe --backup [--out FOLDER]
+scip-desktop.exe --restore "C:\path\to\SCIP-sauvegarde-….scip-backup"
+```
+
+Both start SCIP's PostgreSQL on the data folder, print one JSON line per step, and exit 0 on
+success. `SCIP_BACKUP_DIR` overrides the backup folder.
+
+Only the embedded database is backed up this way; an external PostgreSQL server is backed up with
+that server's own tools. Copying `%LOCALAPPDATA%\com.scip.desktop` with SCIP closed also works as a
+raw copy (the PostgreSQL port changes at every launch; only the password is in `config.json`).
 
 ## Environment (development)
 
