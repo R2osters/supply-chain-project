@@ -99,7 +99,9 @@ CI ne publie pas de release et ne détient aucune clé.
 - **À la fermeture de SCIP** avec une mise à jour prête : même chose avec `--update --no-launch`.
 - **Ligne de commande** : `scip-desktop.exe --update [--check]` : vérifie, télécharge, vérifie,
   sauvegarde (SCIP fermé : sa propre base comme `--backup`), puis lance
-  `SCIP-Setup.exe --silent --update` et attend son code de sortie. Lignes JSON.
+  `SCIP-Setup.exe --silent --update` détaché et rend la main : la commande tourne depuis le dossier
+  que l'installeur remplace, elle ne peut pas l'attendre. Les lignes JSON de l'installeur vont dans
+  `updates/install-{version}.log` (la dernière dit comment il s'est terminé). Lignes JSON.
 
 ## 4. Installeur
 

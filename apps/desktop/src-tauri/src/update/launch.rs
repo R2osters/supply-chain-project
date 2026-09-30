@@ -16,8 +16,20 @@ pub fn installer_args(relaunch: bool) -> Vec<&'static str> {
 /// Detached from SCIP (own process group, no console, no inherited handles): the installer stops
 /// what remains of SCIP in its folder and replaces its files.
 pub fn spawn_installer(path: &Path, relaunch: bool) -> std::io::Result<()> {
+    detached(path, &installer_args(relaunch), Stdio::null(), Stdio::null())
+}
+
+/// `--silent --update` for `scip-desktop.exe --update`, its JSON lines written to `log`. Detached
+/// too: the command runs from SCIP's folder, which the installer empties, so it cannot wait.
+pub fn spawn_silent_installer(path: &Path, log: &Path) -> std::io::Result<()> {
+    let out = std::fs::File::create(log)?;
+    let err = out.try_clone()?;
+    detached(path, &["--silent", "--update"], Stdio::from(out), Stdio::from(err))
+}
+
+fn detached(path: &Path, args: &[&str], stdout: Stdio, stderr: Stdio) -> std::io::Result<()> {
     let mut command = Command::new(path);
-    command.args(installer_args(relaunch)).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    command.args(args).stdin(Stdio::null()).stdout(stdout).stderr(stderr);
     if let Some(dir) = path.parent() {
         command.current_dir(dir);
     }
