@@ -52,8 +52,17 @@ export function trafficColours(palette: { muted: string; ok: string; warn: strin
   };
 }
 
-/** Writes every dot into `out` (grown if too small) and returns the buffer and the dot count. */
-export function packDots(source: DotSource, colours: DotColours, out?: Float32Array): { data: Float32Array; count: number } {
+/**
+ * Writes every dot into `out` (grown if too small) and returns the buffer and the dot count.
+ * Positions are relative to `origin` (mercator, float64): float32 steps near 0.5 are ~6e-8, which
+ * is several pixels at street zoom, while offsets from the view centre stay tiny and exact.
+ */
+export function packDots(
+  source: DotSource,
+  colours: DotColours,
+  out?: Float32Array,
+  origin: readonly [number, number] = [0, 0],
+): { data: Float32Array; count: number } {
   let data = out ?? new Float32Array(1024 * FLOATS_PER_DOT);
   let count = 0;
   source.forEachDot((lon, lat, bucket) => {
@@ -65,8 +74,8 @@ export function packDots(source: DotSource, colours: DotColours, out?: Float32Ar
     const [x, y] = mercator(lon, lat);
     const [r, g, b, a] = colours[bucket ?? 'none'];
     const at = count * FLOATS_PER_DOT;
-    data[at] = x;
-    data[at + 1] = y;
+    data[at] = x - origin[0];
+    data[at + 1] = y - origin[1];
     data[at + 2] = r * a;
     data[at + 3] = g * a;
     data[at + 4] = b * a;
@@ -74,6 +83,18 @@ export function packDots(source: DotSource, colours: DotColours, out?: Float32Ar
     count += 1;
   });
   return { data, count };
+}
+
+/**
+ * `matrix × translate(ox, oy, 0)` in float64, for dots packed relative to (ox, oy). Column-major,
+ * as WebGL and MapLibre store matrices: only the translation column changes.
+ */
+export function translateMatrix(matrix: ArrayLike<number>, ox: number, oy: number): Float32Array {
+  const out = Float32Array.from(matrix as ArrayLike<number>);
+  for (let row = 0; row < 4; row += 1) {
+    out[12 + row] = matrix[row] * ox + matrix[4 + row] * oy + matrix[12 + row];
+  }
+  return out;
 }
 
 /** Dot diameter in CSS pixels: a speck at city scale, a small car at street scale. */
@@ -114,6 +135,8 @@ export function createRoadTrafficLayer(id: string, source: DotSource, colours: (
   let locations: { pos: number; color: number; matrix: WebGLUniformLocation | null; size: WebGLUniformLocation | null } | null =
     null;
   let packed: Float32Array | undefined;
+  /** Bytes allocated on the GPU; grown when the dots outgrow it, otherwise updated in place. */
+  let capacity = 0;
   let lastFrame = 0;
   let active = true;
 
@@ -144,29 +167,40 @@ export function createRoadTrafficLayer(id: string, source: DotSource, colours: (
       lastFrame = now;
       source.step(dt);
 
-      const { data, count } = packDots(source, colours(), packed);
+      const centre = map.getCenter();
+      const origin = mercator(centre.lng, centre.lat);
+      const { data, count } = packDots(source, colours(), packed, origin);
       packed = data;
-      if (count > 0) {
-        const stride = FLOATS_PER_DOT * Float32Array.BYTES_PER_ELEMENT;
-        gl.useProgram(program);
-        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-        gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, count * FLOATS_PER_DOT), gl.DYNAMIC_DRAW);
-        gl.enableVertexAttribArray(locations.pos);
-        gl.vertexAttribPointer(locations.pos, 2, gl.FLOAT, false, stride, 0);
-        gl.enableVertexAttribArray(locations.color);
-        gl.vertexAttribPointer(locations.color, 4, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
-        gl.uniformMatrix4fv(locations.matrix, false, options.modelViewProjectionMatrix as Float32List);
-        gl.uniform1f(locations.size, dotSize(map.getZoom()) * (window.devicePixelRatio || 1));
-        gl.enable(gl.BLEND);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-        gl.drawArrays(gl.POINTS, 0, count);
-      }
+      if (count === 0) return; // nothing to move: no repaint loop until setActive or new roads
 
-      // Keep the cars moving, but only while someone can see them.
-      if (document.visibilityState === 'visible') map.triggerRepaint();
+      const stride = FLOATS_PER_DOT * Float32Array.BYTES_PER_ELEMENT;
+      const view = data.subarray(0, count * FLOATS_PER_DOT);
+      gl.useProgram(program);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      if (view.byteLength > capacity) {
+        capacity = data.byteLength;
+        gl.bufferData(gl.ARRAY_BUFFER, capacity, gl.DYNAMIC_DRAW);
+      }
+      gl.bufferSubData(gl.ARRAY_BUFFER, 0, view);
+      gl.enableVertexAttribArray(locations.pos);
+      gl.vertexAttribPointer(locations.pos, 2, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(locations.color);
+      gl.vertexAttribPointer(locations.color, 4, gl.FLOAT, false, stride, 2 * Float32Array.BYTES_PER_ELEMENT);
+      // mainMatrix takes mercator 0..1 coordinates (modelViewProjectionMatrix expects world pixels).
+      gl.uniformMatrix4fv(locations.matrix, false, translateMatrix(options.defaultProjectionData.mainMatrix, origin[0], origin[1]));
+      gl.uniform1f(locations.size, dotSize(map.getZoom()) * (window.devicePixelRatio || 1));
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawArrays(gl.POINTS, 0, count);
+      gl.disableVertexAttribArray(locations.pos);
+      gl.disableVertexAttribArray(locations.color);
+
+      // Keep the cars moving. A hidden tab pauses animation frames on its own.
+      map.triggerRepaint();
     },
 
     onRemove(_instance: MapLibreMap, gl: WebGLRenderingContext | WebGL2RenderingContext) {
+      capacity = 0;
       if (buffer) gl.deleteBuffer(buffer);
       if (program) gl.deleteProgram(program);
       buffer = null;
@@ -176,6 +210,10 @@ export function createRoadTrafficLayer(id: string, source: DotSource, colours: (
     },
 
     setActive(next: boolean) {
+      if (next && active) {
+        map?.triggerRepaint(); // new roads: restart a loop that stopped on an empty view
+        return;
+      }
       active = next;
       lastFrame = 0;
       if (next) map?.triggerRepaint();

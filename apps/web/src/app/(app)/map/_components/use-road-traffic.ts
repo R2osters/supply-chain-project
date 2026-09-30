@@ -26,6 +26,7 @@ import {
   LINES_MIN_ZOOM,
   flowLinesFromOpenFlow,
   flowLinesFromTomTom,
+  inView,
   measuredSourcesOf,
   openFlowBboxKey,
   roadsInView,
@@ -58,7 +59,7 @@ export interface RoadTrafficOptions {
   enabled: boolean;
   /** A TomTom key is configured on the API. */
   tomtom: boolean;
-  /** The lowest layer the traffic must stay under (aircraft and vessels). */
+  /** The lowest layer the traffic must stay under: the fleet's first GL layer. */
   beforeLayerId?: string;
 }
 
@@ -184,7 +185,8 @@ export function useRoadTraffic(
           source: ROAD_TRAFFIC.tomtom,
           'source-layer': TOMTOM_LAYER,
           minzoom: LINES_MIN_ZOOM,
-          filter: ['!', CLOSED_TOMTOM],
+          // A feature without a level is not a measure: to-number(null) would paint it red.
+          filter: ['all', ['has', 'traffic_level'], ['!', CLOSED_TOMTOM]],
           layout: { 'line-cap': 'round', 'line-join': 'round' },
           paint: { 'line-color': levelColour(palette, 'traffic_level'), 'line-width': LINE_WIDTH, 'line-opacity': 0.5 },
         },
@@ -243,12 +245,15 @@ export function useRoadTraffic(
       return;
     }
     const view = viewOf(map);
-    const features = map.querySourceFeatures(ROAD_TRAFFIC.roads, { sourceLayer: 'transportation' });
+    const features = map.querySourceFeatures(ROAD_TRAFFIC.roads, {
+      sourceLayer: 'transportation',
+      filter: ['in', ['get', 'class'], ['literal', DRIVABLE]],
+    });
     const roads = roadsInView(roadsFromFeatures(features as unknown as TransportationFeature[], zoom), view);
     const tomtomLines = map.getSource(ROAD_TRAFFIC.tomtom)
       ? flowLinesFromTomTom(map.querySourceFeatures(ROAD_TRAFFIC.tomtom, { sourceLayer: TOMTOM_LAYER }) as unknown as TileFeature[])
       : [];
-    const lines = [...openLines.current, ...tomtomLines];
+    const lines = inView([...openLines.current, ...tomtomLines], view);
     const flows = matchFlow(roads, lines);
     simulation.setRoads(roads, flows, zoom);
     layer.current.setActive(true);
@@ -274,7 +279,9 @@ export function useRoadTraffic(
       timer = window.setTimeout(() => {
         timer = null;
         const zoom = map.getZoom();
-        setView({ key: zoom >= LINES_MIN_ZOOM ? openFlowBboxKey(viewOf(map)) : null, zoom });
+        const key = zoom >= LINES_MIN_ZOOM ? openFlowBboxKey(viewOf(map)) : null;
+        // Same box and zoom: keep the state object, so the page does not re-render for nothing.
+        setView((current) => (current.key === key && current.zoom === zoom ? current : { key, zoom }));
         rebuild();
       }, REBUILD_DEBOUNCE_MS);
     };

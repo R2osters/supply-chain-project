@@ -82,8 +82,9 @@ export function flowLinesFromTomTom(features: TileFeature[]): FlowLine[] {
   for (const feature of features) {
     const properties = feature.properties ?? {};
     const closed = properties.road_closure === true || properties.road_closure === 'true';
-    const raw = Number(properties.traffic_level);
-    const level = closed ? 0 : properties.traffic_level !== undefined && Number.isFinite(raw) ? raw : null;
+    // Only a real number is a measure: Number('') or Number(null) would read as a jam (0).
+    const raw = properties.traffic_level;
+    const level = closed ? 0 : typeof raw === 'number' && Number.isFinite(raw) ? Math.min(1, Math.max(0, raw)) : null;
     if (level === null) continue;
     const bothDirections = properties.traffic_road_coverage === 'full';
     for (const coordinates of linesOf(feature.geometry)) {
@@ -101,15 +102,19 @@ export function measuredSourcesOf(lines: FlowLine[]): FlowSource[] {
   return SOURCE_ORDER.filter((source) => seen.has(source));
 }
 
-/** Roads with a vertex in the view grown by `margin` of its size: tiles also hold roads far off-screen. */
-export function roadsInView(roads: Road[], view: View, margin = 0.2): Road[] {
+/** Items with a vertex in the view grown by `margin` of its size: tiles also hold roads far off-screen. */
+export function inView<T extends { coordinates: [number, number][] }>(items: T[], view: View, margin = 0.2): T[] {
   const dx = (view.east - view.west) * margin;
   const dy = (view.north - view.south) * margin;
   const west = view.west - dx;
   const east = view.east + dx;
   const south = view.south - dy;
   const north = view.north + dy;
-  return roads.filter((road) => road.coordinates.some(([lon, lat]) => lon >= west && lon <= east && lat >= south && lat <= north));
+  return items.filter((item) => item.coordinates.some(([lon, lat]) => lon >= west && lon <= east && lat >= south && lat <= north));
+}
+
+export function roadsInView(roads: Road[], view: View, margin = 0.2): Road[] {
+  return inView(roads, view, margin);
 }
 
 const round = (value: number, towards: 'down' | 'up') =>

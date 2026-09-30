@@ -23,7 +23,6 @@ import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-styl
 import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
 import { usePalette, type Palette } from '@/lib/theme';
 import { Banner, DemoTag, Empty, ErrorNote, Legend, Loading, Provenance, SeverityIcon } from '@/components/ui';
-import { LIVE_SOURCE } from './_components/live-traffic';
 import { LiveTrafficCards, LiveTrafficStatus, LiveTrafficToggles, useLiveTraffic } from './_components/live-traffic-layer';
 import { RoadTrafficStatus } from './_components/road-traffic-status';
 import { useRoadTraffic } from './_components/use-road-traffic';
@@ -304,11 +303,12 @@ function LiveMap() {
   // Aircraft and AIS vessels, drawn under the replay track so a replayed day stays on top.
   const liveTraffic = useLiveTraffic(ready ? map.current : null, ready, palette, REPLAY_TRACK);
 
-  // Road traffic under the vessels and aircraft (and, as GL layers, under the fleet's markers).
+  // Road traffic under everything of the fleet (its estimated positions are the first GL layers,
+  // its markers are HTML above the map), and so under vessels and aircraft too.
   const roadTraffic = useRoadTraffic(ready ? map.current : null, ready, palette, {
     enabled: showTraffic,
     tomtom: Boolean(traffic.data?.enabled),
-    beforeLayerId: LIVE_SOURCE.vessels,
+    beforeLayerId: ESTIMATE_AREA,
   });
 
   useEffect(() => {

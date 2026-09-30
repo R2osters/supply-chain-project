@@ -40,6 +40,9 @@ describe('flowLinesFromTomTom', () => {
       { properties: { traffic_level: 0.9, traffic_road_coverage: 'full' }, geometry: { type: 'MultiLineString', coordinates: [[[1, 1], [1.01, 1]], [[2, 2], [2.01, 2]]] } },
       { properties: { road_closure: 'true' }, geometry: line([[3, 3], [3.01, 3]]) },
       { properties: { traffic_level: 'n/a' }, geometry: line([[4, 4], [4.01, 4]]) },
+      { properties: { traffic_level: '' }, geometry: line([[5, 5], [5.01, 5]]) },
+      { properties: { traffic_level: null }, geometry: line([[6, 6], [6.01, 6]]) },
+      { properties: {}, geometry: line([[7, 7], [7.01, 7]]) },
     ]);
     expect(lines).toEqual([
       { coordinates: [[0, 0], [0.01, 0]], level: 0.3, closed: false, bothDirections: false, source: 'tomtom' },
@@ -47,6 +50,16 @@ describe('flowLinesFromTomTom', () => {
       { coordinates: [[2, 2], [2.01, 2]], level: 0.9, closed: false, bothDirections: true, source: 'tomtom' },
       { coordinates: [[3, 3], [3.01, 3]], level: 0, closed: true, bothDirections: false, source: 'tomtom' },
     ]);
+  });
+});
+
+describe('flowLinesFromTomTom bounds', () => {
+  it('clamps levels into 0..1', () => {
+    const [high, low] = flowLinesFromTomTom([
+      { properties: { traffic_level: 1.4 }, geometry: line([[0, 0], [1, 0]]) },
+      { properties: { traffic_level: -0.2 }, geometry: line([[0, 0], [1, 0]]) },
+    ]);
+    expect([high.level, low.level]).toEqual([1, 0]);
   });
 });
 
