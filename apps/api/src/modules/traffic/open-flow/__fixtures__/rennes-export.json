@@ -1,0 +1,259 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          [
+            -1.696161881123269,
+            48.07325637696742
+          ],
+          [
+            -1.696063602103754,
+            48.07357934715254
+          ],
+          [
+            -1.695693332932737,
+            48.0747734664824
+          ],
+          [
+            -1.695371204394512,
+            48.075767830871996
+          ]
+        ],
+        "type": "LineString"
+      },
+      "properties": {
+        "datetime": "2026-09-30T14:50:00+02:00",
+        "predefinedlocationreference": "11652",
+        "averagevehiclespeed": 55,
+        "traveltime": 25,
+        "traveltimereliability": 100,
+        "trafficstatus": "heavy",
+        "vehicleprobemeasurement": 6,
+        "geo_point_2d": {
+          "lon": -1.695615566442059,
+          "lat": 48.07494914823076
+        },
+        "gml_id": "rva_troncon_fcd_v1_1.5442",
+        "id_rva_troncon_fcd_v1_1": 5442,
+        "hierarchie": "Réseau d'appui",
+        "hierarchie_dv": "Réseau structurant",
+        "denomination": "Route départementale 837",
+        "insee": 35206,
+        "vitesse_maxi": 90,
+        "sens_circule": "Sens unique"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          [
+            -1.770350306579993,
+            48.13958187346148
+          ],
+          [
+            -1.770350346005748,
+            48.13958178769659
+          ],
+          [
+            -1.770972135071783,
+            48.13835081639239
+          ],
+          [
+            -1.771329247033236,
+            48.1376254718279
+          ]
+        ],
+        "type": "LineString"
+      },
+      "properties": {
+        "datetime": "2026-09-30T14:50:00+02:00",
+        "predefinedlocationreference": "1601810",
+        "averagevehiclespeed": 14,
+        "traveltime": 69,
+        "traveltimereliability": 100,
+        "trafficstatus": "congested",
+        "vehicleprobemeasurement": 4,
+        "geo_point_2d": {
+          "lon": -1.7709378561605327,
+          "lat": 48.1384268976205
+        },
+        "gml_id": "rva_troncon_fcd_v1_1.5379",
+        "id_rva_troncon_fcd_v1_1": 5379,
+        "hierarchie": "Réseau d'armature",
+        "hierarchie_dv": "Réseau de transit",
+        "denomination": "Route départementale 29",
+        "insee": 35210,
+        "vitesse_maxi": 50,
+        "sens_circule": "Sens unique"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          [
+            -1.664854681179448,
+            48.05348252316887
+          ],
+          [
+            -1.664989597939636,
+            48.05291153072684
+          ],
+          [
+            -1.664990362823412,
+            48.05290713246796
+          ],
+          [
+            -1.66499708688846,
+            48.05284716396599
+          ]
+        ],
+        "type": "LineString"
+      },
+      "properties": {
+        "datetime": "2026-09-30T14:50:00+02:00",
+        "predefinedlocationreference": "11579_G",
+        "averagevehiclespeed": 80,
+        "traveltime": 3,
+        "traveltimereliability": 0,
+        "trafficstatus": "unknown",
+        "vehicleprobemeasurement": 0,
+        "geo_point_2d": {
+          "lon": -1.66492923465493,
+          "lat": 48.05316542840295
+        },
+        "gml_id": "rva_troncon_fcd_v1_1.5443",
+        "id_rva_troncon_fcd_v1_1": 5443,
+        "hierarchie": "Réseau d'appui",
+        "hierarchie_dv": "Réseau structurant",
+        "denomination": "Route départementale 82",
+        "insee": 35206,
+        "vitesse_maxi": 80,
+        "sens_circule": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          [
+            -1.69939666084956,
+            48.06300113252478
+          ],
+          [
+            -1.699512313760426,
+            48.062706904187756
+          ]
+        ],
+        "type": "LineString"
+      },
+      "properties": {
+        "datetime": "2026-09-30T14:50:00+02:00",
+        "predefinedlocationreference": "11654",
+        "averagevehiclespeed": 78,
+        "traveltime": 2,
+        "traveltimereliability": 100,
+        "trafficstatus": "freeFlow",
+        "vehicleprobemeasurement": 5,
+        "geo_point_2d": {
+          "lon": -1.6994544873049928,
+          "lat": 48.06285401835627
+        },
+        "gml_id": "rva_troncon_fcd_v1_1.5445",
+        "id_rva_troncon_fcd_v1_1": 5445,
+        "hierarchie": "Réseau d'appui",
+        "hierarchie_dv": "Réseau structurant",
+        "denomination": "Route départementale 837",
+        "insee": 35066,
+        "vitesse_maxi": 70,
+        "sens_circule": "Sens unique"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          [
+            -1.651560961036608,
+            48.04488583237593
+          ],
+          [
+            -1.649942809885061,
+            48.04477391733652
+          ],
+          [
+            -1.648869526613244,
+            48.04469967350696
+          ]
+        ],
+        "type": "LineString"
+      },
+      "properties": {
+        "datetime": "2026-09-30T14:50:00+02:00",
+        "predefinedlocationreference": "10273_D",
+        "averagevehiclespeed": 75,
+        "traveltime": 10,
+        "traveltimereliability": 60,
+        "trafficstatus": "freeFlow",
+        "vehicleprobemeasurement": 1,
+        "geo_point_2d": {
+          "lon": -1.6502152435538264,
+          "lat": 48.044792756860865
+        },
+        "gml_id": "rva_troncon_fcd_v1_1.5458",
+        "id_rva_troncon_fcd_v1_1": 5458,
+        "hierarchie": "Réseau d'armature",
+        "hierarchie_dv": "Réseau de transit",
+        "denomination": "Route départementale 34",
+        "insee": 35206,
+        "vitesse_maxi": null,
+        "sens_circule": null
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "coordinates": [
+          [
+            -1.648853009091766,
+            48.04480703509309
+          ],
+          [
+            -1.649926294608918,
+            48.04488127907371
+          ],
+          [
+            -1.651544449125304,
+            48.044993194341636
+          ]
+        ],
+        "type": "LineString"
+      },
+      "properties": {
+        "datetime": "2026-09-30T14:50:00+02:00",
+        "predefinedlocationreference": "10273_G",
+        "averagevehiclespeed": 78,
+        "traveltime": 9,
+        "traveltimereliability": 55,
+        "trafficstatus": "freeFlow",
+        "vehicleprobemeasurement": 2,
+        "geo_point_2d": {
+          "lon": -1.6501987288374653,
+          "lat": 48.04490011863635
+        },
+        "gml_id": "rva_troncon_fcd_v1_1.5460",
+        "id_rva_troncon_fcd_v1_1": 5460,
+        "hierarchie": "Réseau d'armature",
+        "hierarchie_dv": "Réseau de transit",
+        "denomination": "Route départementale 34",
+        "insee": 35206,
+        "vitesse_maxi": 70,
+        "sens_circule": null
+      }
+    }
+  ]
+}

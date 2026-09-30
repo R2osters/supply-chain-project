@@ -1,0 +1,191 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "N1_ARTE041101",
+        "pme": null,
+        "niveau": 1,
+        "visible_internet": 1,
+        "visible_intranet": 1,
+        "parent": "N0_ARE_030",
+        "fcd": null,
+        "type": "trr",
+        "id": "N1_ARTE041101"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.75894,
+            45.20043
+          ],
+          [
+            5.75968,
+            45.20066
+          ],
+          [
+            5.76033,
+            45.20083
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "N1_CLE_02",
+        "pme": null,
+        "niveau": 1,
+        "visible_internet": 1,
+        "visible_intranet": 1,
+        "parent": "N0_GRE_CLE_01",
+        "fcd": null,
+        "type": "trr",
+        "id": "N1_CLE_02"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.74289,
+            45.18572
+          ],
+          [
+            5.74116,
+            45.18455
+          ],
+          [
+            5.74096,
+            45.18444
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "N1_ARTE041102",
+        "pme": null,
+        "niveau": 1,
+        "visible_internet": 1,
+        "visible_intranet": 1,
+        "parent": "N0_ARE_028",
+        "fcd": null,
+        "type": "trr",
+        "id": "N1_ARTE041102"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.78608,
+            45.20483
+          ],
+          [
+            5.78782,
+            45.20515
+          ],
+          [
+            5.78891,
+            45.20536
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "N1_ARTE041103",
+        "pme": null,
+        "niveau": 1,
+        "visible_internet": 1,
+        "visible_intranet": 1,
+        "parent": "N0_ARE_026",
+        "fcd": null,
+        "type": "trr",
+        "id": "N1_ARTE041103"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.80642,
+            45.21037
+          ],
+          [
+            5.80758,
+            45.21094
+          ],
+          [
+            5.80845,
+            45.21142
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "N1_ARTE041104",
+        "pme": null,
+        "niveau": 1,
+        "visible_internet": 1,
+        "visible_intranet": 1,
+        "parent": "N0_ARE_021",
+        "fcd": null,
+        "type": "trr",
+        "id": "N1_ARTE041104"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.82746,
+            45.22816
+          ],
+          [
+            5.82964,
+            45.22994
+          ],
+          [
+            5.83066,
+            45.23076
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "code": "N1_501",
+        "pme": null,
+        "niveau": 1,
+        "visible_internet": 0,
+        "visible_intranet": 1,
+        "parent": "N0_501",
+        "fcd": null,
+        "type": "trr",
+        "id": "N1_501"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [
+            5.64362,
+            45.25602
+          ],
+          [
+            5.64429,
+            45.25565
+          ],
+          [
+            5.64495,
+            45.25527
+          ]
+        ]
+      }
+    }
+  ]
+}
