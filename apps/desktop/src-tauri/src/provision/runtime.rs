@@ -253,6 +253,7 @@ fn event_error(step: StepId, event: &ErrorEvent) -> ProvisionError {
         ErrorCode::SpawnFailed => ("spawn-failed", false),
         ErrorCode::TaskFailed => ("task-failed", false),
         ErrorCode::Unhealthy | ErrorCode::Crashed => ("unhealthy", true),
+        ErrorCode::Restore => ("restore", false),
     };
     let mut message: String = event.message.clone();
     for detail in event.details.iter().take(10) {

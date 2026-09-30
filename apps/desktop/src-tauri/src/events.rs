@@ -41,6 +41,8 @@ pub enum ErrorCode {
     TaskFailed,
     Unhealthy,
     Crashed,
+    /// A backup chosen in Settings could not be restored.
+    Restore,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

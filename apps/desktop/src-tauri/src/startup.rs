@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use crate::events::{
     ErrorCode, ErrorEvent, EventSink, ProgressEvent, ReadyEvent, StepStatus, SupervisorEvent,
 };
+use crate::backup;
 use crate::paths::DataDirs;
 use crate::ports::ServicePorts;
 use crate::secrets;
@@ -64,6 +65,8 @@ pub fn step_label(step: &str) -> &str {
         "create-database" => "Préparation de la base SCIP",
         "postgis" => "Activation de PostGIS",
         "migrate" => "Mise à jour du schéma",
+        "drop-database" => "Préparation de la restauration",
+        "restore" => "Restauration de la sauvegarde",
         "ai" => "Démarrage du moteur IA",
         "api" => "Démarrage du serveur SCIP",
         other => other,
@@ -114,9 +117,27 @@ pub fn run_plan(
     Ok(())
 }
 
-/// Full boot after `prepare`: plan, then ready or error event.
+/// Full boot after `prepare`: plan (with a restore scheduled from Settings, if any), then ready
+/// or error event.
 pub fn boot(supervisor: &Supervisor, ctx: &RuntimeContext, events: &dyn EventSink) -> bool {
-    match run_plan(supervisor, ctx.startup_plan(), events) {
+    let staged = match backup::run::stage_pending_restore(ctx) {
+        Ok(staged) => staged,
+        Err(e) => {
+            // Nothing was changed and the schedule is dropped: the next start is a normal one.
+            log::error!("restore could not start: {e}");
+            events.emit(SupervisorEvent::Error(error(
+                ErrorCode::Restore,
+                format!("La restauration n'a pas pu commencer : {e}. Vos données n'ont pas été modifiées ; relancez SCIP."),
+                Vec::new(),
+            )));
+            return false;
+        }
+    };
+    let result = match &staged {
+        None => run_plan(supervisor, ctx.startup_plan(), events),
+        Some(staged) => boot_with_restore(supervisor, ctx, staged, events),
+    };
+    match result {
         Ok(()) => {
             events.emit(SupervisorEvent::Ready(ReadyEvent { api_base_url: ctx.api_base_url() }));
             true
@@ -127,6 +148,35 @@ pub fn boot(supervisor: &Supervisor, ctx: &RuntimeContext, events: &dyn EventSin
             false
         }
     }
+}
+
+/// Database rebuilt from the backup, then the services. If rebuilding fails (the database is
+/// already dropped by then), the safety backup taken just before is restored the same way, so
+/// SCIP opens on the data it had rather than on an empty or half-restored database.
+fn boot_with_restore(
+    supervisor: &Supervisor,
+    ctx: &RuntimeContext,
+    staged: &backup::run::StagedRestore,
+    events: &dyn EventSink,
+) -> Result<(), SupervisorError> {
+    match run_plan(supervisor, ctx.restore_plan(&staged.dump), events) {
+        Ok(()) => backup::run::finish_restore(ctx, staged),
+        Err(failure) => {
+            let reason: String = failure.to_string();
+            log::error!("restore of {} failed: {reason}", staged.archive.display());
+            let rolled_back: Result<(), SupervisorError> = match backup::run::prepare_rollback(ctx, staged) {
+                Ok(Some(dump)) => run_plan(supervisor, ctx.rollback_plan(&dump), events),
+                Ok(None) => Err(failure),
+                Err(e) => {
+                    log::error!("safety backup unusable: {e}");
+                    Err(failure)
+                }
+            };
+            backup::run::finish_rollback(ctx, staged, &reason);
+            rolled_back?;
+        }
+    }
+    run_plan(supervisor, ctx.services_plan(), events)
 }
 
 #[cfg(test)]
@@ -187,7 +237,8 @@ mod tests {
             simulator: true,
             lan_access: false,
         };
-        for step in ctx.startup_plan() {
+        let dump = std::path::Path::new("/d/restore-staging/database.dump");
+        for step in ctx.startup_plan().into_iter().chain(ctx.restore_plan(dump)) {
             assert_ne!(step_label(step.name()), step.name(), "no label for {}", step.name());
         }
     }

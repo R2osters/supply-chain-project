@@ -239,6 +239,88 @@ impl RuntimeContext {
         vec![StartupStep::OptionalService(self.ai_service()), StartupStep::Service(self.api_service())]
     }
 
+    /// A scheduled restore (backup/): the database is dropped and rebuilt from the dump before
+    /// the API starts, then the usual migrations bring an older backup up to date. The services
+    /// are started afterwards by `services_plan`, once the restore is known to have worked.
+    pub fn restore_plan(&self, dump: &Path) -> Vec<StartupStep> {
+        vec![
+            StartupStep::Task(self.initdb_task()),
+            StartupStep::Service(self.postgres_service()),
+            StartupStep::Task(self.drop_database_task()),
+            StartupStep::Task(self.create_database_task()),
+            StartupStep::Task(self.postgis_task()),
+            StartupStep::Task(self.restore_task(dump)),
+            StartupStep::Task(self.migrate_task()),
+        ]
+    }
+
+    /// After a failed restore, with PostgreSQL already running: back to the safety backup.
+    pub fn rollback_plan(&self, safety_dump: &Path) -> Vec<StartupStep> {
+        vec![
+            StartupStep::Task(self.drop_database_task()),
+            StartupStep::Task(self.create_database_task()),
+            StartupStep::Task(self.postgis_task()),
+            StartupStep::Task(self.restore_task(safety_dump)),
+            StartupStep::Task(self.migrate_task()),
+        ]
+    }
+
+    /// `WITH (FORCE)` ends any leftover connection; nothing else runs during the startup plan.
+    pub fn drop_database_task(&self) -> TaskSpec {
+        let command = self.psql("postgres").args(["-c", &format!("DROP DATABASE IF EXISTS {DB_NAME} WITH (FORCE)")]);
+        TaskSpec::new("drop-database", command, Duration::from_secs(120))
+    }
+
+    /// `pg_restore` of a custom-format dump into the freshly created database.
+    pub fn restore_task(&self, dump: &Path) -> TaskSpec {
+        let command = ProcessCommand::new(self.resources.postgres_bin("pg_restore"))
+            .args([
+                "--no-owner".to_owned(),
+                "--no-privileges".to_owned(),
+                "--exit-on-error".to_owned(),
+                "-h".to_owned(),
+                "127.0.0.1".to_owned(),
+                "-p".to_owned(),
+                self.ports.postgres.to_string(),
+                "-U".to_owned(),
+                DB_USER.to_owned(),
+                "-d".to_owned(),
+                DB_NAME.to_owned(),
+                path_arg(dump),
+            ])
+            .env("PGPASSWORD", self.secrets.postgres_password.clone())
+            .env("PGCONNECT_TIMEOUT", "5");
+        TaskSpec::new("restore", command, Duration::from_secs(30 * 60))
+    }
+
+    /// `pg_dump` of the running database into `out` (custom format: compressed, and restorable
+    /// by `pg_restore`). The password travels in the environment, never on the command line.
+    pub fn pg_dump_command(&self, out: &Path) -> ProcessCommand {
+        ProcessCommand::new(self.resources.postgres_bin("pg_dump"))
+            .args([
+                "--format=custom".to_owned(),
+                "--no-owner".to_owned(),
+                "--no-privileges".to_owned(),
+                "-h".to_owned(),
+                "127.0.0.1".to_owned(),
+                "-p".to_owned(),
+                self.ports.postgres.to_string(),
+                "-U".to_owned(),
+                DB_USER.to_owned(),
+                "-d".to_owned(),
+                DB_NAME.to_owned(),
+                "-f".to_owned(),
+                path_arg(out),
+            ])
+            .env("PGPASSWORD", self.secrets.postgres_password.clone())
+            .env("PGCONNECT_TIMEOUT", "5")
+    }
+
+    /// One tab-separated line for the backup manifest: counts, company, newest migration.
+    pub fn backup_facts_command(&self) -> ProcessCommand {
+        self.psql(DB_NAME).args(["-A", "-t", "-F", "\t", "-c", BACKUP_FACTS_SQL])
+    }
+
     // ------------------------------------------------------------ postgres
 
     /// First run only: `PG_VERSION` is written by initdb once the cluster is complete.
@@ -421,6 +503,14 @@ impl RuntimeContext {
     }
 }
 
+/// Counts shown in the Settings list, the company name, and the schema version of the backup.
+const BACKUP_FACTS_SQL: &str = "SELECT \
+    (SELECT count(*) FROM shipments), \
+    (SELECT count(*) FROM purchase_orders), \
+    (SELECT count(*) FROM users), \
+    coalesce((SELECT name FROM companies ORDER BY \"createdAt\" LIMIT 1), ''), \
+    coalesce((SELECT migration_name FROM _prisma_migrations WHERE finished_at IS NOT NULL ORDER BY migration_name DESC LIMIT 1), '')";
+
 fn path_arg(path: &Path) -> String {
     path.display().to_string()
 }
@@ -509,6 +599,34 @@ mod tests {
     fn plan_runs_database_then_ai_then_api() {
         let names: Vec<String> = ctx().startup_plan().iter().map(|s| s.name().to_owned()).collect();
         assert_eq!(names, vec!["initdb", "postgres", "create-database", "postgis", "migrate", "ai", "api"]);
+    }
+
+    #[test]
+    fn a_restore_rebuilds_the_database_before_migrating_and_starts_no_service() {
+        let dump = std::path::Path::new("/data/SCIP/restore-staging/database.dump");
+        let names: Vec<String> = ctx().restore_plan(dump).iter().map(|s| s.name().to_owned()).collect();
+        assert_eq!(
+            names,
+            vec!["initdb", "postgres", "drop-database", "create-database", "postgis", "restore", "migrate"]
+        );
+        let rollback: Vec<String> = ctx().rollback_plan(dump).iter().map(|s| s.name().to_owned()).collect();
+        assert_eq!(rollback, vec!["drop-database", "create-database", "postgis", "restore", "migrate"]);
+    }
+
+    #[test]
+    fn backup_tools_get_the_password_from_the_environment_only() {
+        let c = ctx();
+        let dump = c.pg_dump_command(std::path::Path::new("/b/x.dump"));
+        let restore = c.restore_task(std::path::Path::new("/b/x.dump"));
+        let drop = c.drop_database_task();
+        for command in [&dump, &restore.command, &drop.command, &c.backup_facts_command()] {
+            assert!(command.args.iter().all(|a| !a.contains("pg-pass")), "{:?}", command.args);
+            assert_eq!(command.env.get("PGPASSWORD").map(String::as_str), Some("pg-pass_-"));
+        }
+        assert!(dump.args.contains(&"--format=custom".to_owned()));
+        assert!(dump.args.windows(2).any(|w| w == ["-p", "15432"]));
+        assert!(restore.command.args.contains(&"--exit-on-error".to_owned()));
+        assert!(drop.command.args.iter().any(|a| a == "DROP DATABASE IF EXISTS scip WITH (FORCE)"));
     }
 
     #[test]
