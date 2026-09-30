@@ -81,7 +81,7 @@ interface GatewayStatus {
   packetsDecoded: number;
   packetsRejected: number;
   positionsStored: number;
-  howToPointADevice: string;
+  howToPointADeviceHere: string;
 }
 
 interface EnrolResult {
@@ -543,13 +543,13 @@ function GatewayPanel({ gateway }: { gateway: UseQueryResult<GatewayStatus> }) {
                 size="sm"
                 variant="ghost"
                 icon={copied ? Check : Copy}
-                onClick={() => void navigator.clipboard.writeText(data.howToPointADevice).then(() => setCopied(true))}
+                onClick={() => void navigator.clipboard.writeText(data.howToPointADeviceHere).then(() => setCopied(true))}
               >
                 {copied ? t('dev.copied') : t('dev.v3.copy')}
               </Button>
             </span>
             <p className="t-data m-0 break-words text-[12px] leading-relaxed text-[var(--color-ink)]">
-              {data.howToPointADevice}
+              {data.howToPointADeviceHere}
             </p>
           </div>
         </div>
