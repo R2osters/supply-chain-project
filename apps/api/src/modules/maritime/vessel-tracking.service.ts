@@ -166,8 +166,8 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
       howToGoLive: providerLive
         ? null
         : ambientLive
-          ? 'Live without a key in the Baltic Sea (Digitraffic). Add a free AISStream key in Settings → Data sources for the rest of the world.'
-          : 'Add a free AISStream key in Settings → Data sources for live ships.',
+          ? 'En direct sans clé en mer Baltique (Digitraffic). Ajoutez une clé AISStream gratuite dans Réglages → Sources de données pour le reste du monde.'
+          : 'Ajoutez une clé AISStream gratuite dans Réglages → Sources de données pour voir les navires en direct.',
       attribution: ambientLive ? DIGITRAFFIC_ATTRIBUTION : null,
       fetchedAt: new Date().toISOString(),
       vessels: providerLive || ambientLive ? this.live.inBox(box) : [],
@@ -220,14 +220,14 @@ export class VesselTrackingService implements OnModuleInit, OnModuleDestroy {
       ambient: {
         active: this.ambient?.active ?? false,
         source: 'Digitraffic',
-        coverage: 'Baltic Sea (Finnish receivers)',
-        state: this.ambient?.describe() ?? 'disabled',
+        coverage: 'Mer Baltique (récepteurs finlandais)',
+        state: this.ambient?.describe() ?? 'désactivé',
         attribution: DIGITRAFFIC_ATTRIBUTION,
       },
       howToGoLive: this.provider.isLive
         ? null
-        : 'Add a free AISStream key (aisstream.io) in Settings → Data sources for live terrestrial ' +
-          'AIS, or a MarineTraffic key (paid) for satellite coverage that also reaches mid-ocean.',
+        : 'Ajoutez une clé AISStream gratuite (aisstream.io) dans Réglages → Sources de données pour l’AIS ' +
+          'terrestre en direct, ou une clé MarineTraffic (payante) pour une couverture satellite qui atteint aussi le milieu des océans.',
       /**
        * Always available, key or not: public vessel pages are ordinary hyperlinks. Useful even
        * with a paid feed running, for a second opinion or the port-call history this system does

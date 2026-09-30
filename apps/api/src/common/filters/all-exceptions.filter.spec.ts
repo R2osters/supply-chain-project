@@ -24,7 +24,7 @@ function statusFor(exception: unknown): { status: number; body: Record<string, u
 describe('AllExceptionsFilter', () => {
   it('answers 413, not 500, when a body exceeds the parser limit', () => {
     const error = Object.assign(new Error('request entity too large'), { type: 'entity.too.large', status: 413 });
-    expect(statusFor(error)).toMatchObject({ status: 413, body: { message: 'Request body too large' } });
+    expect(statusFor(error)).toMatchObject({ status: 413, body: { message: 'Le contenu de la requête est trop volumineux' } });
   });
 
   it('answers 400 for a malformed JSON body', () => {
@@ -58,7 +58,7 @@ describe('AllExceptionsFilter', () => {
   it('still hides unexpected errors behind a generic 500', () => {
     expect(statusFor(new Error('secret internals'))).toMatchObject({
       status: 500,
-      body: { message: 'An unexpected error occurred' },
+      body: { message: 'Une erreur inattendue s’est produite' },
     });
   });
 });

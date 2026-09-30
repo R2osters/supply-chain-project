@@ -19,7 +19,7 @@ interface ErrorBody {
   traceId?: string;
   /**
    * Stable machine-readable reason when the thrown HttpException carries one (for example
-   * `password-change-required`), so a client can react without parsing the English message.
+   * `password-change-required`), so a client can react without parsing the human-readable message.
    */
   code?: string;
 }
@@ -86,53 +86,55 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       switch (exception.code) {
         case 'P2002': {
-          const target = (exception.meta?.target as string[] | undefined)?.join(', ') ?? 'field';
+          const target = (exception.meta?.target as string[] | undefined)?.join(', ');
           return {
             status: HttpStatus.CONFLICT,
             error: 'Conflict',
-            message: `A record with this ${target} already exists`,
+            message: target
+              ? `Un enregistrement avec la même valeur pour « ${target} » existe déjà`
+              : 'Un enregistrement identique existe déjà',
           };
         }
         case 'P2025':
-          return { status: HttpStatus.NOT_FOUND, error: 'Not Found', message: 'Record not found' };
+          return { status: HttpStatus.NOT_FOUND, error: 'Not Found', message: 'Enregistrement introuvable' };
         case 'P2003':
           return {
             status: HttpStatus.BAD_REQUEST,
             error: 'Bad Request',
-            message: 'Referenced record does not exist',
+            message: 'L’enregistrement référencé n’existe pas',
           };
         default:
           return {
             status: HttpStatus.BAD_REQUEST,
             error: 'Bad Request',
-            message: 'Database constraint violation',
+            message: 'Opération refusée par la base de données : une contrainte n’est pas respectée',
           };
       }
     }
 
     if (exception instanceof Prisma.PrismaClientValidationError) {
-      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Invalid query payload' };
+      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Les données de la requête ne sont pas valides' };
     }
 
     // Postgres rejects some input outright (a NUL byte in a search string, for instance); that is
     // the client's input, not a server fault.
     if (exception instanceof Prisma.PrismaClientUnknownRequestError) {
-      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Invalid request' };
+      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Requête invalide' };
     }
 
     // body-parser errors carry their own status and a `type` such as entity.too.large.
     const parserError = exception as { type?: unknown; status?: unknown };
     if (typeof parserError?.type === 'string' && parserError.type.startsWith('entity.')) {
       if (parserError.type === 'entity.too.large') {
-        return { status: HttpStatus.PAYLOAD_TOO_LARGE, error: 'Payload Too Large', message: 'Request body too large' };
+        return { status: HttpStatus.PAYLOAD_TOO_LARGE, error: 'Payload Too Large', message: 'Le contenu de la requête est trop volumineux' };
       }
-      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Malformed request body' };
+      return { status: HttpStatus.BAD_REQUEST, error: 'Bad Request', message: 'Le contenu de la requête est mal formé (JSON invalide)' };
     }
 
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       error: 'Internal Server Error',
-      message: 'An unexpected error occurred',
+      message: 'Une erreur inattendue s’est produite',
     };
   }
 }

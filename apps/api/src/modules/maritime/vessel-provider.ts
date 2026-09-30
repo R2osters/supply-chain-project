@@ -98,12 +98,12 @@ export class AisStreamProvider implements VesselProvider {
   ) {}
 
   describe(): string {
-    if (!this.socket) return 'not connected';
-    const state = { 0: 'connecting', 1: 'connected', 2: 'closing', 3: 'closed' }[
+    if (!this.socket) return 'non connecté';
+    const state = { 0: 'connexion en cours', 1: 'connecté', 2: 'fermeture en cours', 3: 'fermé' }[
       this.socket.readyState
     ];
-    return `${state}, ${this.messagesReceived} message(s)${
-      this.lastMessageAt ? `, last ${this.lastMessageAt.toISOString()}` : ''
+    return `${state}, ${this.messagesReceived} message${this.messagesReceived > 1 ? 's' : ''}${
+      this.lastMessageAt ? `, dernier : ${this.lastMessageAt.toISOString()}` : ''
     }`;
   }
 
@@ -203,6 +203,6 @@ export class SimulatedVesselProvider implements VesselProvider {
   readonly isLive = false;
 
   describe(): string {
-    return 'no AIS key configured — positions are interpolated along great-circle tracks and marked SIMULATOR';
+    return 'aucune clé AIS configurée : les positions sont interpolées le long de routes orthodromiques et marquées SIMULATOR';
   }
 }

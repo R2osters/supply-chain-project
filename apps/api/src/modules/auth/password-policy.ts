@@ -9,8 +9,14 @@ import { randomInt } from 'node:crypto';
 export const STRONG_PASSWORD =
   /^(?:(?=.*[a-z])(?=.*[A-Z])(?=.*\d)|(?=.*[a-z])(?=.*[A-Z])(?=.*[^\w\s])|(?=.*[a-z])(?=.*\d)(?=.*[^\w\s])|(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]))[\s\S]{12,}$/;
 
-export const STRONG_PASSWORD_MESSAGE =
-  'password must be at least 12 characters and combine at least three of: lowercase, uppercase, digit, symbol';
+const STRONG_PASSWORD_RULE =
+  'doit comporter au moins 12 caractères et combiner au moins trois de ces types : minuscule, majuscule, chiffre, symbole';
+
+/** Shown when a chosen password breaks STRONG_PASSWORD. */
+export const STRONG_PASSWORD_MESSAGE = `Le mot de passe ${STRONG_PASSWORD_RULE}`;
+
+/** Same rule, for the temporary password an administrator types for a colleague. */
+export const TEMPORARY_PASSWORD_MESSAGE = `Le mot de passe temporaire ${STRONG_PASSWORD_RULE}`;
 
 /*
  * Temporary passwords are read off a screen and typed by someone else, often dictated. The

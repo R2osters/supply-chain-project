@@ -28,7 +28,7 @@ export class CompaniesService {
       where: { id: requireCompanyId(user) },
       select: PUBLIC_FIELDS,
     });
-    if (!company) throw new NotFoundException('Company not found');
+    if (!company) throw new NotFoundException('Entreprise introuvable');
     return company;
   }
 
@@ -39,7 +39,7 @@ export class CompaniesService {
     if (dto.currency !== undefined) data.currency = dto.currency;
     if (dto.timezone !== undefined) data.timezone = dto.timezone;
     const exists = await this.prisma.company.count({ where: { id } });
-    if (!exists) throw new NotFoundException('Company not found');
+    if (!exists) throw new NotFoundException('Entreprise introuvable');
     return this.prisma.company.update({ where: { id }, data, select: PUBLIC_FIELDS });
   }
 }

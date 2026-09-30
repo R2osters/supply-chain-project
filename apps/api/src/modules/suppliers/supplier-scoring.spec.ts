@@ -50,7 +50,7 @@ describe('computeSupplierReliability', () => {
     // supplier with no orders has cancelled none. Score = 0.85·0.95 + 1.0·0.05 = 0.8575.
     expect(result.components.commitment).toBe(1);
     expect(result.reliabilityScore).toBeCloseTo(NEUTRAL_PRIOR * 95 + 5, 2);
-    expect(result.reasons[0]).toContain('No completed orders yet');
+    expect(result.reasons[0]).toContain('Aucune commande terminée');
   });
 
   it('does not let a single late delivery crater the score', () => {
@@ -71,7 +71,7 @@ describe('computeSupplierReliability', () => {
 
     expect(result.onTimeDeliveryRate).toBeCloseTo(expected, 4);
     expect(result.onTimeDeliveryRate).toBeGreaterThan(rawRate);
-    expect(result.reasons.some((r) => r.includes('shrunk toward'))).toBe(true);
+    expect(result.reasons.some((r) => r.includes('ramenés vers'))).toBe(true);
   });
 
   it('converges on the raw rates once there is plenty of history', () => {

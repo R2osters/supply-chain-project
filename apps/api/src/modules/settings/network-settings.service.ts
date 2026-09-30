@@ -75,8 +75,8 @@ export class NetworkSettingsService {
       throw new ConflictException({
         code: 'demo-password-public',
         message:
-          'The demo accounts still use the published password: anyone on the network could sign in as ' +
-          'administrator. Change their passwords, or confirm that you accept the risk.',
+          'Les comptes de démonstration utilisent encore le mot de passe publié : n’importe qui sur le réseau ' +
+          'pourrait se connecter en administrateur. Changez leurs mots de passe, ou confirmez que vous acceptez ce risque.',
       });
     }
     mkdirSync(dirname(this.file), { recursive: true });

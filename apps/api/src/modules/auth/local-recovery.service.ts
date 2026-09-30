@@ -43,7 +43,7 @@ export class LocalRecoveryService {
     });
     if (!admin) {
       throw new NotFoundException(
-        email ? 'No active administrator has this e-mail address' : 'This installation has no active administrator',
+        email ? 'Aucun administrateur actif n’a cette adresse e-mail' : 'Cette installation n’a aucun administrateur actif',
       );
     }
 

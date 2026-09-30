@@ -18,7 +18,7 @@ export interface PrismaDelegateLike<TModel> {
 }
 
 export interface MasterDataOptions {
-  /** Human name used in error messages, e.g. "supplier". */
+  /** Name shown in error messages, in French and capitalised, e.g. "Fournisseur". */
   entity: string;
   /** Columns `?sortBy=` may reference. Anything else falls back to `defaultSort`. */
   sortable: readonly string[];
@@ -86,7 +86,7 @@ export class MasterDataService<TModel extends { id: string; companyId: string }>
     // A row from another tenant is reported as missing, not forbidden: a 403 would confirm the
     // id exists, which is itself a leak across tenants.
     if (!row || (user.role !== 'SUPER_ADMIN' && row.companyId !== user.companyId)) {
-      throw new NotFoundException(`No ${this.options.entity} found with id ${id}`);
+      throw new NotFoundException(`${this.options.entity} introuvable (identifiant ${id})`);
     }
     return row;
   }
@@ -133,7 +133,7 @@ export class MasterDataService<TModel extends { id: string; companyId: string }>
   /** Guard for endpoints that a party-scoped role must never reach. */
   static denyPartyScopedRoles(user: AuthenticatedUser, entity: string): void {
     if (['SUPPLIER', 'CUSTOMER', 'DRIVER'].includes(user.role)) {
-      throw new ForbiddenException(`Your account type cannot manage ${entity} records`);
+      throw new ForbiddenException(`Votre type de compte ne permet pas de gérer ces enregistrements (${entity})`);
     }
   }
 }

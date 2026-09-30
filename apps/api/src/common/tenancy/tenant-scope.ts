@@ -15,7 +15,7 @@ import type { AuthenticatedUser } from '../types/authenticated-user';
 export function companyFilter(user: AuthenticatedUser): { companyId?: string } {
   if (user.role === 'SUPER_ADMIN') return {};
   if (!user.companyId) {
-    throw new ForbiddenException('User is not attached to a company');
+    throw new ForbiddenException('Ce compte n’est rattaché à aucune entreprise');
   }
   return { companyId: user.companyId };
 }
@@ -24,13 +24,13 @@ export function companyFilter(user: AuthenticatedUser): { companyId?: string } {
 export function requireCompanyId(user: AuthenticatedUser, explicit?: string | null): string {
   if (user.role === 'SUPER_ADMIN') {
     if (!explicit) {
-      throw new ForbiddenException('SUPER_ADMIN must specify companyId explicitly');
+      throw new ForbiddenException('Un SUPER_ADMIN doit préciser companyId explicitement');
     }
     return explicit;
   }
-  if (!user.companyId) throw new ForbiddenException('User is not attached to a company');
+  if (!user.companyId) throw new ForbiddenException('Ce compte n’est rattaché à aucune entreprise');
   if (explicit && explicit !== user.companyId) {
-    throw new ForbiddenException('Cannot write outside your own company');
+    throw new ForbiddenException('Impossible d’écrire en dehors de votre propre entreprise');
   }
   return user.companyId;
 }
@@ -39,12 +39,12 @@ export function requireCompanyId(user: AuthenticatedUser, explicit?: string | nu
 export function assertSameCompany(
   user: AuthenticatedUser,
   row: { companyId?: string | null } | null | undefined,
-  entity = 'resource',
+  entity = 'ressource',
 ): void {
   if (!row) return;
   if (user.role === 'SUPER_ADMIN') return;
   if (row.companyId && row.companyId !== user.companyId) {
-    throw new ForbiddenException(`This ${entity} belongs to another company`);
+    throw new ForbiddenException(`Cet élément (${entity}) appartient à une autre entreprise`);
   }
 }
 

@@ -10,7 +10,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { USER_ROLES, type UserRole } from '@scip/shared';
-import { STRONG_PASSWORD } from '../password-policy';
+import { STRONG_PASSWORD, STRONG_PASSWORD_MESSAGE } from '../password-policy';
 
 export const lower = ({ value }: { value: unknown }): unknown =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
@@ -25,10 +25,7 @@ export class RegisterDto {
   @IsString()
   @MinLength(12)
   @MaxLength(128)
-  @Matches(STRONG_PASSWORD, {
-    message:
-      'password must be at least 12 characters and combine at least three of: lowercase, uppercase, digit, symbol',
-  })
+  @Matches(STRONG_PASSWORD, { message: STRONG_PASSWORD_MESSAGE })
   password!: string;
 
   @ApiProperty({ example: 'Ama' })
@@ -96,10 +93,7 @@ export class ResetPasswordDto {
   @IsString()
   @MinLength(12)
   @MaxLength(128)
-  @Matches(STRONG_PASSWORD, {
-    message:
-      'password must be at least 12 characters and combine at least three of: lowercase, uppercase, digit, symbol',
-  })
+  @Matches(STRONG_PASSWORD, { message: STRONG_PASSWORD_MESSAGE })
   password!: string;
 }
 
@@ -118,10 +112,7 @@ export class ChangePasswordDto {
   @IsString()
   @MinLength(12)
   @MaxLength(128)
-  @Matches(STRONG_PASSWORD, {
-    message:
-      'password must be at least 12 characters and combine at least three of: lowercase, uppercase, digit, symbol',
-  })
+  @Matches(STRONG_PASSWORD, { message: STRONG_PASSWORD_MESSAGE })
   newPassword!: string;
 }
 

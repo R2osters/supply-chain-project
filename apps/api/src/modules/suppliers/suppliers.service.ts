@@ -15,7 +15,7 @@ export class SuppliersService extends MasterDataService<Supplier> {
 
   constructor(private readonly prisma: PrismaService) {
     super(prisma.supplier as unknown as PrismaDelegateLike<Supplier>, {
-      entity: 'supplier',
+      entity: 'Fournisseur',
       sortable: ['name', 'code', 'country', 'reliabilityScore', 'observedLeadTimeDays', 'createdAt'],
       defaultSort: 'name',
       searchable: ['name', 'code', 'country', 'city', 'contactName', 'contactEmail'],
@@ -33,7 +33,7 @@ export class SuppliersService extends MasterDataService<Supplier> {
     const supplier = await this.findOne(user, supplierId);
     const product = await this.prisma.product.findUnique({ where: { id: dto.productId } });
     if (!product || product.companyId !== supplier.companyId) {
-      throw new BadRequestException('Product not found in your company');
+      throw new BadRequestException('Produit introuvable dans votre entreprise');
     }
 
     // Price lists are versioned by validFrom. Rather than mutating history, an update closes the
@@ -210,7 +210,7 @@ export class SuppliersService extends MasterDataService<Supplier> {
     });
     if (rows.length === 0) {
       throw new NotFoundException(
-        'No performance snapshots yet — call POST /suppliers/:id/recompute-performance first',
+        'Aucun historique de performance pour l’instant : lancez d’abord le recalcul (POST /suppliers/:id/recompute-performance)',
       );
     }
     return rows;

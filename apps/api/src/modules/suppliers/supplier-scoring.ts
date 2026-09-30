@@ -169,25 +169,25 @@ function buildReasons(
 
   if (completedOrders === 0) {
     reasons.push(
-      `No completed orders yet — every rate is the neutral prior of ${pct(NEUTRAL_PRIOR)}, not measured performance.`,
+      `Aucune commande terminée pour l’instant : chaque taux vaut la valeur a priori neutre de ${pct(NEUTRAL_PRIOR)}, pas une performance mesurée.`,
     );
   } else if (completedOrders < CONFIDENCE_HALF_LIFE_ORDERS) {
     reasons.push(
-      `Only ${completedOrders} completed order(s); rates are shrunk toward the ${pct(NEUTRAL_PRIOR)} prior to avoid over-reacting to a small sample.`,
+      `Seulement ${completedOrders} ${completedOrders > 1 ? 'commandes terminées' : 'commande terminée'} : les taux sont ramenés vers la valeur a priori de ${pct(NEUTRAL_PRIOR)} pour ne pas surréagir à un petit échantillon.`,
     );
   }
 
-  reasons.push(`On-time delivery ${pct(components.onTime)} (weight 35%).`);
-  reasons.push(`Quality acceptance ${pct(components.quality)} (weight 25%).`);
-  reasons.push(`Fill rate ${pct(components.fill)} (weight 20%).`);
+  reasons.push(`Taux de ponctualité ${pct(components.onTime)} (poids 35%).`);
+  reasons.push(`Taux d’acceptation qualité ${pct(components.quality)} (poids 25%).`);
+  reasons.push(`Taux de service ${pct(components.fill)} (poids 20%).`);
 
   if (leadTimeMean > 0) {
     reasons.push(
-      `Lead time ${leadTimeMean.toFixed(1)} ± ${leadTimeStd.toFixed(1)} days → stability ${pct(components.leadTimeStability)} (weight 15%).`,
+      `Délai d’approvisionnement ${leadTimeMean.toFixed(1)} ± ${leadTimeStd.toFixed(1)} jours → stabilité ${pct(components.leadTimeStability)} (poids 15%).`,
     );
   }
   if (components.commitment < 1) {
-    reasons.push(`Cancellations reduce the commitment component to ${pct(components.commitment)}.`);
+    reasons.push(`Les annulations ramènent la composante d’engagement à ${pct(components.commitment)}.`);
   }
   return reasons;
 }

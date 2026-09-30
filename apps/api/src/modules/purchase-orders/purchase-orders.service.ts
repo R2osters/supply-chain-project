@@ -22,6 +22,7 @@ import {
   INCOMING_STOCK_STATUSES,
   PURCHASE_ORDER_TRANSITIONS,
   assertTransition,
+  statusLabel,
 } from './purchase-order-status';
 
 const DAY_MS = 86_400_000;
@@ -105,7 +106,7 @@ export class PurchaseOrdersService {
       },
     });
 
-    if (!order) throw new NotFoundException(`No purchase order found with id ${id}`);
+    if (!order) throw new NotFoundException(`Bon de commande introuvable (identifiant ${id})`);
 
     return {
       ...order,
@@ -122,13 +123,13 @@ export class PurchaseOrdersService {
     const supplier = await this.prisma.supplier.findFirst({
       where: { id: dto.supplierId, companyId },
     });
-    if (!supplier) throw new BadRequestException('Supplier not found in your company');
+    if (!supplier) throw new BadRequestException('Fournisseur introuvable dans votre entreprise');
 
     if (dto.warehouseId) {
       const warehouse = await this.prisma.warehouse.findFirst({
         where: { id: dto.warehouseId, companyId },
       });
-      if (!warehouse) throw new BadRequestException('Warehouse not found in your company');
+      if (!warehouse) throw new BadRequestException('Entrepôt introuvable dans votre entreprise');
     }
 
     const lines = await this.priceLines(companyId, dto.supplierId, dto.items);
@@ -185,7 +186,7 @@ export class PurchaseOrdersService {
   ) {
     const productIds = items.map((i) => i.productId);
     if (new Set(productIds).size !== productIds.length) {
-      throw new BadRequestException('The same product appears more than once; merge the lines');
+      throw new BadRequestException('Le même produit apparaît plusieurs fois : regroupez les lignes');
     }
 
     const [products, priceRows] = await Promise.all([
@@ -201,20 +202,20 @@ export class PurchaseOrdersService {
     return items.map((item) => {
       const product = productById.get(item.productId);
       if (!product) {
-        throw new BadRequestException(`Product ${item.productId} not found in your company`);
+        throw new BadRequestException(`Produit ${item.productId} introuvable dans votre entreprise`);
       }
 
       const priceRow = priceByProduct.get(item.productId);
       const unitPrice = item.unitPrice ?? (priceRow ? Number(priceRow.unitPrice) : undefined);
       if (unitPrice === undefined) {
         throw new BadRequestException(
-          `No price for ${product.sku} from this supplier. Add it to the supplier price list or pass unitPrice explicitly.`,
+          `Aucun prix pour ${product.sku} chez ce fournisseur. Ajoutez-le à sa liste de prix ou indiquez unitPrice explicitement.`,
         );
       }
 
       if (priceRow && item.quantity < Number(priceRow.minimumOrderQuantity)) {
         throw new BadRequestException(
-          `${product.sku}: quantity ${item.quantity} is below the supplier minimum order quantity of ${Number(priceRow.minimumOrderQuantity)}`,
+          `${product.sku} : la quantité ${item.quantity} est inférieure à la quantité minimale de commande du fournisseur (${Number(priceRow.minimumOrderQuantity)})`,
         );
       }
 
@@ -257,7 +258,7 @@ export class PurchaseOrdersService {
         this.logger.warn(`Order number ${orderNumber} was taken; retrying`);
       }
     }
-    throw new BadRequestException('Could not allocate a purchase order number; please retry');
+    throw new BadRequestException('Impossible d’attribuer un numéro de bon de commande : réessayez');
   }
 
   /* ---------------------------------------------------------------- update */
@@ -267,7 +268,7 @@ export class PurchaseOrdersService {
 
     if (!EDITABLE_STATUSES.includes(order.status as PurchaseOrderStatus)) {
       throw new BadRequestException(
-        `A ${order.status} purchase order cannot be edited. Cancel it and raise a new one.`,
+        `Un bon de commande au statut ${statusLabel(order.status)} ne peut plus être modifié. Annulez-le et créez-en un nouveau.`,
       );
     }
 
@@ -335,11 +336,11 @@ export class PurchaseOrdersService {
     assertTransition(from, to);
 
     if (to === 'CANCELLED' && !reason) {
-      throw new BadRequestException('A cancellation reason is required');
+      throw new BadRequestException('Un motif d’annulation est obligatoire');
     }
     if (to === 'DELIVERED') {
       throw new BadRequestException(
-        'Mark a purchase order delivered by receiving it: POST /purchase-orders/:id/receive',
+        'Un bon de commande passe au statut « Livrée » quand il est réceptionné : utilisez POST /purchase-orders/:id/receive',
       );
     }
 
@@ -414,35 +415,35 @@ export class PurchaseOrdersService {
     const status = order.status as PurchaseOrderStatus;
 
     if (['DRAFT', 'PENDING', 'CANCELLED', 'DELIVERED'].includes(status)) {
-      throw new BadRequestException(`A ${status} purchase order cannot be received`);
+      throw new BadRequestException(`Un bon de commande au statut ${statusLabel(status)} ne peut pas être réceptionné`);
     }
 
     const warehouse = await this.prisma.warehouse.findFirst({
       where: { id: dto.warehouseId, companyId: order.companyId },
     });
-    if (!warehouse) throw new BadRequestException('Warehouse not found in your company');
+    if (!warehouse) throw new BadRequestException('Entrepôt introuvable dans votre entreprise');
 
     const itemByProduct = new Map(order.items.map((item) => [item.productId, item]));
 
     for (const line of dto.lines) {
       const item = itemByProduct.get(line.productId);
       if (!item) {
-        throw new BadRequestException(`Product ${line.productId} is not on this purchase order`);
+        throw new BadRequestException(`Le produit ${line.productId} ne figure pas sur ce bon de commande`);
       }
       const rejected = line.rejectedQuantity ?? 0;
       if (rejected > line.receivedQuantity) {
         throw new BadRequestException(
-          `Rejected quantity (${rejected}) cannot exceed received quantity (${line.receivedQuantity})`,
+          `La quantité refusée (${rejected}) ne peut pas dépasser la quantité reçue (${line.receivedQuantity})`,
         );
       }
       const outstanding = Number(item.quantity) - Number(item.receivedQuantity);
       if (line.receivedQuantity > outstanding) {
         throw new BadRequestException(
-          `${item.product.sku}: receiving ${line.receivedQuantity} exceeds the ${outstanding} still outstanding`,
+          `${item.product.sku} : la réception de ${line.receivedQuantity} dépasse les ${outstanding} encore attendus`,
         );
       }
       if (line.expiryDate && Number.isNaN(new Date(line.expiryDate).getTime())) {
-        throw new BadRequestException('expiryDate is not a valid date');
+        throw new BadRequestException('La date de péremption (expiryDate) n’est pas une date valide');
       }
     }
 
@@ -460,7 +461,7 @@ export class PurchaseOrdersService {
             type: 'IN',
             quantity: accepted,
             reference: order.orderNumber,
-            reason: dto.note ?? `Goods receipt for ${order.orderNumber}`,
+            reason: dto.note ?? `Réception de la commande ${order.orderNumber}`,
             batchNumber: line.batchNumber ?? null,
             performedById: user.id,
             purchaseOrderId: id,

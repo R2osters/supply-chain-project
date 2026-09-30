@@ -95,7 +95,7 @@ describe('readBodyCapped', () => {
       },
     });
     await expect(readBodyCapped(new Response(stream), 10, 'example.test')).rejects.toThrow(
-      'exceeds 10 bytes',
+      'dépasse 10 octets',
     );
   });
 

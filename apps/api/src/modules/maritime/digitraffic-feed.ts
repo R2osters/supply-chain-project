@@ -133,9 +133,9 @@ export class DigitrafficAmbientFeed {
   }
 
   describe(): string {
-    if (!this.running) return 'stopped';
-    if (this.lastError) return `unavailable (${this.lastError})`;
-    return `${this.fixes} fixes received`;
+    if (!this.running) return 'arrêté';
+    if (this.lastError) return `indisponible (${this.lastError})`;
+    return `${this.fixes} ${this.fixes > 1 ? 'positions reçues' : 'position reçue'}`;
   }
 
   start(): void {

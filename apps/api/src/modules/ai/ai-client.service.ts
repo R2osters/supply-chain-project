@@ -88,8 +88,8 @@ export class AiClientService {
   ): Promise<TResponse> {
     if (this.isCircuitOpen) {
       throw new ServiceUnavailableException(
-        'The AI service is unreachable and calls are paused. Tracking, procurement and ' +
-          'inventory are unaffected; forecasting and optimisation will resume automatically.',
+        'Le service IA est injoignable et ses appels sont suspendus. Le suivi, les achats et les ' +
+          'stocks ne sont pas affectés ; les prévisions et l’optimisation reprendront automatiquement.',
       );
     }
 
@@ -119,7 +119,7 @@ export class AiClientService {
         const detail = (axiosError.response?.data as { detail?: unknown })?.detail;
         throw new HttpException(
           {
-            message: 'The AI service rejected the request',
+            message: 'Le service IA a refusé la demande',
             detail: detail ?? axiosError.message,
           },
           status,
@@ -131,8 +131,8 @@ export class AiClientService {
         `AI call ${path} failed after ${latencyMs}ms: ${axiosError.message}`,
       );
       throw new ServiceUnavailableException(
-        `The AI service did not answer (${axiosError.code ?? axiosError.message}). ` +
-          'Tracking, procurement and inventory are unaffected.',
+        `Le service IA n’a pas répondu (${axiosError.code ?? axiosError.message}). ` +
+          'Le suivi, les achats et les stocks ne sont pas affectés.',
       );
     }
   }

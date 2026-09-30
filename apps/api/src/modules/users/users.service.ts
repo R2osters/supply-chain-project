@@ -138,12 +138,12 @@ export class UsersService {
     this.assertCanAssign(actor, dto.role);
     const companyId = requireCompanyId(actor, dto.companyId);
     if (dto.driverId && dto.role !== 'DRIVER') {
-      throw new BadRequestException('Only a DRIVER account can be linked to a driver');
+      throw new BadRequestException('Seul un compte DRIVER peut être rattaché à un chauffeur');
     }
     const links = await this.partyLinks(companyId, dto.role, dto, null);
 
     const taken = await this.prisma.user.findUnique({ where: { email: dto.email }, select: { id: true } });
-    if (taken) throw new ConflictException('An account with this email already exists');
+    if (taken) throw new ConflictException('Un compte existe déjà avec cette adresse e-mail');
 
     const { temporaryPassword, passwordHash } = await this.temporaryPasswords.prepare(dto.temporaryPassword);
 
@@ -178,11 +178,11 @@ export class UsersService {
     const roleChange = dto.role !== undefined && dto.role !== target.role;
     const deactivation = dto.isActive === false && target.isActive;
 
-    if (self && roleChange) throw new ForbiddenException('You cannot change your own role');
-    if (self && deactivation) throw new ForbiddenException('You cannot deactivate your own account');
+    if (self && roleChange) throw new ForbiddenException('Vous ne pouvez pas modifier votre propre rôle');
+    if (self && deactivation) throw new ForbiddenException('Vous ne pouvez pas désactiver votre propre compte');
     if (roleChange) this.assertCanAssign(actor, nextRole);
     if (typeof dto.driverId === 'string' && nextRole !== 'DRIVER') {
-      throw new BadRequestException('Only a DRIVER account can be linked to a driver');
+      throw new BadRequestException('Seul un compte DRIVER peut être rattaché à un chauffeur');
     }
 
     const data: Prisma.UserUncheckedUpdateInput = {
@@ -218,7 +218,7 @@ export class UsersService {
     const target = await this.load(actor, id);
     this.assertCanManage(actor, target);
     if (target.id === actor.id) {
-      throw new ForbiddenException('Use "change password" for your own account');
+      throw new ForbiddenException('Pour votre propre compte, passez par « Mon mot de passe »');
     }
     const { temporaryPassword } = await this.temporaryPasswords.reset(id);
     const row = await this.prisma.user.findUniqueOrThrow({ where: { id }, select: USER_SELECT });
@@ -232,7 +232,7 @@ export class UsersService {
   async deactivate(actor: AuthenticatedUser, id: string): Promise<UserView> {
     const target = await this.load(actor, id);
     this.assertCanManage(actor, target);
-    if (target.id === actor.id) throw new ForbiddenException('You cannot deactivate your own account');
+    if (target.id === actor.id) throw new ForbiddenException('Vous ne pouvez pas désactiver votre propre compte');
 
     const row = await this.prisma.$transaction(async (tx) => {
       if (target.role === 'COMPANY_ADMIN' && target.isActive) await this.assertNotLastAdmin(tx, target);
@@ -249,25 +249,25 @@ export class UsersService {
   private async load(actor: AuthenticatedUser, id: string): Promise<UserRecord> {
     const row = await this.prisma.user.findUnique({ where: { id }, select: USER_SELECT });
     if (!row || (actor.role !== 'SUPER_ADMIN' && row.companyId !== actor.companyId)) {
-      throw new NotFoundException(`No user found with id ${id}`);
+      throw new NotFoundException(`Utilisateur introuvable (identifiant ${id})`);
     }
     return row;
   }
 
   private assertCanAssign(actor: AuthenticatedUser, role: UserRole): void {
-    if (role === 'SUPER_ADMIN') throw new ForbiddenException('The SUPER_ADMIN role cannot be given from SCIP');
+    if (role === 'SUPER_ADMIN') throw new ForbiddenException('Le rôle SUPER_ADMIN ne peut pas être attribué depuis SCIP');
     if (!canAssignRole(actor.role, role)) {
       throw new ForbiddenException(
         role === 'COMPANY_ADMIN'
-          ? 'Only an administrator can appoint another administrator'
-          : `Your role cannot give the ${role} role`,
+          ? 'Seul un administrateur peut nommer un autre administrateur'
+          : `Votre rôle ne permet pas d’attribuer le rôle ${role}`,
       );
     }
   }
 
   private assertCanManage(actor: AuthenticatedUser, target: UserRecord): void {
     if (!canManageRole(actor.role, target.role as UserRole)) {
-      throw new ForbiddenException(`Your role cannot manage a ${target.role} account`);
+      throw new ForbiddenException(`Votre rôle ne permet pas de gérer un compte ${target.role}`);
     }
   }
 
@@ -286,7 +286,7 @@ export class UsersService {
     });
     if (others === 0) {
       throw new ConflictException(
-        'This is the last active administrator of the company: appoint another administrator first',
+        'C’est le dernier administrateur actif de l’entreprise : nommez d’abord un autre administrateur',
       );
     }
   }
@@ -302,10 +302,10 @@ export class UsersService {
       select: { id: true, companyId: true, userId: true },
     });
     if (!driver || driver.companyId !== companyId) {
-      throw new BadRequestException('That driver does not belong to this company');
+      throw new BadRequestException('Ce chauffeur n’appartient pas à cette entreprise');
     }
     if (driver.userId && driver.userId !== userId) {
-      throw new ConflictException('That driver is already linked to another account');
+      throw new ConflictException('Ce chauffeur est déjà rattaché à un autre compte');
     }
     await tx.driver.updateMany({ where: { userId, NOT: { id: driverId } }, data: { userId: null } });
     await tx.driver.update({ where: { id: driverId }, data: { userId } });
@@ -329,13 +329,13 @@ export class UsersService {
     ): Promise<string | null> => {
       const givenId = given[field];
       if (role !== kind) {
-        if (givenId) throw new BadRequestException(`${field} only applies to a ${kind} account`);
+        if (givenId) throw new BadRequestException(`${field} ne s’applique qu’à un compte ${kind}`);
         return null;
       }
       const currentId = current?.[field] ?? null;
       const next = givenId !== undefined ? givenId : currentId;
       const mustHave = !current || current.role !== kind || givenId !== undefined;
-      if (!next && mustHave) throw new BadRequestException(`${field} is required for a ${kind} portal account`);
+      if (!next && mustHave) throw new BadRequestException(`${field} est obligatoire pour un compte de portail ${kind}`);
       if (typeof givenId === 'string' && givenId !== currentId) await this.assertPartyOwned(kind, givenId, companyId);
       return next ?? null;
     };
@@ -352,7 +352,7 @@ export class UsersService {
         : await this.prisma.customer.findUnique({ where: { id }, select: { companyId: true } });
     if (!row || row.companyId !== companyId) {
       throw new BadRequestException(
-        `${kind === 'SUPPLIER' ? 'linkedSupplierId' : 'linkedCustomerId'} does not belong to this company`,
+        `${kind === 'SUPPLIER' ? 'Le fournisseur indiqué (linkedSupplierId)' : 'Le client indiqué (linkedCustomerId)'} n’appartient pas à cette entreprise`,
       );
     }
   }

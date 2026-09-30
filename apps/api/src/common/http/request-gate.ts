@@ -10,7 +10,7 @@
 
 export class GateFullError extends Error {
   constructor() {
-    super('Too many requests are already waiting for this upstream service');
+    super('Trop de requêtes attendent déjà ce service externe');
     this.name = 'GateFullError';
   }
 }

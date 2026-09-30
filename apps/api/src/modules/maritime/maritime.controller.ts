@@ -32,7 +32,7 @@ export class MaritimeController {
   })
   live(@Query() query: Record<string, string>) {
     const box = parseBoundingBox(query);
-    if (!box) throw new BadRequestException('minLat, minLon, maxLat and maxLon must describe a valid box');
+    if (!box) throw new BadRequestException('minLat, minLon, maxLat et maxLon doivent décrire une zone valide');
     return this.tracking.liveInView(box);
   }
 

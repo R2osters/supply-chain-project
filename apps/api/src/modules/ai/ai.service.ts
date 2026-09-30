@@ -7,6 +7,7 @@ import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import { DOMAIN_EVENTS, DomainEventsService } from '../events/domain-events.service';
 import { HazardsService } from '../hazards/hazards.service';
 import { AiClientService } from './ai-client.service';
+import { anomalyEventDescription } from './anomaly-labels';
 
 const DAY_MS = 86_400_000;
 
@@ -46,7 +47,7 @@ export class AiService {
     const product = await this.prisma.product.findFirst({
       where: { id: productId, companyId },
     });
-    if (!product) throw new NotFoundException('Product not found in your company');
+    if (!product) throw new NotFoundException('Produit introuvable dans votre entreprise');
 
     const history = await this.prisma.demandHistory.findMany({
       where: { productId },
@@ -56,7 +57,7 @@ export class AiService {
 
     if (history.length === 0) {
       throw new BadRequestException(
-        `${product.sku} has no demand history. Record sales or outbound movements before forecasting.`,
+        `${product.sku} n’a aucun historique de demande. Enregistrez des ventes ou des sorties de stock avant de lancer une prévision.`,
       );
     }
 
@@ -113,7 +114,7 @@ export class AiService {
     });
     if (!forecast) {
       throw new NotFoundException(
-        'No forecast has been generated for this product yet. POST /ai/forecast/:productId first.',
+        'Aucune prévision n’a encore été calculée pour ce produit : lancez-en une d’abord (POST /ai/forecast/:productId).',
       );
     }
     return forecast;
@@ -133,7 +134,7 @@ export class AiService {
         purchaseOrder: { include: { supplier: true } },
       },
     });
-    if (!shipment) throw new NotFoundException('Shipment not found in your company');
+    if (!shipment) throw new NotFoundException('Expédition introuvable dans votre entreprise');
 
     const recent = await this.prisma.gpsPosition.findMany({
       where: { shipmentId, speedKmh: { not: null } },
@@ -231,7 +232,7 @@ export class AiService {
       where: { id: shipmentId, companyId },
       include: { route: true },
     });
-    if (!shipment) throw new NotFoundException('Shipment not found in your company');
+    if (!shipment) throw new NotFoundException('Expédition introuvable dans votre entreprise');
 
     const positions = await this.prisma.gpsPosition.findMany({
       where: { shipmentId },
@@ -252,8 +253,8 @@ export class AiService {
         anomalies: [],
         positionsAnalysed: positions.length,
         explanation: {
-          summary: 'Not enough telemetry to analyse.',
-          reasons: ['Fewer than two position fixes have been recorded for this shipment.'],
+          summary: 'Pas assez de données de géolocalisation à analyser.',
+          reasons: ['Moins de deux positions GPS ont été enregistrées pour cette expédition.'],
           assumptions: [],
         },
       };
@@ -356,10 +357,10 @@ export class AiService {
           data: {
             shipmentId,
             type: 'ANOMALY_DETECTED',
-            description: `${created} anomaly(ies) detected: ${response.anomalies
-              .slice(0, 3)
-              .map((a) => a.type)
-              .join(', ')}`,
+            description: anomalyEventDescription(
+              created,
+              response.anomalies.map((a) => a.type),
+            ),
             metadata: { anomalies: response.anomalies } as Prisma.InputJsonValue,
             isDemoData,
           },
@@ -397,7 +398,7 @@ export class AiService {
     const product = await this.prisma.product.findFirst({
       where: { id: input.productId, companyId },
     });
-    if (!product) throw new NotFoundException('Product not found in your company');
+    if (!product) throw new NotFoundException('Produit introuvable dans votre entreprise');
 
     const offers = await this.prisma.supplierProduct.findMany({
       where: { productId: input.productId, validUntil: null, supplier: { isActive: true } },
@@ -406,7 +407,7 @@ export class AiService {
 
     if (offers.length === 0) {
       throw new BadRequestException(
-        `No active supplier carries ${product.sku}. Add a supplier price list before allocating.`,
+        `Aucun fournisseur actif ne propose ${product.sku}. Ajoutez une liste de prix fournisseur avant de répartir la commande.`,
       );
     }
 
@@ -484,7 +485,7 @@ export class AiService {
     const warehouse = await this.prisma.warehouse.findFirst({
       where: { id: input.warehouseId, companyId },
     });
-    if (!warehouse) throw new NotFoundException('Warehouse not found in your company');
+    if (!warehouse) throw new NotFoundException('Entrepôt introuvable dans votre entreprise');
 
     const customers = await this.prisma.customer.findMany({
       where: { id: { in: input.customerIds }, companyId, isActive: true },
@@ -493,7 +494,7 @@ export class AiService {
 
     if (located.length === 0) {
       throw new BadRequestException(
-        'None of the selected customers has coordinates. Set them before planning routes.',
+        'Aucun des clients sélectionnés n’a de coordonnées. Renseignez-les avant de planifier les itinéraires.',
       );
     }
     if (located.length < customers.length) {
@@ -509,7 +510,7 @@ export class AiService {
       },
     });
     if (vehicles.length === 0) {
-      throw new BadRequestException('No vehicle is available for routing');
+      throw new BadRequestException('Aucun véhicule n’est disponible pour planifier les itinéraires');
     }
 
     const response = await this.ai.post<RouteResponse>(
@@ -882,18 +883,18 @@ export class AiService {
     const product = await this.prisma.product.findFirst({
       where: { id: input.productId, companyId },
     });
-    if (!product) throw new NotFoundException('Product not found in your company');
+    if (!product) throw new NotFoundException('Produit introuvable dans votre entreprise');
 
     const snapshot = await this.companySnapshot(companyId);
     const productSnapshot = snapshot.products.find((p) => p.productId === input.productId);
     if (!productSnapshot) {
       throw new BadRequestException(
-        `${product.sku} has no inventory record, so there is nothing to simulate.`,
+        `${product.sku} n’a aucune ligne de stock : il n’y a rien à simuler.`,
       );
     }
     if (productSnapshot.averageDailyDemand <= 0) {
       throw new BadRequestException(
-        `${product.sku} has no outbound movement in the last 90 days; a simulation would model nothing.`,
+        `${product.sku} n’a eu aucune sortie de stock au cours des 90 derniers jours : une simulation ne modéliserait rien.`,
       );
     }
 

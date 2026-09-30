@@ -132,7 +132,7 @@ export class FeedSettingsService {
   /** Sets (or, with null, forgets) the TomTom daily tile budget; 0 means unlimited. */
   setTileBudget(value: number | null): void {
     if (value !== null && !(Number.isInteger(value) && value >= 0 && value <= MAX_TILE_BUDGET)) {
-      throw new BadRequestException(`The tile budget must be a whole number from 0 to ${MAX_TILE_BUDGET}`);
+      throw new BadRequestException(`Le budget de tuiles doit être un nombre entier compris entre 0 et ${MAX_TILE_BUDGET}`);
     }
     const next = value ?? undefined;
     if (next === this.storedBudget) return;

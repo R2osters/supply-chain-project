@@ -119,7 +119,7 @@ export class TokenService {
     });
 
     if (!stored) {
-      throw new UnauthorizedException('Invalid refresh token');
+      throw new UnauthorizedException('Jeton de session invalide : reconnectez-vous');
     }
 
     if (stored.revokedAt) {
@@ -128,16 +128,16 @@ export class TokenService {
       this.logger.warn(
         `Refresh token reuse detected for user ${stored.userId}; family ${stored.familyId} revoked`,
       );
-      throw new UnauthorizedException('Refresh token reuse detected — please sign in again');
+      throw new UnauthorizedException('Réutilisation d’un jeton de session détectée : reconnectez-vous');
     }
 
     if (stored.expiresAt.getTime() <= Date.now()) {
-      throw new UnauthorizedException('Refresh token expired');
+      throw new UnauthorizedException('Session expirée : reconnectez-vous');
     }
 
     if (!stored.user.isActive) {
       await this.revokeFamily(stored.familyId);
-      throw new UnauthorizedException('Account is disabled');
+      throw new UnauthorizedException('Ce compte est désactivé');
     }
 
     const issued = await this.issue(stored.user, stored.familyId, context);

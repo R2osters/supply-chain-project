@@ -30,7 +30,7 @@ function IsTimezone(options?: ValidationOptions): PropertyDecorator {
       name: 'isTimezone',
       target: target.constructor,
       propertyName: propertyName as string,
-      options: { message: 'timezone must be an IANA time zone such as Africa/Accra', ...options },
+      options: { message: 'Le fuseau horaire (timezone) doit être un fuseau IANA, par exemple Africa/Accra', ...options },
       validator: { validate: isKnownTimezone },
     });
   };
@@ -49,7 +49,7 @@ export class UpdateCompanyDto {
   @IsOptional()
   @Transform(upper)
   @IsString()
-  @Matches(/^[A-Z]{3}$/, { message: 'currency must be a three-letter ISO 4217 code' })
+  @Matches(/^[A-Z]{3}$/, { message: 'La devise (currency) doit être un code ISO 4217 à trois lettres' })
   currency?: string;
 
   @ApiPropertyOptional({ example: 'Africa/Accra' })

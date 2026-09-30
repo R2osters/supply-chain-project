@@ -51,7 +51,7 @@ export class VesselSearchDto {
     example: 'Ever Given',
   })
   @IsString()
-  @MinLength(2, { message: 'Search for at least 2 characters' })
+  @MinLength(2, { message: 'Saisissez au moins 2 caractères pour lancer la recherche' })
   @MaxLength(80)
   q!: string;
 
@@ -98,7 +98,7 @@ export class CreateVesselDto {
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{7}$/, { message: 'imoNumber must be exactly 7 digits' })
+  @Matches(/^\d{7}$/, { message: 'Le numéro IMO (imoNumber) doit comporter exactement 7 chiffres' })
   imoNumber?: string;
 
   @ApiPropertyOptional({
@@ -107,7 +107,7 @@ export class CreateVesselDto {
   })
   @IsOptional()
   @IsString()
-  @Matches(/^\d{9}$/, { message: 'mmsi must be exactly 9 digits' })
+  @Matches(/^\d{9}$/, { message: 'Le MMSI (mmsi) doit comporter exactement 9 chiffres' })
   mmsi?: string;
 
   @ApiPropertyOptional()
@@ -152,7 +152,7 @@ export class CreatePortDto {
   @ApiProperty({ example: 'GHTEM', description: 'UN/LOCODE: 2-letter country + 3-letter place.' })
   @IsString()
   @Matches(/^[A-Z]{2}[A-Z0-9]{3}$/, {
-    message: 'locode must be a 5-character UN/LOCODE such as GHTEM',
+    message: 'Le locode doit être un code UN/LOCODE de 5 caractères, par exemple GHTEM',
   })
   locode!: string;
 

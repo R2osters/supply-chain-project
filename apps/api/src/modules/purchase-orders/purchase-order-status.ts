@@ -35,20 +35,38 @@ export const INCOMING_STOCK_STATUSES: PurchaseOrderStatus[] = [
 /** Once confirmed, lines are a commitment to the supplier and are no longer freely editable. */
 export const EDITABLE_STATUSES: PurchaseOrderStatus[] = ['DRAFT', 'PENDING'];
 
+/** Status names as the French UI shows them (po.st.* in the web's i18n), for error messages. */
+export const PURCHASE_ORDER_STATUS_LABELS: Record<PurchaseOrderStatus, string> = {
+  DRAFT: 'Brouillon',
+  PENDING: 'En attente',
+  CONFIRMED: 'Confirmée',
+  PROCESSING: 'En préparation',
+  SHIPPED: 'Expédiée',
+  IN_TRANSIT: 'En transit',
+  DELIVERED: 'Livrée',
+  CANCELLED: 'Annulée',
+};
+
+/** « Livrée » — the quoted French label, or the raw value for a status this map does not know. */
+export function statusLabel(status: string): string {
+  return `« ${PURCHASE_ORDER_STATUS_LABELS[status as PurchaseOrderStatus] ?? status} »`;
+}
+
 export function canTransition(from: PurchaseOrderStatus, to: PurchaseOrderStatus): boolean {
   return PURCHASE_ORDER_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
 export function assertTransition(from: PurchaseOrderStatus, to: PurchaseOrderStatus): void {
   if (from === to) {
-    throw new BadRequestException(`Purchase order is already ${from}`);
+    throw new BadRequestException(`Ce bon de commande est déjà au statut ${statusLabel(from)}`);
   }
   if (!canTransition(from, to)) {
     const allowed = PURCHASE_ORDER_TRANSITIONS[from];
     throw new BadRequestException(
       allowed.length === 0
-        ? `${from} is a terminal status; no further transitions are possible`
-        : `Cannot move a purchase order from ${from} to ${to}. Allowed: ${allowed.join(', ')}`,
+        ? `${statusLabel(from)} est un statut final : aucun autre changement de statut n’est possible`
+        : `Impossible de faire passer un bon de commande de ${statusLabel(from)} à ${statusLabel(to)}. ` +
+            `Statuts possibles : ${allowed.map(statusLabel).join(', ')}`,
     );
   }
 }

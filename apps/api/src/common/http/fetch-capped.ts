@@ -59,7 +59,7 @@ export async function fetchJsonCapped<T>(url: string, options: CappedFetchOption
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new UpstreamError(`${hostOf(url)} returned a body that is not JSON`, hostOf(url), null);
+    throw new UpstreamError(`${hostOf(url)} a renvoyé une réponse qui n’est pas du JSON`, hostOf(url), null);
   }
 }
 
@@ -76,12 +76,12 @@ export async function openUpstream(url: string, options: CappedFetchOptions = {}
       signal: AbortSignal.timeout(options.timeoutMs ?? DEFAULTS.timeoutMs),
     });
   } catch (error) {
-    const reason = error instanceof Error && error.name === 'TimeoutError' ? 'timed out' : 'unreachable';
+    const reason = error instanceof Error && error.name === 'TimeoutError' ? 'n’a pas répondu à temps' : 'est injoignable';
     throw new UpstreamError(`${host} ${reason}`, host, null);
   }
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
-    throw new UpstreamError(`${host} answered ${response.status}`, host, response.status);
+    throw new UpstreamError(`${host} a répondu ${response.status}`, host, response.status);
   }
   return response;
 }
@@ -94,7 +94,7 @@ export async function readBodyCapped(response: Response, maxBytes: number, host:
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
     await response.body?.cancel().catch(() => undefined);
-    throw new UpstreamError(`${host} response exceeds ${maxBytes} bytes`, host, response.status);
+    throw new UpstreamError(`La réponse de ${host} dépasse ${maxBytes} octets`, host, response.status);
   }
   if (!response.body) return Buffer.alloc(0);
 
@@ -107,7 +107,7 @@ export async function readBodyCapped(response: Response, maxBytes: number, host:
     total += value.byteLength;
     if (total > maxBytes) {
       await reader.cancel().catch(() => undefined);
-      throw new UpstreamError(`${host} response exceeds ${maxBytes} bytes`, host, response.status);
+      throw new UpstreamError(`La réponse de ${host} dépasse ${maxBytes} octets`, host, response.status);
     }
     chunks.push(value);
   }

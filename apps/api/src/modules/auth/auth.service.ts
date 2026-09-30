@@ -52,12 +52,12 @@ export class AuthService {
     // A desktop install holds one company. Its API is reachable from the LAN (drivers' phones),
     // so once set up, registration must not let a neighbour open a second tenant on this PC.
     if (this.singleCompany && (await this.prisma.company.count()) > 0) {
-      throw new ForbiddenException('SCIP is already set up on this computer; ask an administrator for an invitation');
+      throw new ForbiddenException('SCIP est déjà configuré sur cet ordinateur : demandez une invitation à un administrateur');
     }
 
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (existing) {
-      throw new ConflictException('An account with this email already exists');
+      throw new ConflictException('Un compte existe déjà avec cette adresse e-mail');
     }
 
     const passwordHash = await this.passwords.hash(dto.password);
@@ -118,22 +118,22 @@ export class AuthService {
     if (!user) {
       // Constant-time-ish: spend the same CPU as a real verification before failing.
       await this.passwords.verifyDecoy(dto.password);
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Adresse e-mail ou mot de passe incorrect');
     }
 
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
       const minutes = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60000);
-      throw new UnauthorizedException(`Account locked. Try again in ${minutes} minute(s).`);
+      throw new UnauthorizedException(`Compte verrouillé. Réessayez dans ${minutes} minute${minutes > 1 ? 's' : ''}.`);
     }
 
     const valid = await this.passwords.verify(user.passwordHash, dto.password);
     if (!valid) {
       await this.registerFailedLogin(user);
-      throw new UnauthorizedException('Invalid email or password');
+      throw new UnauthorizedException('Adresse e-mail ou mot de passe incorrect');
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Account is disabled');
+      throw new UnauthorizedException('Ce compte est désactivé');
     }
 
     const refreshed = await this.prisma.user.update({
@@ -198,16 +198,16 @@ export class AuthService {
 
     await this.mail.send({
       to: user.email,
-      subject: 'Reset your SCIP password',
+      subject: 'Réinitialisez votre mot de passe SCIP',
       text: [
-        `Hello ${user.firstName},`,
+        `Bonjour ${user.firstName},`,
         '',
-        'Use the token below to reset your password. It expires in ' +
+        'Utilisez le code ci-dessous pour réinitialiser votre mot de passe. Il expire dans ' +
           `${this.auth.passwordResetTtlMinutes} minutes.`,
         '',
         token,
         '',
-        'If you did not request this, you can ignore this message — your password is unchanged.',
+        'Si vous n’êtes pas à l’origine de cette demande, ignorez ce message : votre mot de passe reste inchangé.',
       ].join('\n'),
     });
 
@@ -221,7 +221,7 @@ export class AuthService {
     });
 
     if (!record || record.usedAt || record.expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException('This reset link is invalid or has expired');
+      throw new BadRequestException('Ce lien de réinitialisation est invalide ou a expiré');
     }
 
     const passwordHash = await this.passwords.hash(dto.password);
@@ -248,13 +248,13 @@ export class AuthService {
 
   async changePassword(userId: string, dto: ChangePasswordDto): Promise<{ success: true }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
 
     const valid = await this.passwords.verify(user.passwordHash, dto.currentPassword);
-    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+    if (!valid) throw new UnauthorizedException('Le mot de passe actuel est incorrect');
 
     if (dto.currentPassword === dto.newPassword) {
-      throw new BadRequestException('New password must differ from the current one');
+      throw new BadRequestException('Le nouveau mot de passe doit être différent de l’actuel');
     }
 
     const passwordHash = await this.passwords.hash(dto.newPassword);
@@ -283,11 +283,11 @@ export class AuthService {
 
     await this.mail.send({
       to: user.email,
-      subject: 'Verify your SCIP email address',
+      subject: 'Confirmez votre adresse e-mail SCIP',
       text: [
-        `Hello ${user.firstName},`,
+        `Bonjour ${user.firstName},`,
         '',
-        'Confirm your email address with the token below. It expires in 24 hours.',
+        'Confirmez votre adresse e-mail avec le code ci-dessous. Il expire dans 24 heures.',
         '',
         token,
       ].join('\n'),
@@ -300,7 +300,7 @@ export class AuthService {
     });
 
     if (!record || record.usedAt || record.expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException('This verification link is invalid or has expired');
+      throw new BadRequestException('Ce lien de vérification est invalide ou a expiré');
     }
 
     await this.prisma.$transaction([
@@ -319,8 +319,8 @@ export class AuthService {
 
   async resendVerification(userId: string): Promise<{ success: true }> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new NotFoundException('User not found');
-    if (user.emailVerifiedAt) throw new BadRequestException('Email is already verified');
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    if (user.emailVerifiedAt) throw new BadRequestException('Cette adresse e-mail est déjà vérifiée');
     await this.sendVerificationEmail(user);
     return { success: true };
   }
@@ -333,17 +333,17 @@ export class AuthService {
    */
   async inviteUser(companyId: string, dto: InviteUserDto, invitedByRole: UserRole) {
     if (dto.role === 'SUPER_ADMIN' && invitedByRole !== 'SUPER_ADMIN') {
-      throw new BadRequestException('Only a SUPER_ADMIN can create another SUPER_ADMIN');
+      throw new BadRequestException('Seul un SUPER_ADMIN peut créer un autre SUPER_ADMIN');
     }
     if (dto.role === 'SUPPLIER' && !dto.linkedSupplierId) {
-      throw new BadRequestException('linkedSupplierId is required for a SUPPLIER portal account');
+      throw new BadRequestException('linkedSupplierId est obligatoire pour un compte du portail fournisseur (SUPPLIER)');
     }
     if (dto.role === 'CUSTOMER' && !dto.linkedCustomerId) {
-      throw new BadRequestException('linkedCustomerId is required for a CUSTOMER portal account');
+      throw new BadRequestException('linkedCustomerId est obligatoire pour un compte du portail client (CUSTOMER)');
     }
 
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('An account with this email already exists');
+    if (existing) throw new ConflictException('Un compte existe déjà avec cette adresse e-mail');
 
     await this.assertPartyBelongsToCompany(companyId, dto);
 
@@ -371,13 +371,13 @@ export class AuthService {
     if (dto.linkedSupplierId) {
       const supplier = await this.prisma.supplier.findUnique({ where: { id: dto.linkedSupplierId } });
       if (!supplier || supplier.companyId !== companyId) {
-        throw new BadRequestException('linkedSupplierId does not belong to your company');
+        throw new BadRequestException('Le fournisseur indiqué (linkedSupplierId) n’appartient pas à votre entreprise');
       }
     }
     if (dto.linkedCustomerId) {
       const customer = await this.prisma.customer.findUnique({ where: { id: dto.linkedCustomerId } });
       if (!customer || customer.companyId !== companyId) {
-        throw new BadRequestException('linkedCustomerId does not belong to your company');
+        throw new BadRequestException('Le client indiqué (linkedCustomerId) n’appartient pas à votre entreprise');
       }
     }
   }
@@ -387,7 +387,7 @@ export class AuthService {
       where: { id: userId },
       include: { company: { select: { id: true, name: true, slug: true, currency: true, timezone: true } } },
     });
-    if (!user) throw new NotFoundException('User not found');
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
     return { ...publicUser(user), company: user.company };
   }
 }

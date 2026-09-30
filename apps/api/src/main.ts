@@ -12,6 +12,7 @@ import { AppModule } from './app.module';
 import type { AppConfig } from './config/configuration';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuditInterceptor } from './common/interceptors/audit.interceptor';
+import { validationExceptionFactory } from './common/validation/validation-messages';
 import { PrismaService } from './prisma/prisma.service';
 
 /**
@@ -78,6 +79,8 @@ async function bootstrap(): Promise<void> {
       transform: true,
       transformOptions: { enableImplicitConversion: false },
       validationError: { target: false, value: false },
+      // class-validator's defaults are English; the web shows `message` as is.
+      exceptionFactory: validationExceptionFactory,
     }),
   );
 

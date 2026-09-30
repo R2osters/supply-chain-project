@@ -51,7 +51,7 @@ export class HealthController {
       dependencies,
       degradedFeatures:
         ai.status === 'down'
-          ? ['ETA prediction', 'delay prediction', 'forecasting', 'optimisation', 'recommendations']
+          ? ['prédiction de l’ETA', 'prédiction des retards', 'prévisions de la demande', 'optimisation', 'recommandations']
           : [],
     };
   }

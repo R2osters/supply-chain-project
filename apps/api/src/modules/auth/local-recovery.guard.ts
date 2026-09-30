@@ -67,13 +67,13 @@ export class LocalRecoveryGuard implements CanActivate {
       throw new NotFoundException(`Cannot ${request.method} ${request.originalUrl ?? request.url}`);
     }
     if (!isLoopbackRequest(request)) {
-      throw new ForbiddenException('Password recovery is only available from SCIP on this computer');
+      throw new ForbiddenException('La récupération du mot de passe n’est possible que depuis SCIP sur cet ordinateur');
     }
     const presented = request.headers[LOCAL_RECOVERY_HEADER];
     // Hashing both sides gives equal-length buffers, so timingSafeEqual cannot throw and the
     // comparison leaks neither the token's content nor its length.
     if (typeof presented !== 'string' || !timingSafeEqual(digest(presented), this.expected)) {
-      throw new ForbiddenException('Invalid local recovery token');
+      throw new ForbiddenException('Jeton de récupération locale invalide');
     }
     return true;
   }

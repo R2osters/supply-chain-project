@@ -29,7 +29,7 @@ const asDelegate = <T>(delegate: unknown): PrismaDelegateLike<T> =>
 export class CustomersService extends MasterDataService<Customer> {
   constructor(prisma: PrismaService) {
     super(asDelegate<Customer>(prisma.customer), {
-      entity: 'customer',
+      entity: 'Client',
       sortable: ['name', 'code', 'country', 'city', 'createdAt'],
       defaultSort: 'name',
       searchable: ['name', 'code', 'city', 'contactName', 'contactEmail'],
@@ -41,7 +41,7 @@ export class CustomersService extends MasterDataService<Customer> {
 export class CarriersService extends MasterDataService<Carrier> {
   constructor(prisma: PrismaService) {
     super(asDelegate<Carrier>(prisma.carrier), {
-      entity: 'carrier',
+      entity: 'Transporteur',
       sortable: ['name', 'code', 'onTimeRate', 'shipmentsCompleted', 'createdAt'],
       defaultSort: 'name',
       searchable: ['name', 'code', 'country'],
@@ -54,7 +54,7 @@ export class CarriersService extends MasterDataService<Carrier> {
 export class WarehousesService extends MasterDataService<Warehouse> {
   constructor(private readonly prisma: PrismaService) {
     super(asDelegate<Warehouse>(prisma.warehouse), {
-      entity: 'warehouse',
+      entity: 'Entrepôt',
       sortable: ['name', 'code', 'country', 'city', 'createdAt'],
       defaultSort: 'name',
       searchable: ['name', 'code', 'city', 'country'],
@@ -114,7 +114,7 @@ export class WarehousesService extends MasterDataService<Warehouse> {
 export class VehiclesService extends MasterDataService<Vehicle> {
   constructor(private readonly prisma: PrismaService) {
     super(asDelegate<Vehicle>(prisma.vehicle), {
-      entity: 'vehicle',
+      entity: 'Véhicule',
       sortable: ['plateNumber', 'label', 'type', 'status', 'lastPositionAt', 'createdAt'],
       defaultSort: 'plateNumber',
       searchable: ['plateNumber', 'label'],
@@ -130,7 +130,7 @@ export class VehiclesService extends MasterDataService<Vehicle> {
   async lastLocation(user: AuthenticatedUser, vehicleId: string) {
     const vehicle = await this.findOne(user, vehicleId);
     if (vehicle.lastLatitude === null || vehicle.lastLongitude === null) {
-      return { vehicleId, position: null, message: 'This vehicle has never reported a position' };
+      return { vehicleId, position: null, message: 'Ce véhicule n’a encore jamais transmis de position' };
     }
 
     const activeShipment = await this.prisma.shipment.findFirst({
@@ -164,7 +164,7 @@ export class VehiclesService extends MasterDataService<Vehicle> {
 export class DriversService extends MasterDataService<Driver> {
   constructor(private readonly prisma: PrismaService) {
     super(asDelegate<Driver>(prisma.driver), {
-      entity: 'driver',
+      entity: 'Chauffeur',
       sortable: ['lastName', 'firstName', 'onTimeRate', 'tripsCompleted', 'createdAt'],
       defaultSort: 'lastName',
       searchable: ['firstName', 'lastName', 'phone', 'licenseNumber'],
@@ -185,16 +185,16 @@ export class DriversService extends MasterDataService<Driver> {
         where: { id: data.userId as string },
         select: { id: true, role: true, companyId: true, driverProfile: { select: { id: true } } },
       });
-      if (!linked) throw new NotFoundException('The user to link does not exist');
+      if (!linked) throw new NotFoundException('L’utilisateur à rattacher n’existe pas');
       if (linked.companyId !== requireCompanyId(user)) {
-        throw new BadRequestException('That user belongs to another company');
+        throw new BadRequestException('Cet utilisateur appartient à une autre entreprise');
       }
       if (linked.driverProfile) {
-        throw new BadRequestException('That user already has a driver profile');
+        throw new BadRequestException('Cet utilisateur a déjà un profil de chauffeur');
       }
       if (linked.role !== 'DRIVER') {
         throw new BadRequestException(
-          `User role is ${linked.role}; only a DRIVER-role account can own a driver profile`,
+          `Le rôle de cet utilisateur est ${linked.role} : seul un compte de rôle DRIVER peut avoir un profil de chauffeur`,
         );
       }
     }
@@ -206,7 +206,7 @@ export class DriversService extends MasterDataService<Driver> {
 export class ProductsService extends MasterDataService<Product> {
   constructor(private readonly prisma: PrismaService) {
     super(asDelegate<Product>(prisma.product), {
-      entity: 'product',
+      entity: 'Produit',
       sortable: ['sku', 'name', 'unitCost', 'unitPrice', 'createdAt'],
       defaultSort: 'sku',
       searchable: ['sku', 'name', 'barcode', 'description'],
@@ -279,7 +279,7 @@ export class ProductCategoriesService {
     if (dto.parentId) {
       const parent = await this.prisma.productCategory.findUnique({ where: { id: dto.parentId } });
       if (!parent || parent.companyId !== companyId) {
-        throw new BadRequestException('Parent category not found in your company');
+        throw new BadRequestException('Catégorie parente introuvable dans votre entreprise');
       }
     }
     return this.prisma.productCategory.create({ data: { ...dto, companyId } });
@@ -292,11 +292,11 @@ export class ProductCategoriesService {
     })) as (ProductCategory & { _count: { products: number; children: number } }) | null;
 
     if (!category || category.companyId !== requireCompanyId(user)) {
-      throw new NotFoundException('Category not found');
+      throw new NotFoundException('Catégorie introuvable');
     }
     if (category._count.products > 0 || category._count.children > 0) {
       throw new BadRequestException(
-        'Category still has products or sub-categories; move them before deleting',
+        'Cette catégorie contient encore des produits ou des sous-catégories : déplacez-les avant de la supprimer',
       );
     }
 

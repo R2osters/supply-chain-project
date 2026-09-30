@@ -22,12 +22,12 @@ export class PermissionsGuard implements CanActivate {
     if (!required || required.length === 0) return true;
 
     const user = context.switchToHttp().getRequest<{ user?: AuthenticatedUser }>().user;
-    if (!user) throw new ForbiddenException('Authentication required');
+    if (!user) throw new ForbiddenException('Authentification requise');
 
     const missing = required.filter((permission) => !roleHasPermission(user.role, permission));
     if (missing.length > 0) {
       throw new ForbiddenException(
-        `Role ${user.role} is missing required permission(s): ${missing.join(', ')}`,
+        `Le rôle ${user.role} n’a pas ${missing.length > 1 ? 'les autorisations requises' : 'l’autorisation requise'} : ${missing.join(', ')}`,
       );
     }
     return true;

@@ -14,7 +14,7 @@ import {
 import { USER_ROLES, type UserRole } from '@scip/shared';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 import { lower } from '../auth/dto/auth.dto';
-import { STRONG_PASSWORD, STRONG_PASSWORD_MESSAGE } from '../auth/password-policy';
+import { STRONG_PASSWORD, TEMPORARY_PASSWORD_MESSAGE } from '../auth/password-policy';
 
 const trim = ({ value }: { value: unknown }): unknown => (typeof value === 'string' ? value.trim() : value);
 
@@ -74,7 +74,7 @@ export class CreateUserDto {
   @IsString()
   @MinLength(12)
   @MaxLength(128)
-  @Matches(STRONG_PASSWORD, { message: `temporary ${STRONG_PASSWORD_MESSAGE}` })
+  @Matches(STRONG_PASSWORD, { message: TEMPORARY_PASSWORD_MESSAGE })
   temporaryPassword?: string;
 
   @ApiPropertyOptional({ description: 'DRIVER only: the driver profile this account reports for.' })

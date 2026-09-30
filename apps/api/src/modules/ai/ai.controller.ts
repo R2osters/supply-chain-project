@@ -125,7 +125,7 @@ export class AiController {
       circuitOpen: this.client.isCircuitOpen,
       degradedFeatures: health.reachable
         ? []
-        : ['forecasting', 'delay prediction', 'anomaly detection', 'optimisation', 'recommendations'],
+        : ['prévisions de la demande', 'prédiction des retards', 'détection d’anomalies', 'optimisation', 'recommandations'],
     };
   }
 

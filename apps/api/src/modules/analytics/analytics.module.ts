@@ -98,7 +98,7 @@ export class AnalyticsService {
         share: totalShipments > 0 ? Math.round((demo / totalShipments) * 100) / 100 : 0,
         note:
           demo > 0
-            ? 'Some figures include seeded DEMO DATA. Filter by isDemoData=false for real rows only.'
+            ? 'Certains chiffres incluent des DONNÉES DE DÉMONSTRATION. Filtrez avec isDemoData=false pour ne garder que les données réelles.'
             : null,
       },
     };
@@ -184,8 +184,8 @@ export class AnalyticsService {
       etaAccuracyMinutes: round(row?.avg_eta_error_minutes),
       note:
         total === 0
-          ? 'No delivered shipment in this window; performance cannot be measured yet.'
-          : 'On-time is measured against the promised arrival, not the live ETA.',
+          ? 'Aucune expédition livrée sur cette période : la performance ne peut pas encore être mesurée.'
+          : 'La ponctualité est mesurée par rapport à l’arrivée promise, pas à l’ETA en temps réel.',
     };
   }
 
@@ -341,8 +341,8 @@ export class AnalyticsService {
           measured > 0 ? Math.round((Number(etaRow.within_30) / measured) * 1000) / 1000 : null,
         note:
           measured === 0
-            ? 'No shipment has both an ETA and an actual arrival yet, so accuracy is not measurable.'
-            : 'Measured as the difference between the last computed ETA and actual arrival.',
+            ? 'Aucune expédition n’a encore à la fois une ETA et une arrivée réelle : la précision n’est pas mesurable.'
+            : 'Mesurée comme l’écart entre la dernière ETA calculée et l’arrivée réelle.',
       },
     };
   }

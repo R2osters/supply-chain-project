@@ -68,9 +68,9 @@ export class MarineTrafficProvider implements VesselProvider {
 
   describe(): string {
     return (
-      `polling every ${this.pollSeconds}s, ${this.pollsCompleted} poll(s)` +
-      (this.lastPollAt ? `, last ${this.lastPollAt.toISOString()}` : '') +
-      (this.lastError ? `, last error: ${this.lastError}` : '')
+      `interrogation toutes les ${this.pollSeconds} s, ${this.pollsCompleted} ${this.pollsCompleted > 1 ? 'interrogations' : 'interrogation'}` +
+      (this.lastPollAt ? `, dernière : ${this.lastPollAt.toISOString()}` : '') +
+      (this.lastError ? `, dernière erreur : ${this.lastError}` : '')
     );
   }
 
@@ -89,7 +89,7 @@ export class MarineTrafficProvider implements VesselProvider {
     try {
       mmsiList = await this.trackedMmsi();
     } catch (error) {
-      this.lastError = `could not resolve tracked vessels: ${error}`;
+      this.lastError = `impossible de déterminer les navires suivis : ${error}`;
       return;
     }
 

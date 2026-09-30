@@ -121,12 +121,12 @@ export class MaritimeService {
     return {
       query: term,
       interpretedAs: isImo
-        ? 'IMO number'
+        ? 'numéro IMO'
         : isMmsi
           ? 'MMSI'
           : /^\d+$/.test(term)
-            ? 'partial identifier'
-            : 'name or call sign',
+            ? 'identifiant partiel'
+            : 'nom ou indicatif',
       count: scored.length,
       results: scored.map(({ vessel, score }) => ({
         id: vessel.id,
@@ -233,7 +233,7 @@ export class MaritimeService {
         },
       },
     });
-    if (!vessel) throw new NotFoundException('Vessel not found');
+    if (!vessel) throw new NotFoundException('Navire introuvable');
 
     return {
       ...vessel,
@@ -294,7 +294,7 @@ export class MaritimeService {
     const companyId = requireCompanyId(user);
     if (!dto.imoNumber && !dto.mmsi) {
       throw new BadRequestException(
-        'A vessel needs at least an IMO number or an MMSI — without one it cannot be matched to any position feed.',
+        'Un navire doit avoir au moins un numéro IMO ou un MMSI : sans l’un des deux, il ne peut être rattaché à aucun flux de positions.',
       );
     }
     return this.prisma.vessel.create({ data: { ...dto, companyId, type: (dto.type ?? 'CONTAINER') as never } });
@@ -360,11 +360,11 @@ export class MaritimeService {
       this.prisma.port.findUnique({ where: { id: dto.destinationPortId } }),
     ]);
 
-    if (!vessel) throw new NotFoundException('Vessel not found');
-    if (!origin) throw new NotFoundException('Origin port not found');
-    if (!destination) throw new NotFoundException('Destination port not found');
+    if (!vessel) throw new NotFoundException('Navire introuvable');
+    if (!origin) throw new NotFoundException('Port de départ introuvable');
+    if (!destination) throw new NotFoundException('Port d’arrivée introuvable');
     if (origin.id === destination.id) {
-      throw new BadRequestException('Origin and destination ports must differ');
+      throw new BadRequestException('Les ports de départ et d’arrivée doivent être différents');
     }
 
     const from: LatLng = { latitude: origin.latitude, longitude: origin.longitude };
@@ -379,7 +379,7 @@ export class MaritimeService {
       : new Date(scheduledDepartureAt.getTime() + (distanceNm / speedKnots) * 3_600_000);
 
     if (scheduledArrivalAt <= scheduledDepartureAt) {
-      throw new BadRequestException('Scheduled arrival must be after departure');
+      throw new BadRequestException('L’arrivée prévue doit être postérieure au départ');
     }
 
     return this.prisma.voyage.create({
@@ -415,7 +415,7 @@ export class MaritimeService {
         },
       },
     });
-    if (!voyage) throw new NotFoundException('Voyage not found');
+    if (!voyage) throw new NotFoundException('Traversée introuvable');
 
     const progress = this.voyageProgress(voyage);
     return { ...voyage, ...progress };
@@ -450,7 +450,7 @@ export class MaritimeService {
         progressPercent: 0,
         remainingNm: voyage.distanceNm,
         computedEta: null,
-        etaBasis: 'no position reported for this vessel yet',
+        etaBasis: 'aucune position signalée pour ce navire pour l’instant',
       };
     }
 
@@ -481,8 +481,8 @@ export class MaritimeService {
       scheduleDeltaHours: Math.round(scheduleDeltaHours * 10) / 10,
       isBehindSchedule: scheduleDeltaHours > 6,
       etaBasis: usable
-        ? `remaining ${remainingNm.toFixed(0)} nm at the vessel's observed ${speedKnots.toFixed(1)} knots`
-        : `remaining ${remainingNm.toFixed(0)} nm at the ${vessel.type.toLowerCase().replace('_', ' ')} service speed of ${speedKnots} knots — the vessel is not currently making way`,
+        ? `${remainingNm.toFixed(0)} nm restants à la vitesse observée du navire, ${speedKnots.toFixed(1)} nœuds`
+        : `${remainingNm.toFixed(0)} nm restants à la vitesse de service d’un navire ${vessel.type} (${speedKnots} nœuds) : le navire ne fait actuellement pas route`,
     };
   }
 
@@ -614,7 +614,7 @@ export class MaritimeService {
   async reportPosition(user: AuthenticatedUser, vesselId: string, dto: ReportVesselPositionDto) {
     const vessel = await this.getVessel(user, vesselId);
     if (!vessel.mmsi && !vessel.imoNumber) {
-      throw new BadRequestException('This vessel has no MMSI or IMO to attach a position to');
+      throw new BadRequestException('Ce navire n’a ni MMSI ni numéro IMO auquel rattacher une position');
     }
 
     return this.recordFix({

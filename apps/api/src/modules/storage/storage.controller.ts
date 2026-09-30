@@ -33,14 +33,14 @@ export class StorageController {
   ): Promise<void> {
     const expiresAt = Number.parseInt(expires ?? '', 10);
     if (!key || !signature || !verifyStorageSignature(this.signingSecret, key, expiresAt, signature)) {
-      throw new ForbiddenException('Link is invalid or has expired');
+      throw new ForbiddenException('Ce lien est invalide ou a expiré');
     }
 
     let file;
     try {
       file = await this.storage.read(key);
     } catch {
-      throw new NotFoundException('File not found');
+      throw new NotFoundException('Fichier introuvable');
     }
 
     res.setHeader('Content-Type', file.contentType);

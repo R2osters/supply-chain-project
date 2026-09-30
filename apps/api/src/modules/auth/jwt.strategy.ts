@@ -30,7 +30,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
    */
   async validate(payload: JwtAccessPayload): Promise<AuthenticatedUser> {
     if (payload.type !== 'access') {
-      throw new UnauthorizedException('Wrong token type');
+      throw new UnauthorizedException('Type de jeton incorrect');
     }
 
     const user = await this.prisma.user.findUnique({
@@ -49,10 +49,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
 
     if (!user || !user.isActive) {
-      throw new UnauthorizedException('Account is disabled or no longer exists');
+      throw new UnauthorizedException('Ce compte est désactivé ou n’existe plus');
     }
     if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
-      throw new UnauthorizedException('Account is temporarily locked');
+      throw new UnauthorizedException('Ce compte est temporairement verrouillé');
     }
 
     return {

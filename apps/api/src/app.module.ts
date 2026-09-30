@@ -58,6 +58,7 @@ import { AircraftModule } from './modules/aircraft/aircraft.module';
         const throttle = config.get('throttle', { infer: true });
         return {
           throttlers: [{ name: 'default', ttl: throttle.ttlSeconds * 1000, limit: throttle.limit }],
+          errorMessage: 'Trop de requêtes : patientez quelques instants avant de réessayer',
         };
       },
     }),

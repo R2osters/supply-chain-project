@@ -33,7 +33,7 @@ export class PasswordChangeGuard implements CanActivate {
       statusCode: 403,
       error: 'Forbidden',
       code: PASSWORD_CHANGE_REQUIRED,
-      message: 'Choose a new password before continuing: this account still uses a temporary one',
+      message: 'Choisissez un nouveau mot de passe avant de continuer : ce compte utilise encore un mot de passe temporaire',
     });
   }
 }
