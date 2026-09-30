@@ -30,7 +30,7 @@ export const armAngle = (frame: number, speed = 1): number => {
 };
 
 /** Index of the cell nearest to the arm (0 = 12 o'clock, clockwise). */
-export const activeCell = (frame: number, speed = 1): number => (((roundHalfUp(armAngle(frame, speed) / STEP_DEG)) % CELLS) + CELLS) % CELLS;
+export const activeCell = (frame: number, speed = 1): number => ((roundHalfUp(armAngle(frame, speed) / STEP_DEG) % CELLS) + CELLS) % CELLS;
 
 /** Point of the ring at `deg` degrees clockwise from 12 o'clock, e.g. to move something along the loop. */
 export const ringPoint = (deg: number, radius = RING_RADIUS): {x: number; y: number} => {
