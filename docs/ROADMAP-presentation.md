@@ -23,8 +23,8 @@ sources sans clé et l'audit de sécurité ([security-audit.md](security-audit.m
 | 1 | ~~**Gestion des utilisateurs**~~ **Fait** | Écran Utilisateurs : liste, création avec mot de passe temporaire (montré une fois), rôle, lien chauffeur, désactivation, réinitialisation par l'administrateur. Changement obligatoire du mot de passe temporaire à la connexion, imposé par l'API (HTTP et socket de suivi). Chaque rôle arrive sur une page qu'il a le droit d'ouvrir (chauffeur → livraisons). | — |
 | 2 | ~~**Mot de passe oublié sans e-mail**~~ **Fait** | « Mot de passe oublié ? » sur l'écran de connexion : dans l'application de ce PC, un administrateur reçoit un mot de passe temporaire (jeton local connu du seul shell, API en `127.0.0.1`) ; ailleurs, l'administrateur réinitialise depuis Utilisateurs. | — |
 | 3 | ~~**Cartes hors connexion**~~ **Fait** | Fond de carte monde Natural Earth embarqué (côtes, frontières, fleuves, lacs, villes, 4 Mo) sous les tuiles OpenStreetMap : sans internet, les six cartes restent lisibles. Pas de détail rue par rue hors ligne. | — |
-| 4 | **Scénario de démonstration** | Un parcours de 10 minutes qui montre la boucle complète (retard détecté → risque de rupture → recommandation → commande), où trouver avions et navires en direct, quoi dire. | 0,5 j |
-| 5 | **Sauvegarde et restauration en un clic** (Réglages) | Les données ne vivent que sur ce PC ; aujourd'hui la sauvegarde demande `pg_dump` en ligne de commande. | 0,5 j |
+| 4 | ~~**Scénario de démonstration**~~ **Fait** | Réglages → « Préparer la démo » remet le monde de démo en scène à l'instant présent (camions repartis, 2 retards détectés en direct, rupture SKU-006, recommandations effacées), autant de fois que voulu ; script minuté de 10 minutes dans `docs/DEMO-scenario.md`. | — |
+| 5 | ~~**Sauvegarde et restauration en un clic**~~ **Fait** | Réglages → Sauvegarde : un fichier `.scip-backup` (base + preuves de livraison, sans secrets) dans `Documents\SCIP\Sauvegardes` ; restauration avec sauvegarde de sécurité automatique et retour arrière si elle échoue ; aussi `scip-desktop.exe --backup` / `--restore`. | — |
 
 ### P1 — pour un projet « complet »
 
