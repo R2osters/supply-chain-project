@@ -1,5 +1,7 @@
 import { BadGatewayException, BadRequestException, HttpException, NotFoundException } from '@nestjs/common';
 import { DailyTileBudget, isValidTile, parseTileSegment, rollBudget, tryConsume, utcDayKey } from './tile-budget';
+import { OpenFlowService } from './open-flow/open-flow.service';
+import { TrafficController } from './traffic.controller';
 import { TrafficService } from './traffic.service';
 
 const KEY = 'tt-secret-key-123';
@@ -208,5 +210,28 @@ describe('TrafficService vector flow tiles', () => {
     const service = new TrafficService(undefined, { apiKey: KEY, dailyBudget: 0 });
     for (let x = 0; x < 20; x += 1) await service.getFlowTile(5, x, 0);
     expect(service.status()).toMatchObject({ tilesUsedToday: 20, dailyBudget: 0, note: null });
+  });
+});
+
+describe('TrafficController', () => {
+  it('refuses a malformed box before asking any source', () => {
+    const openFlow = { inBbox: jest.fn(), sources: jest.fn(() => []) } as unknown as OpenFlowService;
+    const controller = new TrafficController(new TrafficService(undefined, { apiKey: null, dailyBudget: 10 }), openFlow);
+    expect(() => controller.openFlow('nope')).toThrow(BadRequestException);
+    expect(() => controller.openFlow(undefined)).toThrow(BadRequestException);
+    expect(openFlow.inBbox).not.toHaveBeenCalled();
+  });
+
+  it('lists TomTom and the open sources in the status', () => {
+    const openFlow = {
+      sources: () => [{ id: 'rennes', active: true, stale: false, updatedAt: null, attribution: 'R' }],
+    } as unknown as OpenFlowService;
+    const withKey = new TrafficController(new TrafficService(undefined, { apiKey: KEY, dailyBudget: 10 }), openFlow);
+    expect(withKey.status().sources).toEqual([
+      { id: 'tomtom', active: true, stale: false, updatedAt: null, attribution: 'Traffic © TomTom' },
+      { id: 'rennes', active: true, stale: false, updatedAt: null, attribution: 'R' },
+    ]);
+    const withoutKey = new TrafficController(new TrafficService(undefined, { apiKey: null, dailyBudget: 10 }), openFlow);
+    expect(withoutKey.status().sources[0]).toMatchObject({ id: 'tomtom', active: false });
   });
 });

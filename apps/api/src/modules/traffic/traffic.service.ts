@@ -45,7 +45,7 @@ export class TileBudgetExceededError extends Error {
   }
 }
 
-const TOMTOM_ATTRIBUTION = 'Traffic © TomTom';
+export const TOMTOM_ATTRIBUTION = 'Traffic © TomTom';
 /** Keeps a 31-day month under TomTom's free monthly allowance (see docs/intel/traffic.md). */
 export const DEFAULT_DAILY_TILE_BUDGET = 6000;
 /** Traffic changes minute to minute; two minutes is the longest a flow colour stays honest. */
@@ -110,6 +110,10 @@ export class TrafficService {
 
   get enabled(): boolean {
     return !!this.apiKey;
+  }
+
+  budgetExhausted(): boolean {
+    return this.budget.exhausted();
   }
 
   status(): TrafficStatus {

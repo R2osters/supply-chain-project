@@ -3,11 +3,18 @@ import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration';
 import { FeedSettingsService } from '../settings/feed-settings.service';
 import { TrafficController } from './traffic.controller';
+import { GrenobleFlowProvider } from './open-flow/grenoble-flow.provider';
+import { OpenFlowService } from './open-flow/open-flow.service';
+import { RennesFlowProvider } from './open-flow/rennes-flow.provider';
 import { DEFAULT_DAILY_TILE_BUDGET, TrafficService } from './traffic.service';
 
 @Module({
   controllers: [TrafficController],
   providers: [
+    {
+      provide: OpenFlowService,
+      useFactory: () => new OpenFlowService([new RennesFlowProvider(), new GrenobleFlowProvider()]),
+    },
     {
       provide: TrafficService,
       inject: [ConfigService, FeedSettingsService],

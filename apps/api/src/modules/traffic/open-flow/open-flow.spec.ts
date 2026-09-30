@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { intersects, parseBbox } from './bbox';
 import { GrenobleFlowProvider } from './grenoble-flow.provider';
 import { grenobleLevel, rennesLevel } from './levels';
+import { MAX_OPEN_FLOW_FEATURES, OpenFlowService } from './open-flow.service';
 import { RennesFlowProvider } from './rennes-flow.provider';
+import type { FlowSegment, OpenFlowProvider } from './types';
 
 const fixture = (name: string): string => readFileSync(join(__dirname, '__fixtures__', name), 'utf8');
 const json = (body: string): Response =>
@@ -169,5 +171,76 @@ describe('GrenobleFlowProvider', () => {
     const snapshot = await provider.snapshot();
     expect(snapshot.stale).toBe(true);
     expect(snapshot.segments).toHaveLength(5);
+  });
+});
+
+describe('OpenFlowService', () => {
+  const RENNES_BOX = { minLon: -1.8, minLat: 48, maxLon: -1.5, maxLat: 48.2 };
+  const segment = (id: string, coordinates: [number, number][]): FlowSegment => ({
+    id,
+    source: 'rennes',
+    coordinates,
+    level: 0.5,
+    closed: false,
+    speedKmh: 35,
+    limitKmh: 70,
+    bothDirections: false,
+  });
+  const provider = (id: 'rennes' | 'grenoble', snapshot: OpenFlowProvider['snapshot'], coverage = RENNES_BOX): OpenFlowProvider => ({
+    id,
+    attribution: id.toUpperCase(),
+    coverage,
+    snapshot,
+  });
+
+  it('merges providers, keeps what touches the box and survives a failing source', async () => {
+    const ok = provider('rennes', async () => ({
+      fetchedAt: new Date('2026-09-30T12:00:00Z'),
+      stale: false,
+      segments: [segment('rennes:a', [[-1.65, 48.1], [-1.64, 48.1]]), segment('rennes:far', [[-1.9, 48.25], [-1.85, 48.25]])],
+    }));
+    const broken = provider('grenoble', async () => {
+      throw new Error('down');
+    });
+    const service = new OpenFlowService([ok, broken]);
+
+    const collection = await service.inBbox(RENNES_BOX);
+    expect(collection.type).toBe('FeatureCollection');
+    expect(collection.features).toEqual([
+      {
+        type: 'Feature',
+        geometry: { type: 'LineString', coordinates: [[-1.65, 48.1], [-1.64, 48.1]] },
+        properties: { id: 'rennes:a', source: 'rennes', level: 0.5, closed: false, speedKmh: 35, limitKmh: 70, bothDirections: false },
+      },
+    ]);
+    expect(service.sources()).toEqual([
+      { id: 'rennes', active: true, stale: false, updatedAt: '2026-09-30T12:00:00.000Z', attribution: 'RENNES' },
+      { id: 'grenoble', active: false, stale: false, updatedAt: null, attribution: 'GRENOBLE' },
+    ]);
+  });
+
+  it('never asks a source whose area is out of view', async () => {
+    const snapshot = jest.fn();
+    const service = new OpenFlowService([provider('grenoble', snapshot, { minLon: 5.5, minLat: 45, maxLon: 6, maxLat: 45.35 })]);
+    expect((await service.inBbox({ minLon: -0.4, minLat: 5.4, maxLon: 0.1, maxLat: 5.8 })).features).toEqual([]);
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
+  it('caps the answer', async () => {
+    const many = Array.from({ length: MAX_OPEN_FLOW_FEATURES + 50 }, (_, i) =>
+      segment(`rennes:${i}`, [[-1.65, 48.1], [-1.64, 48.1]]),
+    );
+    const service = new OpenFlowService([
+      provider('rennes', async () => ({ fetchedAt: new Date(), stale: false, segments: many })),
+    ]);
+    expect((await service.inBbox(RENNES_BOX)).features).toHaveLength(MAX_OPEN_FLOW_FEATURES);
+  });
+
+  it('keeps the last outcome of a source that goes stale', async () => {
+    const service = new OpenFlowService([
+      provider('rennes', async () => ({ fetchedAt: new Date('2026-09-30T11:55:00Z'), stale: true, segments: [] })),
+    ]);
+    await service.inBbox(RENNES_BOX);
+    expect(service.sources()[0]).toMatchObject({ active: true, stale: true, updatedAt: '2026-09-30T11:55:00.000Z' });
   });
 });
