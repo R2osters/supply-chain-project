@@ -204,13 +204,24 @@ export interface VisibleSatellitesResponse {
 
 /* ------------------------------------------------------------------ traffic */
 
+export interface TrafficSourceStatus {
+  id: 'tomtom' | 'rennes' | 'grenoble';
+  active: boolean;
+  stale: boolean;
+  updatedAt: string | null;
+  attribution: string;
+}
+
 export interface TrafficStatus {
   enabled: boolean;
   provider: 'TomTom' | null;
   tilesUsedToday: number;
+  /** TomTom tiles allowed per UTC day; 0 = unlimited. */
   dailyBudget: number;
   attribution: string | null;
   note: string | null;
+  /** TomTom and the keyless measured-speed sources (Rennes, Grenoble), with their last outcome. */
+  sources?: TrafficSourceStatus[];
 }
 
 /* ---------------------------------------------------------------- geocoding */

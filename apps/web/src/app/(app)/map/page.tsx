@@ -23,7 +23,10 @@ import { basemapStyle, useBasemapTheme, watchBasemapTiles } from '@/lib/map-styl
 import { isTrackAnimating, positionAt, startTrack, type MotionTrack } from '@/lib/motion';
 import { usePalette, type Palette } from '@/lib/theme';
 import { Banner, DemoTag, Empty, ErrorNote, Legend, Loading, Provenance, SeverityIcon } from '@/components/ui';
+import { LIVE_SOURCE } from './_components/live-traffic';
 import { LiveTrafficCards, LiveTrafficStatus, LiveTrafficToggles, useLiveTraffic } from './_components/live-traffic-layer';
+import { RoadTrafficStatus } from './_components/road-traffic-status';
+import { useRoadTraffic } from './_components/use-road-traffic';
 import { ReplayControls, type HistoryFix } from './_components/replay';
 import { FixProvenance, VehicleDetail } from './_components/vehicle-detail';
 import {
@@ -66,8 +69,9 @@ interface VehicleMotion {
   fixTime: number;
 }
 
-const TRAFFIC_LAYER = 'live-traffic';
 const REPLAY_TRACK = 'replay-track';
+/** Whether road traffic is shown, remembered per browser. */
+const TRAFFIC_PREFERENCE = 'scip.map.traffic';
 const REPLAY_POINT = 'replay-point';
 
 const FILTER_LABEL: Record<FleetFilter, TranslationKey> = {
@@ -110,7 +114,8 @@ function LiveMap() {
   const [selectedId, setSelectedId] = useState<string | null>(requestedVehicle);
   const [filter, setFilter] = useState<FleetFilter>('all');
   const [lastTick, setLastTick] = useState<Date | null>(null);
-  const [showTraffic, setShowTraffic] = useState(false);
+  // Road traffic is on by default; the choice is remembered on this browser.
+  const [showTraffic, setShowTraffic] = useState(true);
 
   const [replayOn, setReplayOn] = useState(false);
   const [replayIndex, setReplayIndex] = useState(0);
@@ -210,7 +215,7 @@ function LiveMap() {
       center: [-1.0, 6.6], // central Ghana: the whole demo network fits in one view
       zoom: 6.4,
       attributionControl: { compact: true },
-      // Traffic tiles come from our API and need the bearer token; the basemap host must not.
+      // Traffic flow tiles come from our API and need the bearer token; the basemap host must not.
       transformRequest: (url) => {
         const token = getAccessToken();
         return isApiUrl(url) && token ? { url, headers: { Authorization: `Bearer ${token}` } } : { url };
@@ -221,21 +226,6 @@ function LiveMap() {
     instance.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
     instance.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-right');
     instance.on('load', () => {
-      instance.addSource(TRAFFIC_LAYER, {
-        type: 'raster',
-        tiles: [apiUrl('/traffic/tiles/{z}/{x}/{y}')],
-        tileSize: 256,
-        minzoom: 3,
-        maxzoom: 18,
-      });
-      instance.addLayer({
-        id: TRAFFIC_LAYER,
-        type: 'raster',
-        source: TRAFFIC_LAYER,
-        layout: { visibility: 'none' },
-        paint: { 'raster-opacity': 0.85 },
-      });
-
       const colours = paletteRef.current;
       // Where silent vehicles probably are (dead reckoning along the planned route): dashed,
       // translucent and hollow, so a guess never passes for a GPS fix.
@@ -314,6 +304,32 @@ function LiveMap() {
   // Aircraft and AIS vessels, drawn under the replay track so a replayed day stays on top.
   const liveTraffic = useLiveTraffic(ready ? map.current : null, ready, palette, REPLAY_TRACK);
 
+  // Road traffic under the vessels and aircraft (and, as GL layers, under the fleet's markers).
+  const roadTraffic = useRoadTraffic(ready ? map.current : null, ready, palette, {
+    enabled: showTraffic,
+    tomtom: Boolean(traffic.data?.enabled),
+    beforeLayerId: LIVE_SOURCE.vessels,
+  });
+
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(TRAFFIC_PREFERENCE) === 'off') setShowTraffic(false);
+    } catch {
+      // Storage can be unavailable (private window); the default applies.
+    }
+  }, []);
+
+  const toggleTraffic = useCallback(() => {
+    setShowTraffic((value) => {
+      try {
+        window.localStorage.setItem(TRAFFIC_PREFERENCE, value ? 'off' : 'on');
+      } catch {
+        // Not remembered this time; the toggle still works.
+      }
+      return !value;
+    });
+  }, []);
+
   // GL layers hold literal colours: repaint them when the theme changes.
   useEffect(() => {
     const instance = map.current;
@@ -324,12 +340,6 @@ function LiveMap() {
       instance.setPaintProperty(REPLAY_POINT, 'circle-stroke-color', palette.surface2);
     }
   }, [ready, palette]);
-
-  useEffect(() => {
-    if (!ready || !map.current?.getLayer(TRAFFIC_LAYER)) return;
-    const visible = showTraffic && Boolean(traffic.data?.enabled);
-    map.current.setLayoutProperty(TRAFFIC_LAYER, 'visibility', visible ? 'visible' : 'none');
-  }, [ready, showTraffic, traffic.data?.enabled]);
 
   // Replay track + cursor.
   useEffect(() => {
@@ -557,7 +567,6 @@ function LiveMap() {
     deviating === 0
       ? t('map.v3.title.none')
       : t('map.v3.title.some', { n: deviating, d: counts.delayed });
-  const trafficEnabled = Boolean(traffic.data?.enabled);
 
   return (
     <div
@@ -592,15 +601,7 @@ function LiveMap() {
               {t('map.v3.reporting', { n: vehicles.length })}
               {lastTick && ` · ${fmt.time(lastTick)}`}
             </span>
-            <button
-              type="button"
-              className="pill h-8"
-              onClick={() => setShowTraffic((value) => !value)}
-              aria-pressed={showTraffic && trafficEnabled}
-              disabled={!trafficEnabled}
-              title={trafficEnabled ? undefined : (traffic.data?.note ?? t('sit.hint.trafficOff'))}
-              style={trafficEnabled ? undefined : { opacity: 0.5, cursor: 'not-allowed' }}
-            >
+            <button type="button" className="pill h-8" onClick={toggleTraffic} aria-pressed={showTraffic}>
               <Layers />
               {t('map.layer.traffic')}
             </button>
@@ -629,6 +630,7 @@ function LiveMap() {
         </div>
 
         <LiveTrafficStatus live={liveTraffic} />
+        <RoadTrafficStatus enabled={showTraffic} state={roadTraffic} status={traffic.data} />
 
         {fleet.isError && fleet.data && (
           <Banner tone="warn" icon={WifiLow} title={t('map.v3.weakNetwork', { time: fmt.time(new Date(fleet.dataUpdatedAt)) })}>
@@ -718,6 +720,12 @@ function LiveMap() {
             { label: t('map.v3.legend.warehouse'), colour: 'var(--color-muted)' },
             ...(liveTraffic.showAircraft ? [{ label: t('live.legend.aircraft'), colour: 'var(--color-ink)' }] : []),
             ...(liveTraffic.showVessels ? [{ label: t('live.legend.vessel'), colour: 'var(--color-ink)' }] : []),
+            ...(showTraffic
+              ? [
+                  { label: t('map.legend.traffic'), colour: 'var(--color-muted)' },
+                  { label: t('map.legend.jams'), colour: 'var(--color-crit)', shape: 'line' as const },
+                ]
+              : []),
           ]}
         />
       </div>
