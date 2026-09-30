@@ -6,3 +6,4 @@ out/
 public/audio/stems/
 public/audio/master.wav
 __pycache__/
+.rb-src/
