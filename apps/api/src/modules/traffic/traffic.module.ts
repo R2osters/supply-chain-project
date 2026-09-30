@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../../config/configuration';
 import { FeedSettingsService } from '../settings/feed-settings.service';
 import { TrafficController } from './traffic.controller';
-import { TrafficService } from './traffic.service';
+import { DEFAULT_DAILY_TILE_BUDGET, TrafficService } from './traffic.service';
 
 @Module({
   controllers: [TrafficController],
@@ -12,7 +12,12 @@ import { TrafficService } from './traffic.service';
       provide: TrafficService,
       inject: [ConfigService, FeedSettingsService],
       useFactory: (config: ConfigService<AppConfig, true>, feeds: FeedSettingsService) =>
-        new TrafficService(config, undefined, () => feeds.get('tomtomApiKey')),
+        new TrafficService(
+          config,
+          undefined,
+          () => feeds.get('tomtomApiKey'),
+          () => feeds.getTileBudget() ?? config.get('intel', { infer: true }).tomtomDailyTileBudget ?? DEFAULT_DAILY_TILE_BUDGET,
+        ),
     },
   ],
   exports: [TrafficService],

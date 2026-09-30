@@ -53,6 +53,27 @@ describe('FeedSettingsService', () => {
     expect(seen).toEqual([['openskyClientId', 'openskyClientSecret']]);
   });
 
+  it('stores the TomTom tile budget next to the keys without losing either', () => {
+    const file = tempFile();
+    const service = makeService(file);
+    service.update({ tomtomApiKey: 'abcd1234' });
+    service.setTileBudget(0);
+    expect(service.getTileBudget()).toBe(0);
+    service.update({ aisStreamApiKey: 'x-1' });
+
+    const reloaded = makeService(file);
+    expect(reloaded.getTileBudget()).toBe(0);
+    expect(reloaded.get('tomtomApiKey')).toBe('abcd1234');
+    reloaded.setTileBudget(null);
+    expect(reloaded.getTileBudget()).toBeNull();
+    expect(makeService(file).get('aisStreamApiKey')).toBe('x-1');
+  });
+
+  it('refuses a budget that is not a whole number of tiles', () => {
+    const service = makeService(tempFile());
+    for (const bad of [-1, 1.5, Number.NaN, 20_000_000]) expect(() => service.setTileBudget(bad)).toThrow();
+  });
+
   it('survives a corrupt settings file', () => {
     const file = tempFile();
     writeFileSync(file, '{not json');

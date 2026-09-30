@@ -45,24 +45,33 @@ export function rollBudget(state: BudgetState | null, today: string): BudgetStat
 /**
  * Counts one upstream request if the budget allows it. Returns the new state and whether the
  * request may proceed; the attempt is counted before the fetch because TomTom bills a request
- * whether or not the tile arrives.
+ * whether or not the tile arrives. A limit of 0 (or less) means no ceiling: the user chose to let
+ * their TomTom plan, not SCIP, decide when to stop.
  */
 export function tryConsume(state: BudgetState, limit: number): { state: BudgetState; allowed: boolean } {
-  if (state.used >= limit) return { state, allowed: false };
+  if (limit > 0 && state.used >= limit) return { state, allowed: false };
   return { state: { day: state.day, used: state.used + 1 }, allowed: true };
 }
 
-/** Stateful wrapper with an injectable clock, so the service does not reimplement day rollover. */
+/**
+ * Stateful wrapper with an injectable clock, so the service does not reimplement day rollover.
+ * The limit may be a function: it is then read on every use, so a budget changed in the settings
+ * screen applies without a restart.
+ */
 export class DailyTileBudget {
   private state: BudgetState | null = null;
+  private readonly limitSource: () => number;
 
   constructor(
-    private readonly limit: number,
+    limit: number | (() => number),
     private readonly now: () => Date = () => new Date(),
-  ) {}
+  ) {
+    this.limitSource = typeof limit === 'function' ? limit : () => limit;
+  }
 
+  /** Tiles allowed per UTC day; 0 means unlimited. */
   get dailyLimit(): number {
-    return this.limit;
+    return this.limitSource();
   }
 
   usedToday(): number {
@@ -71,11 +80,12 @@ export class DailyTileBudget {
   }
 
   exhausted(): boolean {
-    return this.usedToday() >= this.limit;
+    const limit = this.dailyLimit;
+    return limit > 0 && this.usedToday() >= limit;
   }
 
   consume(): boolean {
-    const result = tryConsume(rollBudget(this.state, utcDayKey(this.now())), this.limit);
+    const result = tryConsume(rollBudget(this.state, utcDayKey(this.now())), this.dailyLimit);
     this.state = result.state;
     return result.allowed;
   }

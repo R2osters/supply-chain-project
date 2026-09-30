@@ -45,6 +45,8 @@ export class TileBudgetExceededError extends Error {
 }
 
 const TOMTOM_ATTRIBUTION = 'Traffic © TomTom';
+/** Keeps a 31-day month under TomTom's free monthly allowance (see docs/intel/traffic.md). */
+export const DEFAULT_DAILY_TILE_BUDGET = 6000;
 /** Traffic changes minute to minute; two minutes is the longest a flow colour stays honest. */
 const TILE_TTL_MS = 120_000;
 /** On upstream failure (or an exhausted budget) a tile up to ten minutes old beats a hole in the map. */
@@ -73,10 +75,14 @@ export class TrafficService {
     config?: ConfigService<AppConfig, true>,
     settings?: TrafficSettings,
     private readonly keySource?: () => string | null,
+    /** Asked on every tile, like the key: the budget can be changed in the settings screen. */
+    budgetSource?: () => number,
   ) {
     const intel = config?.get('intel', { infer: true });
     this.fixedApiKey = settings?.apiKey ?? intel?.tomtomApiKey ?? null;
-    this.budget = new DailyTileBudget(settings?.dailyBudget ?? intel?.tomtomDailyTileBudget ?? 6000);
+    this.budget = new DailyTileBudget(
+      budgetSource ?? settings?.dailyBudget ?? intel?.tomtomDailyTileBudget ?? DEFAULT_DAILY_TILE_BUDGET,
+    );
   }
 
   private get apiKey(): string | null {

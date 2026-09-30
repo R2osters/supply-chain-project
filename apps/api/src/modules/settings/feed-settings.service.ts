@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -31,6 +31,11 @@ export interface FeedKeyState {
 
 type Listener = (changed: FeedKey[]) => void;
 
+/** Stored next to the keys in the same file; not a secret, so it lives outside FEED_KEYS. */
+const TILE_BUDGET_FIELD = 'tomtomDailyTileBudget';
+/** A generous ceiling on what can be typed: ten million tiles a day is far beyond any plan. */
+export const MAX_TILE_BUDGET = 10_000_000;
+
 /**
  * Credentials for live data feeds (AIS for ships, OpenSky for aircraft).
  *
@@ -46,6 +51,8 @@ export class FeedSettingsService {
   private readonly fromEnvironment: FeedValues;
   private readonly bundled: FeedValues;
   private stored: FeedValues;
+  /** TomTom tiles per UTC day chosen in the settings screen; undefined = not chosen. 0 = unlimited. */
+  private storedBudget: number | undefined;
   private readonly listeners: Listener[] = [];
 
   constructor(config: ConfigService<AppConfig, true>) {
@@ -63,6 +70,7 @@ export class FeedSettingsService {
     });
     this.bundled = readValues(config.get('settings', { infer: true }).bundledFile, this.logger);
     this.stored = readValues(this.file, this.logger);
+    this.storedBudget = readBudget(this.file);
   }
 
   /** The effective value of a key, or null when neither the screen nor the environment set it. */
@@ -99,7 +107,7 @@ export class FeedSettingsService {
     }
     if (changed.length === 0) return this.describe();
 
-    this.save(next);
+    this.save(next, this.storedBudget);
     this.stored = next;
     this.logger.log(`Feed settings changed: ${changed.join(', ')}`);
     for (const listener of this.listeners) {
@@ -116,11 +124,29 @@ export class FeedSettingsService {
     this.listeners.push(listener);
   }
 
+  /** The TomTom daily tile budget chosen in the settings screen, or null when none was chosen. */
+  getTileBudget(): number | null {
+    return this.storedBudget ?? null;
+  }
+
+  /** Sets (or, with null, forgets) the TomTom daily tile budget; 0 means unlimited. */
+  setTileBudget(value: number | null): void {
+    if (value !== null && !(Number.isInteger(value) && value >= 0 && value <= MAX_TILE_BUDGET)) {
+      throw new BadRequestException(`The tile budget must be a whole number from 0 to ${MAX_TILE_BUDGET}`);
+    }
+    const next = value ?? undefined;
+    if (next === this.storedBudget) return;
+    this.save(this.stored, next);
+    this.storedBudget = next;
+    this.logger.log(`Traffic tile budget changed: ${next === undefined ? 'default' : next === 0 ? 'unlimited' : next}`);
+  }
+
   /** Write-then-rename, so a crash mid-save never leaves a half-written file behind. */
-  private save(values: FeedValues): void {
+  private save(values: FeedValues, budget: number | undefined): void {
     mkdirSync(dirname(this.file), { recursive: true });
     const temporary = `${this.file}.tmp`;
-    writeFileSync(temporary, JSON.stringify(values, null, 2), { mode: 0o600 });
+    const body = budget === undefined ? values : { ...values, [TILE_BUDGET_FIELD]: budget };
+    writeFileSync(temporary, JSON.stringify(body, null, 2), { mode: 0o600 });
     renameSync(temporary, this.file);
   }
 }
@@ -139,6 +165,20 @@ function readValues(file: string | null, logger: Logger): FeedValues {
     // A corrupt file must not stop the API; the user can re-enter the keys.
     logger.warn(`Ignoring unreadable ${file}: ${error instanceof Error ? error.message : error}`);
     return {};
+  }
+}
+
+/** The stored tile budget, if the file holds a valid one. */
+function readBudget(file: string | null): number | undefined {
+  if (!file || !existsSync(file)) return undefined;
+  try {
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const value = raw[TILE_BUDGET_FIELD];
+    return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_TILE_BUDGET
+      ? value
+      : undefined;
+  } catch {
+    return undefined; // readValues already logged the unreadable file.
   }
 }
 

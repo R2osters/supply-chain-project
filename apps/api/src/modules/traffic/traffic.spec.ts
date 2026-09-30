@@ -51,6 +51,22 @@ describe('daily budget', () => {
     expect(tryConsume(state, 3)).toEqual({ state: { day: 'd', used: 3 }, allowed: false });
   });
 
+  it('treats 0 as unlimited', () => {
+    const budget = new DailyTileBudget(0);
+    for (let i = 0; i < 10_000; i += 1) expect(budget.consume()).toBe(true);
+    expect(budget.exhausted()).toBe(false);
+  });
+
+  it('reads a changing limit on every use', () => {
+    let limit = 1;
+    const budget = new DailyTileBudget(() => limit);
+    expect(budget.consume()).toBe(true);
+    expect(budget.consume()).toBe(false);
+    limit = 3;
+    expect(budget.consume()).toBe(true);
+    expect(budget.dailyLimit).toBe(3);
+  });
+
   it('refills at midnight UTC', () => {
     let clock = new Date('2026-09-28T23:59:00Z');
     const budget = new DailyTileBudget(1, () => clock);
