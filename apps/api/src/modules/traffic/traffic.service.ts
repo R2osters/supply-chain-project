@@ -13,7 +13,8 @@ import type { AppConfig } from '../../config/configuration';
 import { DailyTileBudget, isValidTile } from './tile-budget';
 
 /**
- * Live traffic-flow overlay: TomTom raster flow tiles, proxied so the API key stays on the server.
+ * Live traffic flow from TomTom: raster tiles (the Situation map's overlay) and vector tiles (the
+ * live map's measured speeds), both proxied so the API key stays on the server.
  *
  * A key in the browser is a key anyone can copy out of the network tab and spend. Proxying costs
  * us bandwidth (tiles are small, ~5–30 kB) but lets us enforce the daily budget, cache tiles
@@ -53,8 +54,26 @@ const TILE_TTL_MS = 120_000;
 const TILE_STALE_MS = 10 * 60_000;
 /** ~512 tiles of 5–30 kB bounds the cache to a few megabytes. */
 const TILE_CACHE_ENTRIES = 512;
-/** A flow PNG is tens of kilobytes; anything near 1 MB is not a tile. */
+/** A flow PNG or vector tile is tens of kilobytes; anything near 1 MB is not a tile. */
 const TILE_MAX_BYTES = 1024 * 1024;
+
+type TileKind = 'raster' | 'flow';
+
+/** What each kind of tile is, upstream: its URL and the content types that prove it is a tile. */
+const TILE_KINDS: Record<TileKind, { url: (z: number, x: number, y: number, key: string) => string; types: string[] }> = {
+  raster: {
+    url: (z, x, y, key) =>
+      `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/${z}/${x}/${y}.png?key=${encodeURIComponent(key)}&tileSize=256`,
+    types: ['image/png'],
+  },
+  // Relative speeds (current / free flow) per road line: the live map colours and slows its
+  // simulated traffic with them. Adapted from God's Eye View (MIT), server/providers/traffic.js.
+  flow: {
+    url: (z, x, y, key) =>
+      `https://api.tomtom.com/traffic/map/4/tile/flow/relative/${z}/${x}/${y}.pbf?key=${encodeURIComponent(key)}`,
+    types: ['application/vnd.mapbox-vector-tile', 'application/x-protobuf', 'application/octet-stream'],
+  },
+};
 
 @Injectable()
 export class TrafficService {
@@ -116,35 +135,43 @@ export class TrafficService {
     };
   }
 
-  async getTile(z: number, x: number, y: number): Promise<Buffer> {
+  /** A raster flow tile (256 px PNG), for the Situation map's overlay. */
+  getTile(z: number, x: number, y: number): Promise<Buffer> {
+    return this.serveTile('raster', z, x, y);
+  }
+
+  /** A vector flow tile (Mapbox Vector Tile, layer "Traffic flow"), for the live map. */
+  getFlowTile(z: number, x: number, y: number): Promise<Buffer> {
+    return this.serveTile('flow', z, x, y);
+  }
+
+  private async serveTile(kind: TileKind, z: number, x: number, y: number): Promise<Buffer> {
     if (!this.apiKey) throw new NotFoundException('Live traffic is not enabled');
     if (!isValidTile(z, x, y)) throw new BadRequestException('Invalid tile coordinates');
 
     try {
-      const cached = await this.tiles.getOrLoad(`${z}/${x}/${y}`, () => this.fetchTile(z, x, y));
+      const cached = await this.tiles.getOrLoad(`${kind}/${z}/${x}/${y}`, () => this.fetchTile(kind, z, x, y));
       return cached.value;
     } catch (error) {
       if (error instanceof TileBudgetExceededError) {
         throw new HttpException('Daily traffic tile budget reached', HttpStatus.TOO_MANY_REQUESTS);
       }
-      this.logger.warn(`TomTom tile ${z}/${x}/${y} failed: ${this.redact(describe(error))}`);
+      this.logger.warn(`TomTom ${kind} tile ${z}/${x}/${y} failed: ${this.redact(describe(error))}`);
       throw new BadGatewayException('Traffic tiles are temporarily unavailable');
     }
   }
 
-  private async fetchTile(z: number, x: number, y: number): Promise<Buffer> {
+  private async fetchTile(kind: TileKind, z: number, x: number, y: number): Promise<Buffer> {
     // Counted before the request: TomTom bills the attempt whether or not a tile comes back.
     if (!this.budget.consume()) throw new TileBudgetExceededError();
 
-    const url =
-      `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/${z}/${x}/${y}.png` +
-      `?key=${encodeURIComponent(this.apiKey ?? '')}&tileSize=256`;
-    const response = await openUpstream(url, { timeoutMs: 15_000, noRedirects: true });
+    const { url, types } = TILE_KINDS[kind];
+    const response = await openUpstream(url(z, x, y, this.apiKey ?? ''), { timeoutMs: 15_000, noRedirects: true });
     const contentType = response.headers.get('content-type') ?? '';
-    if (!contentType.startsWith('image/png')) {
+    if (!types.some((type) => contentType.startsWith(type))) {
       await response.body?.cancel().catch(() => undefined);
       // An error document served with 200 must not be cached and shown as a tile.
-      throw new UpstreamError('api.tomtom.com returned a non-PNG body', 'api.tomtom.com', response.status);
+      throw new UpstreamError(`api.tomtom.com returned a body that is not a ${kind} tile`, 'api.tomtom.com', response.status);
     }
     return readBodyCapped(response, TILE_MAX_BYTES, 'api.tomtom.com');
   }

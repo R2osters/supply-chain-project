@@ -146,3 +146,67 @@ describe('TrafficService', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('TrafficService vector flow tiles', () => {
+  afterEach(() => jest.restoreAllMocks());
+  const MVT = Buffer.from([0x1a, 0x02, 0x08, 0x02]);
+  const mvt = (type = 'application/vnd.mapbox-vector-tile'): Response =>
+    new Response(MVT, { status: 200, headers: { 'content-type': type } });
+
+  it('proxies vector flow tiles with the key only upstream', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(mvt());
+    const service = new TrafficService(undefined, { apiKey: KEY, dailyBudget: 10 });
+    expect((await service.getFlowTile(12, 2048, 1361)).equals(MVT)).toBe(true);
+    expect(String(fetchSpy.mock.calls[0][0])).toMatch(
+      /^https:\/\/api\.tomtom\.com\/traffic\/map\/4\/tile\/flow\/relative\/12\/2048\/1361\.pbf\?key=tt-secret-key-123$/,
+    );
+  });
+
+  it('accepts the protobuf content types TomTom may use', async () => {
+    for (const type of ['application/x-protobuf', 'application/octet-stream']) {
+      jest.spyOn(global, 'fetch').mockResolvedValueOnce(mvt(type));
+      const service = new TrafficService(undefined, { apiKey: KEY, dailyBudget: 10 });
+      expect((await service.getFlowTile(3, 1, 1)).equals(MVT)).toBe(true);
+    }
+  });
+
+  it('caches flow tiles apart from raster tiles and counts only upstream attempts', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockImplementation(async (url) =>
+      String(url).includes('.pbf') ? mvt() : png(),
+    );
+    const service = new TrafficService(undefined, { apiKey: KEY, dailyBudget: 10 });
+    await service.getFlowTile(12, 1, 1);
+    await service.getFlowTile(12, 1, 1);
+    await service.getTile(12, 1, 1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(service.status().tilesUsedToday).toBe(2);
+  });
+
+  it('refuses a flow body that is not a vector tile, without caching it', async () => {
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockImplementation(async () => new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } }));
+    const service = new TrafficService(undefined, { apiKey: KEY, dailyBudget: 10 });
+    await expect(service.getFlowTile(12, 1, 1)).rejects.toBeInstanceOf(BadGatewayException);
+    await expect(service.getFlowTile(12, 1, 1)).rejects.toBeInstanceOf(BadGatewayException);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('is 404 without a key and 429 once the budget is spent', async () => {
+    await expect(new TrafficService(undefined, { apiKey: null, dailyBudget: 10 }).getFlowTile(1, 0, 0)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    jest.spyOn(global, 'fetch').mockImplementation(async () => mvt());
+    const service = new TrafficService(undefined, { apiKey: KEY, dailyBudget: 1 });
+    await service.getFlowTile(3, 0, 0);
+    const error = await service.getFlowTile(3, 1, 0).catch((e: unknown) => e);
+    expect((error as HttpException).getStatus()).toBe(429);
+  });
+
+  it('never stops at a budget of 0 (unlimited)', async () => {
+    jest.spyOn(global, 'fetch').mockImplementation(async () => mvt());
+    const service = new TrafficService(undefined, { apiKey: KEY, dailyBudget: 0 });
+    for (let x = 0; x < 20; x += 1) await service.getFlowTile(5, x, 0);
+    expect(service.status()).toMatchObject({ tilesUsedToday: 20, dailyBudget: 0, note: null });
+  });
+});

@@ -40,4 +40,23 @@ export class TrafficController {
     const png = await this.traffic.getTile(zoom, column, row);
     return new StreamableFile(png, { type: 'image/png', length: png.length });
   }
+
+  @Get('flow-tiles/:z/:x/:y')
+  @RequirePermissions('gps:read')
+  @Throttle({ default: { limit: 1200, ttl: 60_000 } })
+  @Header('Cache-Control', 'private, max-age=120')
+  @ApiProduces('application/vnd.mapbox-vector-tile')
+  @ApiOperation({
+    summary: 'TomTom traffic-flow vector tile (relative speeds per road line)',
+    description:
+      'Layer "Traffic flow": traffic_level (current / free-flow speed), road_type, road_closure, ' +
+      'traffic_road_coverage. Same budget and errors as the raster tiles: 404 without a key, 429 once ' +
+      'the daily budget is spent, 502 when TomTom fails.',
+  })
+  async flowTile(@Param('z') z: string, @Param('x') x: string, @Param('y') y: string): Promise<StreamableFile> {
+    const [zoom, column, row] = [z, x, y.replace(/\.pbf$/i, '')].map(parseTileSegment);
+    if (zoom === null || column === null || row === null) throw new BadRequestException('Invalid tile coordinates');
+    const tile = await this.traffic.getFlowTile(zoom, column, row);
+    return new StreamableFile(tile, { type: 'application/vnd.mapbox-vector-tile', length: tile.length });
+  }
 }
