@@ -8,5 +8,16 @@ fn main() {
     if std::env::args().skip(1).any(|arg| arg == "--provision") {
         std::process::exit(scip_desktop_lib::provision::run_cli());
     }
+    // Backup / restore without a window (DEPLOYMENT.md), same reasons as `--provision`.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(command) = scip_desktop_lib::backup::cli::parse(&args) {
+        std::process::exit(match command {
+            Ok(command) => scip_desktop_lib::backup::cli::run_cli(command),
+            Err(message) => {
+                println!("{}", serde_json::json!({ "error": message }));
+                2
+            }
+        });
+    }
     scip_desktop_lib::run();
 }

@@ -7,6 +7,10 @@ use std::sync::{Arc, Mutex};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
+use crate::backup::manifest::{self as backup_manifest, BackupInfo};
+use crate::backup::pending::{write_pending, PendingRestore};
+use crate::backup::run::{self as backup_run, RestoreResult};
+use crate::backup::backups_dir;
 use crate::events::{
     ErrorEvent, EventSink, StartupSnapshot, SupervisorEvent, ERROR_EVENT, PROGRESS_EVENT, READY_EVENT,
 };
@@ -26,6 +30,8 @@ struct AppState {
     supervisor: Mutex<Option<Arc<Supervisor>>>,
     /// API base URL and local recovery token, once the services are prepared.
     recovery: Mutex<Option<(String, String)>>,
+    /// Ports, password and folders of the running services, for backups.
+    context: Mutex<Option<Arc<RuntimeContext>>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,6 +68,100 @@ async fn recover_admin_password(
     tauri::async_runtime::spawn_blocking(move || recovery::request(&api, &token, email.as_deref()))
         .await
         .map_err(|_| "La récupération du mot de passe a échoué.".to_owned())?
+}
+
+const STARTING: &str = "SCIP est encore en train de démarrer. Réessayez dans un instant.";
+
+fn running_context(state: &AppState) -> Result<Arc<RuntimeContext>, String> {
+    state.context.lock().unwrap().clone().ok_or_else(|| STARTING.to_owned())
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupsView {
+    pub directory: String,
+    /// False with an external database: backups are then that server's business.
+    pub embedded: bool,
+    pub backups: Vec<BackupInfo>,
+    pub last_restore: Option<RestoreResult>,
+}
+
+/// Settings → Sauvegarde: the backups of the folder, newest first.
+#[tauri::command]
+async fn list_backups(state: tauri::State<'_, Arc<AppState>>) -> Result<BackupsView, String> {
+    let ctx: Arc<RuntimeContext> = running_context(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = backups_dir();
+        BackupsView {
+            directory: dir.display().to_string(),
+            embedded: !ctx.is_external_database(),
+            backups: backup_manifest::list_backups(&dir),
+            last_restore: backup_run::read_last_result(&ctx.dirs.root),
+        }
+    })
+    .await
+    .map_err(|_| "La lecture des sauvegardes a échoué.".to_owned())
+}
+
+/// Takes a backup of the running database and the delivery proofs (a few seconds).
+#[tauri::command]
+async fn create_backup(state: tauri::State<'_, Arc<AppState>>) -> Result<BackupInfo, String> {
+    let ctx: Arc<RuntimeContext> = running_context(&state)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        backup_run::create_backup(&ctx, &backups_dir(), false).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|_| "La sauvegarde a échoué.".to_owned())?
+}
+
+#[tauri::command]
+fn open_backups_folder(app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let dir = backups_dir();
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    app.opener().open_path(dir.display().to_string(), None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Restores `name` (a backup of the folder): safety backup first, then SCIP restarts its
+/// services and the startup plan rebuilds the database from the backup.
+#[tauri::command]
+async fn schedule_restore(app: AppHandle, state: tauri::State<'_, Arc<AppState>>, name: String) -> Result<(), String> {
+    let ctx: Arc<RuntimeContext> = running_context(&state)?;
+    let state: Arc<AppState> = Arc::clone(&state);
+    tauri::async_runtime::spawn_blocking(move || {
+        let dir = backups_dir();
+        let archive = backup_manifest::resolve(&dir, &name)
+            .ok_or_else(|| "Sauvegarde introuvable dans le dossier des sauvegardes.".to_owned())?;
+        backup_run::check_restorable(&ctx, &archive).map_err(|e| e.to_string())?;
+        let safety: BackupInfo = backup_run::create_backup(&ctx, &dir, true)
+            .map_err(|e| format!("La sauvegarde de sécurité a échoué, restauration annulée : {e}"))?;
+        write_pending(&ctx.dirs.root, &PendingRestore { archive, safety_backup: Some(dir.join(&safety.name)) })
+            .map_err(|e| e.to_string())?;
+        restart_services(app, state);
+        Ok(())
+    })
+    .await
+    .map_err(|_| "La restauration n'a pas pu être lancée.".to_owned())?
+}
+
+/// Stops every service, shows the startup screen again and boots anew in this process (a new
+/// process would meet the single-instance lock of this one). The boot finds the scheduled
+/// restore; the startup screen then reopens the interface on the new API port.
+fn restart_services(app: AppHandle, state: Arc<AppState>) {
+    let supervisor: Option<Arc<Supervisor>> = state.supervisor.lock().unwrap().take();
+    if let Some(supervisor) = supervisor {
+        supervisor.stop_all();
+    }
+    *state.snapshot.lock().unwrap() = StartupSnapshot::default();
+    *state.context.lock().unwrap() = None;
+    *state.recovery.lock().unwrap() = None;
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.eval("window.location.replace('/splash/index.html')");
+    }
+    let spawned = std::thread::Builder::new().name("supervisor".into()).spawn(move || boot(app, state));
+    if let Err(e) = spawned {
+        log::error!("could not restart the services: {e}");
+    }
 }
 
 /// Lets a page that loaded after some events were emitted catch up.
@@ -110,6 +210,8 @@ fn boot(app: AppHandle, state: Arc<AppState>) {
     ));
     *state.supervisor.lock().unwrap() = Some(Arc::clone(&supervisor));
     *state.recovery.lock().unwrap() = Some((ctx.api_base_url(), ctx.secrets.local_recovery_token.clone()));
+    let ctx: Arc<RuntimeContext> = Arc::new(ctx);
+    *state.context.lock().unwrap() = Some(Arc::clone(&ctx));
     if startup::boot(&supervisor, &ctx, sink.as_ref()) {
         supervisor.monitor();
     }
@@ -172,7 +274,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_runtime_info,
             get_startup_status,
-            recover_admin_password
+            recover_admin_password,
+            list_backups,
+            create_backup,
+            open_backups_folder,
+            schedule_restore
         ])
         .setup(move |app| {
             match_system_theme(app.handle());

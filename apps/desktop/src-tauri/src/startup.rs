@@ -150,22 +150,40 @@ pub fn boot(supervisor: &Supervisor, ctx: &RuntimeContext, events: &dyn EventSin
     }
 }
 
-/// Database rebuilt from the backup, then the services. If rebuilding fails (the database is
-/// already dropped by then), the safety backup taken just before is restored the same way, so
-/// SCIP opens on the data it had rather than on an empty or half-restored database.
+/// Database rebuilt from the backup, then the services.
 fn boot_with_restore(
     supervisor: &Supervisor,
     ctx: &RuntimeContext,
     staged: &backup::run::StagedRestore,
     events: &dyn EventSink,
 ) -> Result<(), SupervisorError> {
-    match run_plan(supervisor, ctx.restore_plan(&staged.dump), events) {
-        Ok(()) => backup::run::finish_restore(ctx, staged),
+    restore_database(supervisor, ctx, staged, events, false)?;
+    run_plan(supervisor, ctx.services_plan(), events)
+}
+
+/// Rebuilds the database from a staged backup (starting PostgreSQL first unless it already
+/// runs). If rebuilding fails (the database is already dropped by then), the safety backup taken
+/// just before is restored the same way, so SCIP keeps the data it had rather than an empty or
+/// half-restored database; the error is still returned when there was no way back.
+pub fn restore_database(
+    supervisor: &Supervisor,
+    ctx: &RuntimeContext,
+    staged: &backup::run::StagedRestore,
+    events: &dyn EventSink,
+    postgres_running: bool,
+) -> Result<(), SupervisorError> {
+    let plan: Vec<StartupStep> =
+        if postgres_running { ctx.rebuild_plan(&staged.dump) } else { ctx.restore_plan(&staged.dump) };
+    match run_plan(supervisor, plan, events) {
+        Ok(()) => {
+            backup::run::finish_restore(ctx, staged);
+            Ok(())
+        }
         Err(failure) => {
             let reason: String = failure.to_string();
             log::error!("restore of {} failed: {reason}", staged.archive.display());
             let rolled_back: Result<(), SupervisorError> = match backup::run::prepare_rollback(ctx, staged) {
-                Ok(Some(dump)) => run_plan(supervisor, ctx.rollback_plan(&dump), events),
+                Ok(Some(dump)) => run_plan(supervisor, ctx.rebuild_plan(&dump), events),
                 Ok(None) => Err(failure),
                 Err(e) => {
                     log::error!("safety backup unusable: {e}");
@@ -173,10 +191,9 @@ fn boot_with_restore(
                 }
             };
             backup::run::finish_rollback(ctx, staged, &reason);
-            rolled_back?;
+            rolled_back
         }
     }
-    run_plan(supervisor, ctx.services_plan(), events)
 }
 
 #[cfg(test)]

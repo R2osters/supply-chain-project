@@ -10,6 +10,7 @@
 //! usual migrations bring an older backup up to date.
 
 pub mod archive;
+pub mod cli;
 pub mod manifest;
 pub mod pending;
 pub mod run;

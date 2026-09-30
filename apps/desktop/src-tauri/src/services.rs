@@ -243,24 +243,20 @@ impl RuntimeContext {
     /// the API starts, then the usual migrations bring an older backup up to date. The services
     /// are started afterwards by `services_plan`, once the restore is known to have worked.
     pub fn restore_plan(&self, dump: &Path) -> Vec<StartupStep> {
+        let mut plan: Vec<StartupStep> =
+            vec![StartupStep::Task(self.initdb_task()), StartupStep::Service(self.postgres_service())];
+        plan.extend(self.rebuild_plan(dump));
+        plan
+    }
+
+    /// With PostgreSQL running: the database dropped and rebuilt from `dump`, then migrated. Used
+    /// by a restore (command line), and to fall back on the safety backup when a restore fails.
+    pub fn rebuild_plan(&self, dump: &Path) -> Vec<StartupStep> {
         vec![
-            StartupStep::Task(self.initdb_task()),
-            StartupStep::Service(self.postgres_service()),
             StartupStep::Task(self.drop_database_task()),
             StartupStep::Task(self.create_database_task()),
             StartupStep::Task(self.postgis_task()),
             StartupStep::Task(self.restore_task(dump)),
-            StartupStep::Task(self.migrate_task()),
-        ]
-    }
-
-    /// After a failed restore, with PostgreSQL already running: back to the safety backup.
-    pub fn rollback_plan(&self, safety_dump: &Path) -> Vec<StartupStep> {
-        vec![
-            StartupStep::Task(self.drop_database_task()),
-            StartupStep::Task(self.create_database_task()),
-            StartupStep::Task(self.postgis_task()),
-            StartupStep::Task(self.restore_task(safety_dump)),
             StartupStep::Task(self.migrate_task()),
         ]
     }
@@ -609,8 +605,8 @@ mod tests {
             names,
             vec!["initdb", "postgres", "drop-database", "create-database", "postgis", "restore", "migrate"]
         );
-        let rollback: Vec<String> = ctx().rollback_plan(dump).iter().map(|s| s.name().to_owned()).collect();
-        assert_eq!(rollback, vec!["drop-database", "create-database", "postgis", "restore", "migrate"]);
+        let rebuild: Vec<String> = ctx().rebuild_plan(dump).iter().map(|s| s.name().to_owned()).collect();
+        assert_eq!(rebuild, vec!["drop-database", "create-database", "postgis", "restore", "migrate"]);
     }
 
     #[test]
