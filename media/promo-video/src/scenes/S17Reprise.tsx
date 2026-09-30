@@ -4,7 +4,7 @@
 // shipments (SHP-0217, SHP-0309, SHP-0388, each a container glyph with its violet demo dot) hop from station to station,
 // one station per beat: SUIVRE lights crit (the delay is heard), OPTIMISER warn (the risk), RECOMMANDATION ok (the
 // answer), HUMAIN live (it runs) — one station and one colour at a time, each on its own cue. The lines, Plex Condensed
-// 200 px, cut in on their cues and rise word by word on the voice: « LE SUIVI ENTEND. » → « L'OPTIMISATION PROPOSE. »
+// 200 px, cut in on their cues and rise word by word on the voice: « LE SUIVI ENTEND. » → « L’OPTIMISATION PROPOSE. »
 // → « VOUS DÉCIDEZ. ». On « décidez » the big button comes to the centre; the cursor glides onto it, it fills over the
 // beat, and the click lands on frame 4860 exactly, with the S07 choreography: press 0.96, shockwave 0 → 700 px, punch
 // zoom 1 → 1.03 → 1. The arm stops at 12 o'clock on the click and the ring flashes ink. On the last beat everything
@@ -87,7 +87,7 @@ export const ARRIVALS: readonly Arrival[] = seriesLocal(S, 'S17.station').map((a
 
 const LINE_WORDS: ReadonlyArray<ReadonlyArray<readonly [string, string]>> = [
   [['Le', 'LE'], ['suivi', 'SUIVI'], ['entend', 'ENTEND.']],
-  [["L'optimisation", "L'OPTIMISATION"], ['propose', 'PROPOSE.']],
+  [["L'optimisation", 'L’OPTIMISATION'], ['propose', 'PROPOSE.']],
   [['vous', 'VOUS'], ['décidez', 'DÉCIDEZ.']],
 ];
 

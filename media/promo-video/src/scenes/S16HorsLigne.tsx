@@ -3,8 +3,8 @@
 // square « online » tiles, like a web map. On the downbeat the Wi-Fi is struck through in crit, « HORS LIGNE ». From the
 // next beat the tiles fall away in a diagonal wave, one diagonal per sixteenth (the 28 descending tile clicks of the
 // score, over 105 frames), and the map underneath does not move: it stays readable. On « carte » the caption
-// « FOND DE CARTE EMBARQUÉ · NATURAL EARTH » settles in the bottom-left corner. No live layer (ships, planes, disasters)
-// is shown here: only the base map is available offline (spec § 8).
+// « FOND DE CARTE EMBARQUÉ · NATURAL EARTH » settles, on two lines, in the open South Pacific. No live layer (ships,
+// planes, disasters) is shown here: only the base map is available offline (spec § 8).
 import {AbsoluteFill, useCurrentFrame} from 'remotion';
 import geo from '../../generated/geo.json';
 import {WorldMap} from '../components/WorldMap';
@@ -30,6 +30,23 @@ const CLICKS = roundHalfUp(105 / SIXTEENTH);
 const FALL_FRAMES = 14;
 const FALL_DROP = 110;
 const FALL_TILT = 7;
+
+/**
+ * Equal Earth closes Antarctica with a straight edge along the South Pole (y = 960.5), which is not a coast. The coast
+ * overlay is clipped just above it: the lowest real coast (the ice-shelf fronts near the antimeridian, y ≤ 958.7) keeps
+ * its whole 1.4 px stroke, the pole edge (959.8 … 961.2 once stroked) is not drawn.
+ */
+export const POLE_Y = 960.5;
+export const COAST_CLIP_Y = 959.6;
+
+/**
+ * The caption, on two lines in the open South Pacific, west of the Chilean coast (about 100 px of water all round):
+ * the Equal Earth frame has no free corner for it on one line (653 px), and the bottom-left corner is Antarctica.
+ * The line break stands for the « · » separator of the one-line form.
+ */
+export const CAPTION_LINES = ['FOND DE CARTE EMBARQUÉ', 'NATURAL EARTH'] as const;
+/** Mono 24 px with +0.08 em: 16.32 px per character, plus 2 × 16 px padding and the 1.5 px borders. */
+export const CAPTION_BOX = {x: 96, y: 748, w: Math.ceil(CAPTION_LINES[0].length * 24 * 0.68) + 32 + 3, h: 84} as const;
 
 export const S16_T = (() => {
   const tiles = cueLocal(S, 'S16.tiles');
@@ -119,10 +136,15 @@ export const S16HorsLigne: React.FC = () => {
           the charter's neutral greys, strong enough to read at the back of a classroom. */}
       <WorldMap theme={theme} layers={['land', 'lakes', 'rivers', 'borders', 'cities']} />
       <svg width={1920} height={1080} style={{position: 'absolute', left: 0, top: 0}}>
+        <defs>
+          <clipPath id="s16-above-pole">
+            <rect x={0} y={0} width={1920} height={COAST_CLIP_Y} />
+          </clipPath>
+        </defs>
         <path d={geo.world.rivers} fill="none" stroke={pal.dim} strokeOpacity={0.45} strokeWidth={1} strokeLinejoin="round" />
         <path d={geo.world.lakes} fill="none" stroke={pal.dim} strokeOpacity={0.6} strokeWidth={1} />
         <path d={geo.world.borders} fill="none" stroke={pal.dim} strokeOpacity={0.55} strokeWidth={1} strokeLinejoin="round" />
-        <path d={geo.world.land} fill="none" stroke={pal.muted} strokeWidth={1.4} strokeLinejoin="round" />
+        <path d={geo.world.land} fill="none" stroke={pal.muted} strokeWidth={1.4} strokeLinejoin="round" clipPath="url(#s16-above-pole)" />
         {geo.world.cities.map((c, i) => (
           <circle key={i} cx={c.x} cy={c.y} r={c.r + 0.5} fill={pal.ink} stroke={pal.map} strokeWidth={1.5} />
         ))}
@@ -138,8 +160,13 @@ export const S16HorsLigne: React.FC = () => {
         <WifiGlyph size={34} color={pal.ink} strike={wifiStrike(f)} strikeColor={crit} knockout={pal.surface2} />
         HORS LIGNE
       </div>
-      <div style={{position: 'absolute', left: 96, top: 916, opacity: captionIn, transform: `translateY(${(1 - captionIn) * 10}px)`}}>
-        <Chip theme={theme} style={{background: pal.surface2}}>FOND DE CARTE EMBARQUÉ · NATURAL EARTH</Chip>
+      <div style={{position: 'absolute', left: CAPTION_BOX.x, top: CAPTION_BOX.y, opacity: captionIn, transform: `translateY(${(1 - captionIn) * 10}px)`}}>
+        <Chip
+          theme={theme}
+          style={{background: pal.surface2, height: CAPTION_BOX.h, flexDirection: 'column', alignItems: 'flex-start', justifyContent: 'center', gap: 10}}
+        >
+          {CAPTION_LINES.map((l) => <span key={l}>{l}</span>)}
+        </Chip>
       </div>
     </AbsoluteFill>
   );

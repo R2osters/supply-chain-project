@@ -5,10 +5,13 @@ import {armAngle} from '../components/LoopSequencer';
 import {stackBox, topFace} from '../components/IsoStack';
 import {FRAMES_PER_BEAT, quantize, roundHalfUp, SIXTEENTH} from '../lib/beat';
 import {cue, cueLocal, sceneFrames, sceneStart, seriesLocal, wordLocal} from '../lib/timeline';
+import geo from '../../generated/geo.json';
 import {
-  CHIPS, chipIn, CIRCLE, EXPLODED, IN_PC, LABEL_BOXES, lockClosed, PC_GROUP, S15_T, shackle, SLABS, slabAt, statusAt,
+  CHIPS, chipIn, CIRCLE, circleDots, EXPLODED, IN_PC, LABEL_BOXES, lockClosed, PC_GROUP, S15_T, shackle, SLABS, slabAt, statusAt,
 } from './S15Fichier';
-import {S16_T, TILE, TILE_COLS, TILE_ROWS, tileFall, tileState, wifiStrike} from './S16HorsLigne';
+import {
+  CAPTION_BOX, CAPTION_LINES, COAST_CLIP_Y, POLE_Y, S16_T, TILE, TILE_COLS, TILE_ROWS, tileFall, tileState, wifiStrike,
+} from './S16HorsLigne';
 import {ARRIVALS, clickFx17, holdFill17, lineAt, LINES, litStation, S17_T, s17ArmFrame, SHIPMENTS, STATIONS, tokenAt} from './S17Reprise';
 import {DOT_HOME, dotState, logoDraw, RINGS, S18_T, SLOGAN, waveAt} from './S18Coda';
 
@@ -95,6 +98,25 @@ describe('S15 · un seul fichier', () => {
     // In the exploded view no slab hides the pictogram of the one below it.
     for (let i = 0; i < 3; i++) expect(topFace(EXPLODED[i])[2].y + EXPLODED[i].t).toBeLessThanOrEqual(topFace(EXPLODED[i + 1])[0].y);
   });
+
+  it('closes the dotted circle on its label chip: only the dots behind the chip are left out', () => {
+    const chip = PC_GROUP[0];
+    const all = circleDots(1);
+    const pitch = (2 * Math.PI * CIRCLE.r) / 112;
+    // Every other dot is drawn, and none of them touches the chip.
+    expect(all.length).toBeGreaterThan(112 - 20);
+    for (const p of all) expect(p.y + 2.4 <= chip.y || Math.abs(p.x - CIRCLE.x) >= chip.w / 2).toBe(true);
+    // The arc runs down to the chip's top edge on both sides, symmetrically (the old gap stopped ~70 px above it).
+    const lowest = (side: number) => Math.max(...all.filter((p) => Math.sign(p.x - CIRCLE.x) === side).map((p) => p.y));
+    for (const side of [-1, 1]) {
+      expect(lowest(side)).toBeGreaterThan(chip.y - 2.4 - 4 - pitch);
+      expect(lowest(side)).toBeLessThan(chip.y);
+    }
+    expect(lowest(-1)).toBeCloseTo(lowest(1), 6);
+    // Drawn clockwise from the bottom: a partial circle is a prefix of the whole one.
+    expect(circleDots(0.5)).toEqual(all.slice(0, circleDots(0.5).length));
+    expect(circleDots(0.5).length).toBeLessThan(all.length);
+  });
 });
 
 describe('S16 · hors ligne', () => {
@@ -139,6 +161,30 @@ describe('S16 · hors ligne', () => {
   it('shows the caption on « carte »', () => {
     expect(S16_T.caption).toBe(w16('carte', 'S16'));
   });
+
+  // The map's vertices (land rings) and city dots, from the same generated/geo.json the scene draws.
+  const landPoints = geo.world.land
+    .split('Z')
+    .flatMap((ring) => [...ring.matchAll(/(-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({x: Number(m[1]), y: Number(m[2])})));
+
+  it('sets the caption on open water, inside the margins, clear of every coast and city', () => {
+    expect(CAPTION_LINES.join(' · ')).toBe('FOND DE CARTE EMBARQUÉ · NATURAL EARTH');
+    expect(inside(CAPTION_BOX)).toBe(true);
+    const gap = (p: {x: number; y: number}) =>
+      Math.hypot(Math.max(CAPTION_BOX.x - p.x, 0, p.x - CAPTION_BOX.x - CAPTION_BOX.w), Math.max(CAPTION_BOX.y - p.y, 0, p.y - CAPTION_BOX.y - CAPTION_BOX.h));
+    for (const p of landPoints) expect(gap(p)).toBeGreaterThan(60);
+    for (const c of geo.world.cities) expect(gap(c)).toBeGreaterThan(60);
+  });
+
+  it('draws every coast but not the straight pole edge that closes Antarctica', () => {
+    const coastStroke = 1.4 / 2;
+    expect(Math.max(...landPoints.map((p) => p.y))).toBe(POLE_Y);
+    // Every vertex is either on the pole edge (clipped whole) or a coast whose stroke stays above the clip.
+    for (const p of landPoints) {
+      if (p.y === POLE_Y) expect(POLE_Y - coastStroke).toBeGreaterThan(COAST_CLIP_Y);
+      else expect(p.y + coastStroke).toBeLessThan(COAST_CLIP_Y);
+    }
+  });
 });
 
 describe('S17 · reprise', () => {
@@ -179,7 +225,7 @@ describe('S17 · reprise', () => {
   });
 
   it('cuts to each kinetic line on its cue, each word on its voice word', () => {
-    expect(LINES.map((l) => l.words.map((w) => w.text).join(' '))).toEqual(['LE SUIVI ENTEND.', "L'OPTIMISATION PROPOSE.", 'VOUS DÉCIDEZ.']);
+    expect(LINES.map((l) => l.words.map((w) => w.text).join(' '))).toEqual(['LE SUIVI ENTEND.', 'L’OPTIMISATION PROPOSE.', 'VOUS DÉCIDEZ.']);
     const cues = ['S17.line1', 'S17.line2', 'S17.line3'].map((id) => cueLocal('S17', id));
     const spoken = [['Le', 'suivi', 'entend'], ["L'optimisation", 'propose'], ['vous', 'décidez']];
     LINES.forEach((line, k) => {

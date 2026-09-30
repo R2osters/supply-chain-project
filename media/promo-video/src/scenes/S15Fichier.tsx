@@ -244,8 +244,29 @@ const Switch: React.FC = () => (
 );
 
 const CIRCLE_DOTS = 112;
-/** Half-width of the circle's label chip: the dotted line stops at its edges. */
-const LABEL_HALF = PC_GROUP[0].w / 2 + 10;
+const DOT_R = 2.4;
+/** Clearance kept between a dot and the label chip. */
+const DOT_GAP = 4;
+
+/**
+ * The dotted circle's dots, drawn clockwise from the bottom up to `drawn` (0..1). The label chip sits on the circle like
+ * a badge: only the dots behind it (or touching it) are left out, so the arc runs down to the chip's top edge on both
+ * sides and the perimeter reads as closed. The chip fades in over the first dots, which never show through it.
+ */
+export const circleDots = (drawn: number): Point[] => {
+  const chip = PC_GROUP[0];
+  const dots: Point[] = [];
+  for (let k = 0; k < CIRCLE_DOTS; k++) {
+    if (k / CIRCLE_DOTS > drawn) break;
+    const a = Math.PI / 2 + (2 * Math.PI * k) / CIRCLE_DOTS;
+    const x = CIRCLE.x + CIRCLE.r * Math.cos(a);
+    const y = CIRCLE.y + CIRCLE.r * Math.sin(a);
+    const behindChip = y + DOT_R + DOT_GAP > chip.y && Math.abs(x - CIRCLE.x) < chip.w / 2 + DOT_R + DOT_GAP;
+    if (!behindChip) dots.push({x, y});
+  }
+  return dots;
+};
+
 const WAVE_LIFE = 30;
 const WAVE_EVERY = 7.5;
 const WAVE_FROM = 30;
@@ -354,16 +375,7 @@ export const S15Fichier: React.FC = () => {
             <circle cx={CIRCLE.x} cy={CIRCLE.y} r={CIRCLE.r + 10} fill="black" />
           </mask>
         </defs>
-        {circle > 0 &&
-          Array.from({length: CIRCLE_DOTS}, (_, k) => {
-            if (k / CIRCLE_DOTS > circle) return null;
-            // Clockwise from the bottom, where the label sits; the line stops at the label's edges.
-            const a = Math.PI / 2 + (2 * Math.PI * k) / CIRCLE_DOTS;
-            const x = CIRCLE.x + CIRCLE.r * Math.cos(a);
-            const y = CIRCLE.y + CIRCLE.r * Math.sin(a);
-            if (y > CIRCLE.y && Math.abs(x - CIRCLE.x) < LABEL_HALF) return null;
-            return <circle key={k} cx={x} cy={y} r={2.4} fill={pal.ink} />;
-          })}
+        {circle > 0 && circleDots(circle).map((p, k) => <circle key={k} cx={p.x} cy={p.y} r={DOT_R} fill={pal.ink} />)}
         <g mask="url(#s15-outside-circle)" fill="none" stroke={pal.muted} strokeWidth={2} strokeLinecap="round">
           {waves.map((w, k) => <path key={k} d={waveArc(w.r)} opacity={w.o * wifiIn} />)}
         </g>
