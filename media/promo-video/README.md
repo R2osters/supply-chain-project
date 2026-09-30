@@ -17,18 +17,21 @@ Tout est généré par du code, sans montage à la main :
 - `timeline/timeline.json` est la source unique : scènes, mesures, textes de la voix et cues.
   L'image et le son lisent tous les deux ce fichier, d'où la synchro.
 
-Sortie : `out/scip-le-signal.mp4` (H.264 CRF 18, AAC 320 kb/s). La conception complète est dans
+Sortie : `out/scip-le-signal.mp4` (H.264 CRF 18 en BT.709 à plage limitée, AAC 320 kb/s). La
+conception complète est dans
 `docs/superpowers/specs/2026-09-29-video-le-signal-design.md`.
 
 ## Prérequis
 
-- **Node 20 ou plus récent** (npm inclus). Sous Node 25, vitest 5 affiche un avertissement
-  `EBADENGINE` à l'installation : il fonctionne quand même.
+- **Node 22.12+ ou Node 24** (npm inclus) : c'est la plage prise en charge pour les tests, vitest
+  5.0.2 demandant `^22.12 || ^24 || >=26`. Node 25 fonctionne, avec un avertissement `EBADENGINE`
+  à l'installation. Node 20, 21 et 23 sont hors de la plage de vitest.
 - **Python 3.12** pour la voix, la musique, le lint et les contrôles audio.
 - Un accès réseau la première fois (voix edge-tts, fond de carte Natural Earth, Chrome de
   Remotion). Ensuite les caches `.vo-cache/` et `.geo-cache/` suffisent.
 - De la place pendant un rendu : environ 330 Mo dans le dossier temporaire (voir l'astuce plus
-  bas) et 450 Mo dans `out/` (vidéo muette intermédiaire, puis film final de 223 Mo).
+  bas) et 610 Mo dans `out/` au moment du mux (vidéo muette intermédiaire de 197 Mo, nouveau
+  film `.partial` et ancien film, 204 Mo chacun).
 
 Les commandes ci-dessous sont données pour PowerShell, depuis `media/promo-video/`.
 
@@ -63,13 +66,20 @@ npm run geo
 npm run render
 ```
 
-`npm run render` se fait en deux temps (décision R22) :
+`npm run render` se fait en deux temps (décision R22), après un contrôle
+(`node scripts/mux.mjs --check`) qui s'arrête tout de suite si `public/audio/master.wav` manque,
+plutôt qu'à la fin du rendu :
 
 1. Remotion rend l'image **sans le son** (`--muted`) dans `out/scip-le-signal.video.mp4`
-   (H.264, CRF 18, 1920×1080) ;
+   (H.264, CRF 18, 1920×1080). `--color-space=bt709` convertit les images en BT.709 à plage
+   limitée (`yuv420p`, `tv`) : sans cette option, Remotion 4 écrit du BT.601 plein écart
+   (`yuvj420p`, `pc`), que bien des lecteurs et vidéoprojecteurs HD lisent mal (noirs bouchés,
+   blancs brûlés, teintes décalées) ;
 2. `scripts/mux.mjs` y ajoute `public/audio/master.wav` avec le ffmpeg fourni par Remotion
-   (`-c:v copy -c:a aac -b:a 320k`), écrit `out/scip-le-signal.mp4` et supprime le fichier
-   intermédiaire.
+   (`-c:v copy -c:a aac -b:a 320k -movflags +faststart`, l'index `moov` en tête du fichier pour
+   que la lecture démarre sans tout lire). Il écrit d'abord `out/scip-le-signal.mp4.partial`,
+   le renomme en `out/scip-le-signal.mp4` seulement si ffmpeg a réussi (un mux raté laisse
+   l'ancien film en place), puis supprime le fichier intermédiaire.
 
 Le mux AAC de Remotion décale le son de 2 048 échantillons (1,28 image) : chaque cue tomberait une
 à deux images en retard. Le remux ne décale rien. `npm run render:draft` suit le même chemin en
@@ -132,7 +142,8 @@ scène, `src/scenes/Sxx*.tsx`.
 - **Rapport de contrôle** (porte D) : sonde du MP4 (`npx remotion ffprobe out/scip-le-signal.mp4`),
   mesures audio du fichier final, déterminisme, tests, puis la checklist des faits du spec § 8,
   ligne par ligne, chacune prouvée par un still pleine taille
-  (`npm run stills -- --frames 1000,1370,1680 --out out/stills/facts`).
+  (`npm run stills -- --frames 1000,1370,1680 --out out/stills/facts --prefix fact`, qui écrit
+  `fact-NNNN.png`).
 
 ## Licences
 

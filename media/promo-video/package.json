@@ -6,8 +6,8 @@
   "scripts": {
     "studio": "remotion studio src/index.ts",
     "still": "remotion still src/index.ts SignalVideo",
-    "render": "remotion render src/index.ts SignalVideo out/scip-le-signal.video.mp4 --codec=h264 --crf=18 --muted && node scripts/mux.mjs out/scip-le-signal.video.mp4 out/scip-le-signal.mp4",
-    "render:draft": "remotion render src/index.ts SignalVideo out/scip-le-signal-draft.video.mp4 --codec=h264 --crf=28 --scale=0.6666666666666666 --muted && node scripts/mux.mjs out/scip-le-signal-draft.video.mp4 out/scip-le-signal-draft.mp4",
+    "render": "node scripts/mux.mjs --check && remotion render src/index.ts SignalVideo out/scip-le-signal.video.mp4 --codec=h264 --crf=18 --color-space=bt709 --muted && node scripts/mux.mjs out/scip-le-signal.video.mp4 out/scip-le-signal.mp4",
+    "render:draft": "node scripts/mux.mjs --check && remotion render src/index.ts SignalVideo out/scip-le-signal-draft.video.mp4 --codec=h264 --crf=28 --scale=0.6666666666666666 --color-space=bt709 --muted && node scripts/mux.mjs out/scip-le-signal-draft.video.mp4 out/scip-le-signal-draft.mp4",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "geo": "node scripts/geo.mjs",
