@@ -1298,6 +1298,14 @@
     applyLang(i18n.getLang()); // applies strings to the static shell
     if (isUninstall()) return goto("un-confirm");
 
+    // Started by SCIP's updater: straight to the progress screen; the engine relaunches SCIP
+    // (unless it was closing) and closes this window once the update is done.
+    const update = L.autoUpdateState(ctx);
+    if (update) {
+      S = update;
+      return startInstall();
+    }
+
     const jump = engine.mock ? L.screenFromParam(params.get("step")) : null;
     if (jump && jump !== "welcome") {
       await prefillForJump(jump);

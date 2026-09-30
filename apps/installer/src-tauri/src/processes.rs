@@ -15,6 +15,18 @@ pub struct RunningProcess {
     pub exe: PathBuf,
 }
 
+/// Waits up to `patience` for SCIP to close on its own (an update it started), then stops what is
+/// still running from `dir`, SCIP first.
+pub fn wait_then_stop(dir: &Path, patience: std::time::Duration) {
+    let deadline = std::time::Instant::now() + patience;
+    while app_running_in(list(), dir) && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    for process in running_in(list(), dir) {
+        kill(process.pid);
+    }
+}
+
 /// Processes whose executable lives in `dir`, SCIP itself first (killing it lets its job object
 /// take the sidecars down with it).
 pub fn running_in(all: Vec<RunningProcess>, dir: &Path) -> Vec<RunningProcess> {

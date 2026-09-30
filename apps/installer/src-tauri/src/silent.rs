@@ -3,6 +3,7 @@
 //!
 //! ```text
 //! SCIP-Setup.exe --silent --plan plan.json [--skip-provision]
+//! SCIP-Setup.exe --silent --update              (upgrade the existing install, no plan)
 //! SCIP-Setup.exe --silent --uninstall [--remove-data]
 //! ```
 //!
@@ -28,6 +29,10 @@ pub struct Args {
     pub plan: Option<PathBuf>,
     pub skip_provision: bool,
     pub remove_data: bool,
+    /// Started by SCIP's updater: upgrade the existing install without screens to click.
+    pub update: bool,
+    /// With `--update`: SCIP is closing, do not relaunch it.
+    pub no_launch: bool,
 }
 
 impl Args {
@@ -41,6 +46,8 @@ impl Args {
                 "--plan" => out.plan = iter.next().map(PathBuf::from),
                 "--skip-provision" => out.skip_provision = true,
                 "--remove-data" => out.remove_data = true,
+                "--update" => out.update = true,
+                "--no-launch" => out.no_launch = true,
                 // Unknown arguments are ignored: Windows or a shortcut may add its own.
                 _ => {}
             }
@@ -73,7 +80,8 @@ fn fail(code: &str, message: &str) -> i32 {
 /// Returns the process exit code: 0 on success.
 pub fn run(args: &Args) -> i32 {
     let ctx = match build_context(args.uninstall) {
-        Ok(ctx) => ctx,
+        // Headless: never relaunch SCIP (the caller, e.g. `scip-desktop.exe --update`, decides).
+        Ok(ctx) => ctx.with_update(args.update, true),
         Err(e) => return fail(&e.code, &e.message),
     };
     let journal = Arc::new(journal_for(&ctx));
@@ -84,15 +92,18 @@ pub fn run(args: &Args) -> i32 {
         uninstall::spawn_pending_self_delete();
         return if ok { 0 } else { 1 };
     }
-    let Some(plan_path) = &args.plan else {
-        return fail("invalid_input", "--silent needs --plan <file.json> (or --uninstall)");
-    };
-    let plan: InstallPlan = match std::fs::read(plan_path)
-        .map_err(|e| e.to_string())
-        .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()))
-    {
-        Ok(plan) => plan,
-        Err(e) => return fail("invalid_plan", &format!("{}: {e}", plan_path.display())),
+    let plan: InstallPlan = match (&args.plan, args.update) {
+        // An upgrade keeps the data and settings: the plan carries nothing (plan.rs).
+        (None, true) if ctx.mode == Mode::Upgrade => InstallPlan::upgrade(),
+        (None, true) => return fail("not_installed", "--update: no SCIP installation to update"),
+        (None, false) => return fail("invalid_input", "--silent needs --plan <file.json>, --update or --uninstall"),
+        (Some(plan_path), _) => match std::fs::read(plan_path)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()))
+        {
+            Ok(plan) => plan,
+            Err(e) => return fail("invalid_plan", &format!("{}: {e}", plan_path.display())),
+        },
     };
     let installer = Installer::new(
         Arc::new(system_actions(&ctx, args.skip_provision)),
@@ -126,5 +137,9 @@ mod tests {
         assert_eq!(a.plan, Some(PathBuf::from("C:/p.json")));
         let u = parse("--uninstall --silent --remove-data --whatever");
         assert!(u.silent && u.uninstall && u.remove_data && u.plan.is_none());
+        let up = parse("--update --no-launch");
+        assert!(up.update && up.no_launch && !up.silent && up.plan.is_none());
+        let headless = parse("--silent --update");
+        assert!(headless.silent && headless.update && !headless.no_launch);
     }
 }

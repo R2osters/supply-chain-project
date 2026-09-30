@@ -359,9 +359,21 @@
     };
   }
 
+  /**
+   * Started by SCIP's updater (`--update`) over an existing install: the upgrade starts at once,
+   * without screens to click and without touching the Desktop shortcut.
+   */
+  function autoUpdateState(ctx) {
+    if (!ctx || !ctx.autoUpdate || ctx.mode !== "upgrade") return null;
+    const state = initialState("upgrade");
+    state.desktopShortcut = false;
+    return state;
+  }
+
   return {
     RAIL,
     SCREENS,
+    autoUpdateState,
     FLOW,
     INPUT_SCREENS,
     COUNTRIES,

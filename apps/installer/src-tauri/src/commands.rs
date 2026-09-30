@@ -47,7 +47,16 @@ pub fn build_context(uninstall_flag: bool) -> Result<SetupContext, CommandError>
     let payload_source: PathBuf =
         std::env::var(PAYLOAD_ENV).ok().filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or(me);
     let payload_bytes = PayloadReader::open(&payload_source).map(|r| r.footer().len).unwrap_or(0);
-    Ok(SetupContext { mode, layout, existing, locale: Locale::detect(), payload_source, payload_bytes })
+    Ok(SetupContext {
+        mode,
+        layout,
+        existing,
+        locale: Locale::detect(),
+        payload_source,
+        payload_bytes,
+        auto_update: false,
+        launch_after: false,
+    })
 }
 
 /// Install logs go to the data folder with SCIP's other logs. The uninstaller logs to %TEMP%:
@@ -140,17 +149,29 @@ async fn test_database(state: State<'_>, request: Request<'_>) -> Result<DbRepor
 }
 
 #[tauri::command]
-fn start_install(state: State<'_>, request: Request<'_>) -> Result<(), CommandError> {
+fn start_install(app: AppHandle, state: State<'_>, request: Request<'_>) -> Result<(), CommandError> {
     if state.ctx.mode == Mode::Uninstall {
         return Err(CommandError::new("wrong_mode", "this is the uninstaller"));
     }
     let plan: InstallPlan = input(&request, &["plan"])?;
     let installer = state.installer()?;
     installer.start(plan)?;
+    let ctx = state.ctx.clone();
     std::thread::Builder::new()
         .name("install".into())
         .spawn(move || {
-            installer.run();
+            let done: bool = installer.run();
+            // An update started by SCIP ends on its own: SCIP relaunched (or not, when it was
+            // closing), then the window closes after a moment on the "done" screen.
+            if done && ctx.auto_update {
+                if ctx.launch_after {
+                    if let Err(e) = start_scip(&ctx) {
+                        log::warn!("could not relaunch SCIP after the update: {}", e.message);
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                app.exit(0);
+            }
         })
         .map_err(|e| CommandError::new("internal", e.to_string()))?;
     Ok(())
@@ -193,6 +214,18 @@ fn launch_scip(app: AppHandle, state: State<'_>, request: Request<'_>) -> Result
         };
         result.map_err(|e| CommandError::new("shortcut", e.to_string()))?;
     }
+    start_scip(ctx)?;
+    // Let the command's reply reach the page before the window closes.
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        app.exit(0);
+    });
+    Ok(())
+}
+
+/// Starts the installed SCIP, detached: it must outlive the installer, which exits right after.
+fn start_scip(ctx: &SetupContext) -> Result<(), CommandError> {
+    let exe = ctx.app_exe();
     let mut command = Command::new(&exe);
     command.current_dir(ctx.target_dir());
     if ctx.layout.test_mode {
@@ -201,18 +234,11 @@ fn launch_scip(app: AppHandle, state: State<'_>, request: Request<'_>) -> Result
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        // SCIP must outlive the installer, which exits right after.
         const DETACHED_PROCESS: u32 = 0x0000_0008;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
         command.creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP);
     }
-    command.spawn().map_err(|e| CommandError::new("launch_failed", e.to_string()))?;
-    // Let the command's reply reach the page before the window closes.
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(300));
-        app.exit(0);
-    });
-    Ok(())
+    command.spawn().map(|_| ()).map_err(|e| CommandError::new("launch_failed", e.to_string()))
 }
 
 #[derive(Deserialize)]
@@ -259,9 +285,9 @@ impl EventSink for TauriSink {
     }
 }
 
-pub fn run_app(uninstall_flag: bool) {
+pub fn run_app(uninstall_flag: bool, update: bool, no_launch: bool) {
     let ctx = match build_context(uninstall_flag) {
-        Ok(ctx) => ctx,
+        Ok(ctx) => ctx.with_update(update, no_launch),
         Err(e) => {
             eprintln!("SCIP Setup: {}", e.message);
             std::process::exit(2);

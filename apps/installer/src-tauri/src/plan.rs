@@ -35,6 +35,11 @@ fn text<'a>(value: &'a Value, path: &[&str]) -> Option<&'a str> {
 }
 
 impl InstallPlan {
+    /// What an upgrade needs: nothing (data and settings are kept), no Desktop shortcut change.
+    pub fn upgrade() -> Self {
+        Self { desktop_shortcut: false, rest: Map::new() }
+    }
+
     pub fn kind(&self) -> Option<&str> {
         self.rest.get("kind").and_then(Value::as_str)
     }

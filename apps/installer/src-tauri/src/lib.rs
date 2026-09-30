@@ -23,5 +23,5 @@ pub fn run() {
     if args.silent {
         std::process::exit(silent::run(&args));
     }
-    commands::run_app(args.uninstall);
+    commands::run_app(args.uninstall, args.update, args.no_launch);
 }

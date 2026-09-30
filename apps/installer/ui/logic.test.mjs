@@ -195,3 +195,14 @@ test("the rail leaves out steps that do not apply and renumbers the rest", () =>
   assert.equal(L.visibleRail(demo).length, L.RAIL.length - 2);
   assert.equal(L.stepNumber("summary", demo), 6);
 });
+
+test("an update started by SCIP begins at once and leaves the Desktop shortcut alone", () => {
+  const state = L.autoUpdateState({ mode: "upgrade", autoUpdate: true, launchAfter: true });
+  assert.ok(state);
+  assert.equal(state.mode, "upgrade");
+  const plan = L.buildPlan(state);
+  assert.equal(plan.desktopShortcut, false);
+  assert.equal(L.autoUpdateState({ mode: "upgrade", autoUpdate: false }), null);
+  assert.equal(L.autoUpdateState({ mode: "install", autoUpdate: true }), null);
+  assert.equal(L.autoUpdateState(null), null);
+});

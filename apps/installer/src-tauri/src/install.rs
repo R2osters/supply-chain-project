@@ -218,6 +218,11 @@ impl SystemActions {
 impl InstallActions for SystemActions {
     fn extract(&self, progress: Progress) -> Result<(), StepFailure> {
         let target = self.target();
+        // SCIP started this update and is closing: give it time to stop its database cleanly,
+        // then stop whatever is left in its folder.
+        if self.ctx.auto_update {
+            crate::processes::wait_then_stop(&target, std::time::Duration::from_secs(60));
+        }
         // The checks screen already said so; this covers SCIP being started since.
         if crate::processes::app_running_in(crate::processes::list(), &target) {
             let message = self.ctx.locale.pick("Fermez SCIP pour continuer", "Close SCIP to continue");

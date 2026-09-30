@@ -135,6 +135,10 @@ pub struct Existing {
 #[serde(rename_all = "camelCase")]
 pub struct ContextInfo {
     pub mode: Mode,
+    /// Started by SCIP's updater (`--update`) over an existing install: no screen to click.
+    pub auto_update: bool,
+    /// Relaunch SCIP once the automatic update is done (not with `--no-launch`).
+    pub launch_after: bool,
     pub version: String,
     pub existing: Option<Existing>,
     pub locale: Locale,
@@ -153,9 +157,19 @@ pub struct SetupContext {
     /// File whose tail holds the payload (normally this exe).
     pub payload_source: PathBuf,
     pub payload_bytes: u64,
+    /// `--update` over an existing install (see `ContextInfo::auto_update`).
+    pub auto_update: bool,
+    pub launch_after: bool,
 }
 
 impl SetupContext {
+    /// `--update` only means something over an existing install; elsewhere it is ignored.
+    pub fn with_update(mut self, update: bool, no_launch: bool) -> Self {
+        self.auto_update = update && self.mode == Mode::Upgrade;
+        self.launch_after = self.auto_update && !no_launch;
+        self
+    }
+
     pub fn decide_mode(uninstall_flag: bool, existing: Option<&Existing>) -> Mode {
         match (uninstall_flag, existing) {
             (true, _) => Mode::Uninstall,
@@ -175,6 +189,8 @@ impl SetupContext {
     pub fn info(&self) -> ContextInfo {
         ContextInfo {
             mode: self.mode,
+            auto_update: self.auto_update,
+            launch_after: self.launch_after,
             version: setup_version().to_string(),
             existing: self.existing.clone(),
             locale: self.locale,
@@ -283,10 +299,37 @@ mod tests {
             locale: Locale::Fr,
             payload_source: PathBuf::new(),
             payload_bytes: 0,
+            auto_update: false,
+            launch_after: false,
         };
         assert_eq!(ctx.target_dir(), PathBuf::from(r"C:\Old\SCIP"));
         assert_eq!(ctx.info().default_install_dir, r"C:\Old\SCIP");
         ctx.mode = Mode::Install;
         assert_eq!(ctx.target_dir(), ctx.layout.install_dir);
+    }
+
+    #[test]
+    fn update_flags_apply_only_over_an_existing_install() {
+        let layout = Layout::resolve(env(&[("LOCALAPPDATA", "C:/x")])).unwrap();
+        let base = SetupContext {
+            mode: Mode::Upgrade,
+            layout,
+            existing: Some(Existing { version: "0.2.0".into(), dir: r"C:\Old\SCIP".into() }),
+            locale: Locale::Fr,
+            payload_source: PathBuf::new(),
+            payload_bytes: 0,
+            auto_update: false,
+            launch_after: false,
+        };
+        let updating = base.clone().with_update(true, false);
+        assert!(updating.auto_update && updating.launch_after);
+        assert!(updating.info().auto_update);
+        let closing = base.clone().with_update(true, true);
+        assert!(closing.auto_update && !closing.launch_after);
+        let mut fresh = base.clone();
+        fresh.mode = Mode::Install;
+        let fresh = fresh.with_update(true, false);
+        assert!(!fresh.auto_update && !fresh.launch_after);
+        assert!(!base.with_update(false, false).auto_update);
     }
 }
