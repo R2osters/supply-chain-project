@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { intersects, parseBbox } from './bbox';
-import { rennesLevel } from './levels';
+import { GrenobleFlowProvider } from './grenoble-flow.provider';
+import { grenobleLevel, rennesLevel } from './levels';
 import { RennesFlowProvider } from './rennes-flow.provider';
 
 const fixture = (name: string): string => readFileSync(join(__dirname, '__fixtures__', name), 'utf8');
@@ -96,5 +97,77 @@ describe('RennesFlowProvider', () => {
 
     now = 1_000_000; // past the grace: no data is better than old data presented as live
     await expect(provider.snapshot()).rejects.toThrow();
+  });
+});
+
+describe('Grenoble levels', () => {
+  it('maps Métromobilité service levels', () => {
+    expect(grenobleLevel(1)).toEqual({ level: 0.9, closed: false });
+    expect(grenobleLevel(2)).toEqual({ level: 0.6, closed: false });
+    expect(grenobleLevel(3)).toEqual({ level: 0.3, closed: false });
+    expect(grenobleLevel(4)).toEqual({ level: 0, closed: true });
+    expect(grenobleLevel(0)).toEqual({ level: null, closed: false });
+    expect(grenobleLevel('3')).toEqual({ level: null, closed: false });
+    expect(grenobleLevel(undefined)).toEqual({ level: null, closed: false });
+  });
+});
+
+describe('GrenobleFlowProvider', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  const serve = (lines: string, levels: string) =>
+    jest.spyOn(global, 'fetch').mockImplementation(async (url) => json(String(url).includes('/lines/') ? lines : levels));
+
+  it('joins the public lines with their live level', async () => {
+    serve(fixture('grenoble-lines.json'), fixture('grenoble-dyn.json'));
+    const { segments } = await new GrenobleFlowProvider().snapshot();
+    const byId = new Map(segments.map((segment) => [segment.id, segment]));
+
+    // N1_501 is not public (visible_internet = 0); N1_ABSENT_FROM_LINES has no geometry.
+    expect([...byId.keys()].sort()).toEqual([
+      'grenoble:N1_ARTE041101',
+      'grenoble:N1_ARTE041102',
+      'grenoble:N1_ARTE041103',
+      'grenoble:N1_ARTE041104',
+      'grenoble:N1_CLE_02',
+    ]);
+    expect(byId.get('grenoble:N1_ARTE041101')).toMatchObject({ level: 0.9, closed: false });
+    expect(byId.get('grenoble:N1_CLE_02')).toMatchObject({ level: 0.6, closed: false });
+    expect(byId.get('grenoble:N1_ARTE041102')).toMatchObject({ level: 0.3, closed: false });
+    expect(byId.get('grenoble:N1_ARTE041103')).toMatchObject({ level: 0, closed: true });
+    expect(byId.get('grenoble:N1_ARTE041104')).toMatchObject({ level: null, closed: false });
+    for (const segment of segments) {
+      expect(segment).toMatchObject({ source: 'grenoble', bothDirections: true, speedKmh: null, limitKmh: null });
+    }
+  });
+
+  it('tolerates an empty level list', async () => {
+    serve(fixture('grenoble-lines.json'), JSON.stringify({ N1_ARTE041101: [] }));
+    const { segments } = await new GrenobleFlowProvider().snapshot();
+    expect(segments).toEqual([expect.objectContaining({ id: 'grenoble:N1_ARTE041101', level: null, closed: false })]);
+  });
+
+  it('fetches the lines once a day and the levels every minute', async () => {
+    let now = 0;
+    const spy = serve(fixture('grenoble-lines.json'), fixture('grenoble-dyn.json'));
+    const provider = new GrenobleFlowProvider(() => now);
+    await provider.snapshot();
+    now = 61_000;
+    await provider.snapshot();
+    const urls = spy.mock.calls.map(([url]) => String(url));
+    expect(urls.filter((url) => url.includes('/lines/'))).toHaveLength(1);
+    expect(urls.filter((url) => url.includes('/dyn/'))).toHaveLength(2);
+  });
+
+  it('reports stale data when the levels fail after a good answer', async () => {
+    let now = 0;
+    const spy = serve(fixture('grenoble-lines.json'), fixture('grenoble-dyn.json'));
+    const provider = new GrenobleFlowProvider(() => now);
+    await provider.snapshot();
+    spy.mockRejectedValue(new Error('down'));
+    now = 120_000;
+    const snapshot = await provider.snapshot();
+    expect(snapshot.stale).toBe(true);
+    expect(snapshot.segments).toHaveLength(5);
   });
 });
