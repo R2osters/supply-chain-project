@@ -1,6 +1,6 @@
 // src/scenes/S15Fichier.tsx — S15 · Un seul fichier, 136-148 s, light, COUPLET 4 (spec § 4 S15).
-// « Et tout ça ? »: the pieces of the film (container notes, pins, sequencer cells) orbit the centre and are drawn into
-// one file icon, « SCIP-Setup.exe » with its « 1 FICHIER » badge, whose four content bars they fill. On « fichier » the
+// « Et tout ça ? »: pictograms of the film's instruments (heartbeat, staff, notes, pins, ring, tuner, models, keys,
+// faders, globe, code) orbit the centre and are drawn into one file icon, « SCIP-Setup.exe » with its « 1 FICHIER » badge, whose four content bars they fill. On « fichier » the
 // file bursts and its four bars tip into an exploded isometric stack at the angles of the logo — MOTEUR IA,
 // POSTGRESQL 16 + POSTGIS, API, INTERFACE rising bottom first on the D F A D arpeggio — each slab with its pictogram and
 // its install step. The steps light up one by one from « installé » (StatusMark), and the facts drop as chips on their
@@ -11,7 +11,7 @@
 import {AbsoluteFill, useCurrentFrame} from 'remotion';
 import {Chip} from '../components/Chip';
 import {ContainerGlyph} from '../components/ContainerGlyph';
-import {IsoStack, lerpSlab, morphQuad, stackSlabs, type Box, type IsoSlabSpec, type Slab, type SlabGlyph} from '../components/IsoStack';
+import {IsoStack, ISO_SLOPE, lerpSlab, morphQuad, stackSlabs, type Box, type IsoSlabSpec, type Slab, type SlabGlyph} from '../components/IsoStack';
 import {Logo} from '../components/Logo';
 import {Pin} from '../components/Pin';
 import {LABEL, MONO} from '../components/typography';
@@ -115,10 +115,10 @@ export const LABEL_BOXES: readonly Box[] = SLABS.map((s, i) => ({x: LABEL_X, y: 
 export const CIRCLE = {x: 640, y: 560, r: 280} as const;
 const SCREEN: Box = {x: CIRCLE.x - 150, y: 432, w: 300, h: 190};
 const PC_SCALE = 0.6;
-const IN_PC_BLOCK = 2 * SLAB_A * PC_SCALE * (4.5 / 8) + 4 * SLAB_T * PC_SCALE;
+const IN_PC_BLOCK = 2 * SLAB_A * PC_SCALE * ISO_SLOPE + 4 * SLAB_T * PC_SCALE;
 export const IN_PC: readonly Slab[] = stackSlabs(SLABS.length, {
   cx: CIRCLE.x,
-  cy: SCREEN.y + SCREEN.h / 2 - IN_PC_BLOCK / 2 + SLAB_A * PC_SCALE * (4.5 / 8),
+  cy: SCREEN.y + SCREEN.h / 2 - IN_PC_BLOCK / 2 + SLAB_A * PC_SCALE * ISO_SLOPE,
   a: SLAB_A * PC_SCALE,
   t: SLAB_T * PC_SCALE,
   pitch: SLAB_T * PC_SCALE,
