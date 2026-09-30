@@ -12,15 +12,17 @@ const json = (body: string): Response =>
   new Response(body, { status: 200, headers: { 'content-type': 'application/json' } });
 
 describe('Rennes levels', () => {
-  it('uses the measured speed over the limit, capped at 1', () => {
-    expect(rennesLevel(35, 70, 'heavy', 3)).toBeCloseTo(0.5);
-    expect(rennesLevel(90, 70, 'freeFlow', 3)).toBe(1);
+  it("follows Rennes' own status, which compares with each section's reference speed", () => {
+    // A city street at 25 km/h under a 50 km/h limit flows normally: not a jam.
+    expect(rennesLevel(25, 50, 'freeFlow', 3)).toBe(0.9);
+    expect(rennesLevel(35, 70, 'heavy', 3)).toBe(0.6);
+    expect(rennesLevel(null, 70, 'congested', 3)).toBe(0.3);
   });
 
-  it('falls back to the status when a speed is unusable', () => {
-    expect(rennesLevel(null, 70, 'freeFlow', 3)).toBe(0.9);
-    expect(rennesLevel(40, null, 'heavy', 3)).toBe(0.6);
-    expect(rennesLevel(40, 0, 'congested', 3)).toBe(0.3);
+  it('uses the speed over the limit, capped at 1, only without a usable status', () => {
+    expect(rennesLevel(35, 70, undefined, 3)).toBeCloseTo(0.5);
+    expect(rennesLevel(90, 70, 'strange', 3)).toBe(1);
+    expect(rennesLevel(40, 0, undefined, 3)).toBeNull();
   });
 
   it('treats a line without probes as unmeasured, whatever its speed says', () => {
@@ -59,10 +61,10 @@ describe('RennesFlowProvider', () => {
 
     expect(stale).toBe(false);
     expect(segments).toHaveLength(6);
-    expect(byId.get('rennes:11652')).toMatchObject({ level: expect.closeTo(0.611, 3), speedKmh: 55, limitKmh: 90 });
-    expect(byId.get('rennes:1601810')?.level).toBeCloseTo(0.28);
+    expect(byId.get('rennes:11652')).toMatchObject({ level: 0.6, speedKmh: 55, limitKmh: 90 });
+    expect(byId.get('rennes:1601810')?.level).toBe(0.3);
     expect(byId.get('rennes:11579_G')?.level).toBeNull();
-    expect(byId.get('rennes:11654')?.level).toBe(1);
+    expect(byId.get('rennes:11654')?.level).toBe(0.9);
     expect(byId.get('rennes:10273_D')?.level).toBe(0.9);
     for (const segment of segments) {
       expect(segment).toMatchObject({ source: 'rennes', closed: false, bothDirections: false });

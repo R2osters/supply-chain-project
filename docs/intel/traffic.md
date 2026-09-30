@@ -78,7 +78,7 @@ flow), or `null` when nothing was measured.
 | Source | Level |
 | --- | --- |
 | TomTom | `traffic_level` as published; `road_closure = true` means closed. |
-| Rennes | `min(1, averagevehiclespeed / vitesse_maxi)` when both are positive; otherwise from `trafficstatus`: `freeFlow` 0.9, `heavy` 0.6, `congested` 0.3. `unknown`, or zero probe vehicles, means not measured. |
+| Rennes | From `trafficstatus`, Rennes' own comparison with each section's reference speed: `freeFlow` 0.9, `heavy` 0.6, `congested` 0.3. Only without a usable status: `min(1, averagevehiclespeed / vitesse_maxi)`. `unknown`, or zero probe vehicles, means not measured. |
 | Grenoble | `nsv_id` 1 → 0.9, 2 → 0.6, 3 → 0.3, 4 → closed; 0 or anything else means not measured. |
 
 Colours: a level of 0.85 or more is green, 0.55 or more orange, below that red. The level also
@@ -134,8 +134,10 @@ pair about 12 m apart, so `bothDirections` is false. Two traps, both seen in the
 - its `unknown` lines still carry a speed and a limit (often 80 / 80) with zero probe vehicles.
   Read as a ratio they would pass for free-flowing measured roads, so `unknown` or no probe means
   not measured, before anything else;
-- about one line in six reports a speed above its limit (504 of 2 859), so the ratio is capped
-  at 1.
+- the speed over the legal limit is a poor measure of congestion: city streets flow well under
+  their limit, and on 30 September 2026 that ratio called 601 of 2 277 lines in the city a jam
+  where Rennes counted 196 congested ones in the whole area. The level follows Rennes' status;
+  the ratio (capped at 1, as one line in six reports a speed above its limit) is only a fallback.
 
 **Grenoble.** The meaning of `nsv_id` (0 unknown, 1 free, 2 heavy, 3 congested, 4 blocked) comes
 from Métromobilité's own code (`MetromobiliteWS`, `trrC38.js`). Levels and lines are joined by
