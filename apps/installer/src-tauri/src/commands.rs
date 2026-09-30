@@ -14,8 +14,8 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
 use crate::checks::{self, Check, RealProbe};
 use crate::context::{
-    setup_version, ContextInfo, Existing, Layout, Locale, Mode, SetupContext, DATA_DIR_ENV, PAYLOAD_ENV,
-    UNINSTALL_EXE,
+    payload_source, setup_version, ContextInfo, Existing, Layout, Locale, Mode, SetupContext, DATA_DIR_ENV,
+    PAYLOAD_ENV, UNINSTALL_EXE,
 };
 use crate::db::{self, DbParams, DbReport};
 use crate::events::{CommandError, EventSink, InstallEvent, Journal, Reporter};
@@ -45,7 +45,7 @@ pub fn build_context(uninstall_flag: bool) -> Result<SetupContext, CommandError>
     }
     let mode = SetupContext::decide_mode(uninstall_flag, existing.as_ref());
     let payload_source: PathBuf =
-        std::env::var(PAYLOAD_ENV).ok().filter(|v| !v.is_empty()).map(PathBuf::from).unwrap_or(me);
+        payload_source(me, std::env::var(PAYLOAD_ENV).ok(), layout.test_mode, cfg!(debug_assertions));
     let payload_bytes = PayloadReader::open(&payload_source).map(|r| r.footer().len).unwrap_or(0);
     Ok(SetupContext {
         mode,

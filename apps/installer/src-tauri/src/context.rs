@@ -22,6 +22,18 @@ const DATA_FOLDER: &str = "com.scip.desktop";
 pub const APP_EXE: &str = "scip-desktop.exe";
 pub const UNINSTALL_EXE: &str = "uninstall.exe";
 
+/// The file whose tail holds the payload: this exe, unless a development build or a test run
+/// points to another one with `SCIP_SETUP_PAYLOAD`. A release build outside test mode ignores
+/// the variable: the installer SCIP verified before starting it must install its own payload, not
+/// one a user environment variable points to. (With `SCIP_SETUP_TEST` set as well, the install
+/// goes to the test folder and registry key, never over the real SCIP.)
+pub fn payload_source(me: PathBuf, requested: Option<String>, test_mode: bool, debug_build: bool) -> PathBuf {
+    match requested.filter(|path| !path.trim().is_empty()) {
+        Some(path) if test_mode || debug_build => PathBuf::from(path),
+        _ => me,
+    }
+}
+
 /// The SCIP version being installed. The packaging script sets it from apps/desktop's
 /// tauri.conf.json; a plain `cargo build` uses this crate's version.
 pub fn setup_version() -> &'static str {
@@ -331,5 +343,25 @@ mod tests {
         let fresh = fresh.with_update(true, false);
         assert!(!fresh.auto_update && !fresh.launch_after);
         assert!(!base.with_update(false, false).auto_update);
+    }
+
+    #[test]
+    fn a_release_installer_only_installs_its_own_payload() {
+        let me = PathBuf::from(r"C:\data\updates\SCIP-Setup-0.3.0.exe");
+        let other = Some(r"C:\Users\x\evil-setup.exe".to_owned());
+        // What SCIP verified and started must install itself, whatever the environment says.
+        assert_eq!(payload_source(me.clone(), other.clone(), false, false), me);
+        // `tauri dev` and the installer's tests may point to a built setup.
+        assert_eq!(
+            payload_source(me.clone(), other.clone(), true, false),
+            PathBuf::from(r"C:\Users\x\evil-setup.exe")
+        );
+        assert_eq!(
+            payload_source(me.clone(), other, false, true),
+            PathBuf::from(r"C:\Users\x\evil-setup.exe")
+        );
+        // An empty variable is no request.
+        assert_eq!(payload_source(me.clone(), Some("  ".into()), true, true), me);
+        assert_eq!(payload_source(me.clone(), None, true, true), me);
     }
 }
