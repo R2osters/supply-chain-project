@@ -17,7 +17,8 @@ pub use manifest::UpdateManifest;
 pub use version::Version;
 
 /// Where the latest release describes itself (no API rate limit, no token: the repository is public).
-pub const FEED_URL: &str = "https://github.com/R2osters/supply-chain-project/releases/latest/download/latest.json";
+pub const FEED_URL: &str =
+    "https://github.com/R2osters/supply-chain-project/releases/latest/download/latest.json";
 /// Installers are only ever downloaded from the releases of this repository.
 pub const ALLOWED_PREFIX: &str = "https://github.com/R2osters/supply-chain-project/releases/download/";
 /// Test overrides: a local feed, and the public key its installers are signed with.
@@ -54,11 +55,8 @@ impl UpdateConfig {
     }
 
     fn resolve(feed: Option<String>, key: Option<String>, embedded: &str) -> Option<Self> {
-        let public_key: String = key
-            .filter(|k| !k.trim().is_empty())
-            .unwrap_or_else(|| embedded.to_owned())
-            .trim()
-            .to_owned();
+        let public_key: String =
+            key.filter(|k| !k.trim().is_empty()).unwrap_or_else(|| embedded.to_owned()).trim().to_owned();
         if public_key.is_empty() {
             return None;
         }
@@ -67,7 +65,11 @@ impl UpdateConfig {
                 let allowed_prefix: String = origin(&feed)?;
                 Some(Self { feed, allowed_prefix, public_key })
             }
-            None => Some(Self { feed: FEED_URL.to_owned(), allowed_prefix: ALLOWED_PREFIX.to_owned(), public_key }),
+            None => Some(Self {
+                feed: FEED_URL.to_owned(),
+                allowed_prefix: ALLOWED_PREFIX.to_owned(),
+                public_key,
+            }),
         }
     }
 }
@@ -102,7 +104,12 @@ mod tests {
 
     #[test]
     fn a_test_feed_only_allows_its_own_origin() {
-        let config = UpdateConfig::resolve(Some("http://127.0.0.1:8765/feed/latest.json".into()), Some("dGVzdA==".into()), "").unwrap();
+        let config = UpdateConfig::resolve(
+            Some("http://127.0.0.1:8765/feed/latest.json".into()),
+            Some("dGVzdA==".into()),
+            "",
+        )
+        .unwrap();
         assert_eq!(config.allowed_prefix, "http://127.0.0.1:8765/");
         assert_eq!(config.public_key, "dGVzdA==");
         assert_eq!(UpdateConfig::resolve(Some("file:///c/latest.json".into()), Some("k".into()), ""), None);

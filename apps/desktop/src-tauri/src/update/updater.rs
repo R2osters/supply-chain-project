@@ -17,7 +17,13 @@ pub trait Fetcher: Send + Sync {
     fn text(&self, url: &str) -> Result<String, UpdateError>;
     /// Writes the body of `url` to `to`, calling `progress(received, total)` along the way; stops
     /// with an error past `max_bytes`.
-    fn download(&self, url: &str, to: &Path, max_bytes: u64, progress: &dyn Fn(u64)) -> Result<(), UpdateError>;
+    fn download(
+        &self,
+        url: &str,
+        to: &Path,
+        max_bytes: u64,
+        progress: &dyn Fn(u64),
+    ) -> Result<(), UpdateError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -29,10 +35,20 @@ pub enum UpdateState {
     Checking,
     UpToDate,
     #[serde(rename_all = "camelCase")]
-    Downloading { version: String, received: u64, total: u64 },
+    Downloading {
+        version: String,
+        received: u64,
+        total: u64,
+    },
     #[serde(rename_all = "camelCase")]
-    Ready { version: String, notes: Option<String>, pub_date: Option<String> },
-    Error { message: String },
+    Ready {
+        version: String,
+        notes: Option<String>,
+        pub_date: Option<String>,
+    },
+    Error {
+        message: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -131,7 +147,8 @@ impl Updater {
                 }
                 continue;
             };
-            let manifest = std::fs::read_to_string(entry.path()).ok().and_then(|body| UpdateManifest::parse(&body).ok());
+            let manifest =
+                std::fs::read_to_string(entry.path()).ok().and_then(|body| UpdateManifest::parse(&body).ok());
             let usable = version > self.current
                 && manifest.as_ref().is_some_and(|m| {
                     verify_download(&self.installer_path(&version), m, &config.public_key).is_ok()
@@ -206,7 +223,8 @@ impl Updater {
         if version <= self.current {
             return Ok(UpdateState::UpToDate);
         }
-        std::fs::create_dir_all(&self.dir).map_err(|e| UpdateError::Io(format!("dossier des mises à jour : {e}")))?;
+        std::fs::create_dir_all(&self.dir)
+            .map_err(|e| UpdateError::Io(format!("dossier des mises à jour : {e}")))?;
         let installer: PathBuf = self.installer_path(&version);
         if verify_download(&installer, &manifest, &config.public_key).is_err() {
             let part: PathBuf = self.dir.join(format!("SCIP-Setup-{version}.exe.part"));
@@ -228,7 +246,8 @@ impl Updater {
                 return Err(e);
             }
             let _ = std::fs::remove_file(&installer);
-            std::fs::rename(&part, &installer).map_err(|e| UpdateError::Io(format!("installeur téléchargé : {e}")))?;
+            std::fs::rename(&part, &installer)
+                .map_err(|e| UpdateError::Io(format!("installeur téléchargé : {e}")))?;
         }
         let saved = serde_json::to_string_pretty(&manifest).map_err(|e| UpdateError::Io(e.to_string()))?;
         std::fs::write(self.manifest_path(&version), saved).map_err(|e| UpdateError::Io(e.to_string()))?;
@@ -237,12 +256,17 @@ impl Updater {
 
     /// The ready installer, verified once more right before it is run.
     pub fn ready_installer(&self) -> Result<(PathBuf, Version), UpdateError> {
-        let config = self.config.as_ref().ok_or_else(|| UpdateError::Verification("mises à jour désactivées".into()))?;
+        let config = self
+            .config
+            .as_ref()
+            .ok_or_else(|| UpdateError::Verification("mises à jour désactivées".into()))?;
         let UpdateState::Ready { version, .. } = self.status().state else {
             return Err(UpdateError::Verification("aucune mise à jour prête".into()));
         };
-        let version = Version::parse(&version).ok_or_else(|| UpdateError::Verification("version illisible".into()))?;
-        let body = std::fs::read_to_string(self.manifest_path(&version)).map_err(|e| UpdateError::Io(e.to_string()))?;
+        let version =
+            Version::parse(&version).ok_or_else(|| UpdateError::Verification("version illisible".into()))?;
+        let body = std::fs::read_to_string(self.manifest_path(&version))
+            .map_err(|e| UpdateError::Io(e.to_string()))?;
         let manifest = UpdateManifest::parse(&body)?;
         let path = self.installer_path(&version);
         if let Err(e) = verify_download(&path, &manifest, &config.public_key) {
@@ -255,7 +279,11 @@ impl Updater {
 }
 
 fn ready_state(version: &Version, manifest: &UpdateManifest) -> UpdateState {
-    UpdateState::Ready { version: version.to_string(), notes: manifest.notes.clone(), pub_date: manifest.pub_date.clone() }
+    UpdateState::Ready {
+        version: version.to_string(),
+        notes: manifest.notes.clone(),
+        pub_date: manifest.pub_date.clone(),
+    }
 }
 
 /// Real network access (ureq): redirects to GitHub's storage are followed.
@@ -280,7 +308,9 @@ impl Fetcher for HttpFetcher {
             .map_err(|e| UpdateError::Network(format!("GitHub injoignable : {e}")))?;
         let status: u16 = response.status().as_u16();
         if status != 200 {
-            return Err(UpdateError::Network(format!("GitHub a répondu {status} (aucune version publiée ?)")));
+            return Err(UpdateError::Network(format!(
+                "GitHub a répondu {status} (aucune version publiée ?)"
+            )));
         }
         response
             .body_mut()
@@ -290,21 +320,33 @@ impl Fetcher for HttpFetcher {
             .map_err(|e| UpdateError::Network(format!("réponse illisible : {e}")))
     }
 
-    fn download(&self, url: &str, to: &Path, max_bytes: u64, progress: &dyn Fn(u64)) -> Result<(), UpdateError> {
+    fn download(
+        &self,
+        url: &str,
+        to: &Path,
+        max_bytes: u64,
+        progress: &dyn Fn(u64),
+    ) -> Result<(), UpdateError> {
         use std::io::{Read, Write};
         let mut response = Self::agent(std::time::Duration::from_secs(60 * 60))
             .get(url)
             .call()
             .map_err(|e| UpdateError::Network(format!("téléchargement impossible : {e}")))?;
         if response.status().as_u16() != 200 {
-            return Err(UpdateError::Network(format!("téléchargement refusé ({})", response.status().as_u16())));
+            return Err(UpdateError::Network(format!(
+                "téléchargement refusé ({})",
+                response.status().as_u16()
+            )));
         }
         let mut reader = response.body_mut().with_config().limit(max_bytes).reader();
-        let mut file = std::fs::File::create(to).map_err(|e| UpdateError::Io(format!("création de {} : {e}", to.display())))?;
+        let mut file = std::fs::File::create(to)
+            .map_err(|e| UpdateError::Io(format!("création de {} : {e}", to.display())))?;
         let mut buffer = vec![0u8; 1 << 20];
         let mut received: u64 = 0;
         loop {
-            let read = reader.read(&mut buffer).map_err(|e| UpdateError::Network(format!("téléchargement interrompu : {e}")))?;
+            let read = reader
+                .read(&mut buffer)
+                .map_err(|e| UpdateError::Network(format!("téléchargement interrompu : {e}")))?;
             if read == 0 {
                 break;
             }
@@ -335,7 +377,13 @@ mod tests {
         fn text(&self, _url: &str) -> Result<String, UpdateError> {
             self.feed.lock().unwrap().clone()
         }
-        fn download(&self, _url: &str, to: &Path, _max: u64, progress: &dyn Fn(u64)) -> Result<(), UpdateError> {
+        fn download(
+            &self,
+            _url: &str,
+            to: &Path,
+            _max: u64,
+            progress: &dyn Fn(u64),
+        ) -> Result<(), UpdateError> {
             self.downloads.fetch_add(1, Ordering::SeqCst);
             std::fs::write(to, &self.body).unwrap();
             progress(self.body.len() as u64);
@@ -362,8 +410,16 @@ mod tests {
     }
 
     fn updater(dir: &Path, feed: Result<String, UpdateError>, body: &[u8]) -> (Updater, Arc<FakeFetcher>) {
-        let fetcher = Arc::new(FakeFetcher { feed: Mutex::new(feed), body: body.to_vec(), downloads: AtomicUsize::new(0) });
-        let config = UpdateConfig { feed: format!("{PREFIX}latest.json"), allowed_prefix: PREFIX.into(), public_key: public_b64(&test_key()) };
+        let fetcher = Arc::new(FakeFetcher {
+            feed: Mutex::new(feed),
+            body: body.to_vec(),
+            downloads: AtomicUsize::new(0),
+        });
+        let config = UpdateConfig {
+            feed: format!("{PREFIX}latest.json"),
+            allowed_prefix: PREFIX.into(),
+            public_key: public_b64(&test_key()),
+        };
         let updater = Updater::new(
             Some(config),
             Version::parse("0.2.0").unwrap(),
@@ -388,7 +444,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (u, fetcher) = updater(dir.path(), Ok(manifest_for(b"setup", "0.3.0", b"setup")), b"setup");
         let status = u.check_now();
-        assert!(matches!(&status.state, UpdateState::Ready { version, .. } if version == "0.3.0"), "{status:?}");
+        assert!(
+            matches!(&status.state, UpdateState::Ready { version, .. } if version == "0.3.0"),
+            "{status:?}"
+        );
         assert!(dir.path().join("SCIP-Setup-0.3.0.exe").is_file());
         assert!(dir.path().join("SCIP-Setup-0.3.0.json").is_file());
         assert_eq!(u.ready_installer().unwrap().1.to_string(), "0.3.0");
@@ -417,7 +476,10 @@ mod tests {
         *fetcher.feed.lock().unwrap() = Ok(manifest_for(b"setup", "0.3.0", b"setup"));
         assert!(matches!(u.check_now().state, UpdateState::Ready { .. }));
         *fetcher.feed.lock().unwrap() = Err(UpdateError::Network("offline".into()));
-        assert!(matches!(u.check_now().state, UpdateState::Ready { .. }), "a ready update survives going offline");
+        assert!(
+            matches!(u.check_now().state, UpdateState::Ready { .. }),
+            "a ready update survives going offline"
+        );
     }
 
     #[test]
@@ -436,7 +498,8 @@ mod tests {
         }
         // Leftovers of an update already installed, and an interrupted download.
         std::fs::write(dir.path().join("SCIP-Setup-0.1.0.exe"), b"old").unwrap();
-        std::fs::write(dir.path().join("SCIP-Setup-0.1.0.json"), manifest_for(b"old", "0.1.0", b"old")).unwrap();
+        std::fs::write(dir.path().join("SCIP-Setup-0.1.0.json"), manifest_for(b"old", "0.1.0", b"old"))
+            .unwrap();
         std::fs::write(dir.path().join("SCIP-Setup-0.4.0.exe.part"), b"half").unwrap();
 
         let (u, fetcher) = updater(dir.path(), Err(UpdateError::Network("offline".into())), b"");
@@ -460,10 +523,19 @@ mod tests {
     #[test]
     fn without_key_nothing_happens() {
         let dir = tempfile::tempdir().unwrap();
-        let fetcher = Arc::new(FakeFetcher { feed: Mutex::new(Err(UpdateError::Network("x".into()))), body: vec![], downloads: AtomicUsize::new(0) });
-        let u = Updater::new(None, Version::parse("0.2.0").unwrap(), dir.path().to_path_buf(), fetcher, Box::new(|_| {}));
+        let fetcher = Arc::new(FakeFetcher {
+            feed: Mutex::new(Err(UpdateError::Network("x".into()))),
+            body: vec![],
+            downloads: AtomicUsize::new(0),
+        });
+        let u = Updater::new(
+            None,
+            Version::parse("0.2.0").unwrap(),
+            dir.path().to_path_buf(),
+            fetcher,
+            Box::new(|_| {}),
+        );
         assert_eq!(u.check_now().state, UpdateState::Disabled);
         assert!(!u.enabled());
     }
-
 }

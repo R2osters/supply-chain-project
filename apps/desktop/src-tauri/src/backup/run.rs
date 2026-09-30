@@ -6,7 +6,9 @@ use std::process::Output;
 use serde::{Deserialize, Serialize};
 
 use super::archive::{extract_archive, write_archive};
-use super::manifest::{self, file_name, info, BackupInfo, BackupKind, Counts, Manifest, DUMP_NAME, FILES_DIR, FORMAT};
+use super::manifest::{
+    self, file_name, info, BackupInfo, BackupKind, Counts, Manifest, DUMP_NAME, FILES_DIR, FORMAT,
+};
 use super::pending::{clear_pending, read_pending};
 use super::BackupError;
 use crate::services::RuntimeContext;
@@ -49,7 +51,15 @@ fn run(command: std::process::Command, what: &str) -> Result<Output, BackupError
     let output: Output = command.output().map_err(|e| BackupError::io(format!("lancement de {what}"), e))?;
     if !output.status.success() {
         let stderr: String = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        let tail: String = stderr.lines().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect::<Vec<_>>().join(" | ");
+        let tail: String = stderr
+            .lines()
+            .rev()
+            .take(4)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join(" | ");
         return Err(BackupError::Tool(format!("{what} a échoué : {tail}")));
     }
     Ok(output)
@@ -112,7 +122,8 @@ pub fn create_backup(ctx: &RuntimeContext, dir: &Path, kind: BackupKind) -> Resu
             safety: kind.is_automatic(),
         };
         write_archive(&part, &manifest, &dump, &ctx.dirs.files)?;
-        std::fs::rename(&part, dir.join(&name)).map_err(|e| BackupError::io("finalisation de la sauvegarde", e))?;
+        std::fs::rename(&part, dir.join(&name))
+            .map_err(|e| BackupError::io("finalisation de la sauvegarde", e))?;
         let size: u64 = std::fs::metadata(dir.join(&name)).map(|m| m.len()).unwrap_or(0);
         Ok(info(name.clone(), size, manifest))
     })();
@@ -124,7 +135,9 @@ pub fn create_backup(ctx: &RuntimeContext, dir: &Path, kind: BackupKind) -> Resu
 /// Checks a backup before scheduling it: readable, and not from a newer SCIP.
 pub fn check_restorable(ctx: &RuntimeContext, archive: &Path) -> Result<Manifest, BackupError> {
     if ctx.is_external_database() {
-        return Err(BackupError::Refused("SCIP utilise une base externe : restauration impossible d'ici.".into()));
+        return Err(BackupError::Refused(
+            "SCIP utilise une base externe : restauration impossible d'ici.".into(),
+        ));
     }
     let manifest: Manifest = super::archive::read_manifest(archive)?;
     let shipped: Option<String> = manifest::latest_shipped_migration(&ctx.resources.api_dir());
@@ -169,10 +182,12 @@ pub fn stage_pending_restore(ctx: &RuntimeContext) -> Result<Option<StagedRestor
 fn swap_in_files(files: &Path, restored: &Path, before: &Path) -> Result<(), BackupError> {
     let _ = std::fs::remove_dir_all(before);
     if files.exists() {
-        std::fs::rename(files, before).map_err(|e| BackupError::io("mise de côté des preuves de livraison", e))?;
+        std::fs::rename(files, before)
+            .map_err(|e| BackupError::io("mise de côté des preuves de livraison", e))?;
     }
     if restored.is_dir() {
-        std::fs::rename(restored, files).map_err(|e| BackupError::io("restauration des preuves de livraison", e))
+        std::fs::rename(restored, files)
+            .map_err(|e| BackupError::io("restauration des preuves de livraison", e))
     } else {
         std::fs::create_dir_all(files).map_err(|e| BackupError::io("création du dossier des preuves", e))
     }
@@ -198,13 +213,17 @@ pub fn finish_restore(ctx: &RuntimeContext, staged: &StagedRestore) {
 
 /// The restore failed after the database was dropped: photos back, and the safety backup's dump
 /// ready for `rollback_plan`. `None` without a safety backup.
-pub fn prepare_rollback(ctx: &RuntimeContext, staged: &StagedRestore) -> Result<Option<PathBuf>, BackupError> {
+pub fn prepare_rollback(
+    ctx: &RuntimeContext,
+    staged: &StagedRestore,
+) -> Result<Option<PathBuf>, BackupError> {
     let root: &Path = &ctx.dirs.root;
     clear_pending(root);
     let before: PathBuf = root.join(FILES_BEFORE);
     if before.exists() {
         let _ = std::fs::remove_dir_all(&ctx.dirs.files);
-        std::fs::rename(&before, &ctx.dirs.files).map_err(|e| BackupError::io("retour des preuves de livraison", e))?;
+        std::fs::rename(&before, &ctx.dirs.files)
+            .map_err(|e| BackupError::io("retour des preuves de livraison", e))?;
     }
     let Some(safety) = &staged.safety_backup else {
         return Ok(None);

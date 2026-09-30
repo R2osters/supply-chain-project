@@ -177,7 +177,10 @@ mod tests {
 
     #[test]
     fn names_carry_the_time_and_the_safety_suffix() {
-        assert_eq!(file_name("2026-09-30-141502", BackupKind::Manual), "SCIP-sauvegarde-2026-09-30-141502.scip-backup");
+        assert_eq!(
+            file_name("2026-09-30-141502", BackupKind::Manual),
+            "SCIP-sauvegarde-2026-09-30-141502.scip-backup"
+        );
         assert_eq!(
             file_name("2026-09-30-141502", BackupKind::BeforeRestore),
             "SCIP-sauvegarde-2026-09-30-141502-avant-restauration.scip-backup"
@@ -210,14 +213,20 @@ mod tests {
         let dump = dir.path().join("d.dump");
         std::fs::write(&dump, b"dump").unwrap();
         let empty = dir.path().join("empty-files");
-        for (name, at) in [("SCIP-sauvegarde-a.scip-backup", "2026-09-29T10:00:00+02:00"), ("SCIP-sauvegarde-b.scip-backup", "2026-09-30T10:00:00+02:00")] {
+        for (name, at) in [
+            ("SCIP-sauvegarde-a.scip-backup", "2026-09-29T10:00:00+02:00"),
+            ("SCIP-sauvegarde-b.scip-backup", "2026-09-30T10:00:00+02:00"),
+        ] {
             write_archive(&dir.path().join(name), &manifest(at), &dump, &empty).unwrap();
         }
         std::fs::write(dir.path().join("SCIP-sauvegarde-broken.scip-backup"), b"not a tar").unwrap();
         std::fs::write(dir.path().join("notes.txt"), b"x").unwrap();
 
         let list = list_backups(dir.path());
-        assert_eq!(list.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(), ["SCIP-sauvegarde-b.scip-backup", "SCIP-sauvegarde-a.scip-backup"]);
+        assert_eq!(
+            list.iter().map(|b| b.name.as_str()).collect::<Vec<_>>(),
+            ["SCIP-sauvegarde-b.scip-backup", "SCIP-sauvegarde-a.scip-backup"]
+        );
         assert_eq!(list[0].counts.shipments, 55);
         assert!(list[0].size_bytes > 0);
         assert!(list_backups(&dir.path().join("missing")).is_empty());
@@ -246,11 +255,16 @@ mod tests {
     fn latest_shipped_migration_reads_timestamped_folders_only() {
         let dir = tempfile::tempdir().unwrap();
         let migrations = dir.path().join("prisma").join("migrations");
-        for name in ["20260813002719_init", "20260929120000_user_must_change_password", "migration_lock.toml.d"] {
+        for name in
+            ["20260813002719_init", "20260929120000_user_must_change_password", "migration_lock.toml.d"]
+        {
             std::fs::create_dir_all(migrations.join(name)).unwrap();
         }
         std::fs::write(migrations.join("99999999999999_file_not_folder"), b"").unwrap();
-        assert_eq!(latest_shipped_migration(dir.path()).as_deref(), Some("20260929120000_user_must_change_password"));
+        assert_eq!(
+            latest_shipped_migration(dir.path()).as_deref(),
+            Some("20260929120000_user_must_change_password")
+        );
         assert_eq!(latest_shipped_migration(&dir.path().join("none")), None);
     }
 }

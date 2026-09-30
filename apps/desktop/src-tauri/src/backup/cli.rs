@@ -11,10 +11,10 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use super::pending::{write_pending, PendingRestore};
-use super::run::{self, check_restorable, create_backup};
 use super::backups_dir;
 use super::manifest::BackupKind;
+use super::pending::{write_pending, PendingRestore};
+use super::run::{self, check_restorable, create_backup};
 use crate::events::{EventSink, SupervisorEvent};
 use crate::paths::DataDirs;
 use crate::services::{resolve_resources_root, RuntimeContext, RESOURCES_DIR_ENV};
@@ -36,14 +36,18 @@ pub fn parse(args: &[String]) -> Option<Result<Command, String>> {
     let value_after = |flag: &str| args.iter().position(|a| a == flag).map(|i| args.get(i + 1).cloned());
     if args.iter().any(|a| a == "--backup") {
         return Some(match value_after("--out") {
-            Some(Some(dir)) if !dir.starts_with("--") => Ok(Command::Backup { out: Some(PathBuf::from(dir)) }),
+            Some(Some(dir)) if !dir.starts_with("--") => {
+                Ok(Command::Backup { out: Some(PathBuf::from(dir)) })
+            }
             Some(_) => Err("--out attend un dossier".into()),
             None => Ok(Command::Backup { out: None }),
         });
     }
     if args.iter().any(|a| a == "--restore") {
         return Some(match value_after("--restore") {
-            Some(Some(file)) if !file.starts_with("--") => Ok(Command::Restore { archive: PathBuf::from(file) }),
+            Some(Some(file)) if !file.starts_with("--") => {
+                Ok(Command::Restore { archive: PathBuf::from(file) })
+            }
             _ => Err("--restore attend le chemin d'une sauvegarde".into()),
         });
     }
@@ -61,7 +65,9 @@ pub(crate) struct JsonSink;
 impl EventSink for JsonSink {
     fn emit(&self, event: SupervisorEvent) {
         match event {
-            SupervisorEvent::Progress(p) => line(json!({ "step": p.step, "label": p.label, "status": p.status })),
+            SupervisorEvent::Progress(p) => {
+                line(json!({ "step": p.step, "label": p.label, "status": p.status }))
+            }
             SupervisorEvent::Error(e) => line(json!({ "log": e.message, "details": e.details })),
             SupervisorEvent::Ready(_) => {}
         }
@@ -84,8 +90,11 @@ pub fn run_cli(command: Command) -> i32 {
 /// `pg_ctl status` exits 0 only when a server runs on that data folder (a stale pid file after
 /// a crash does not count).
 fn postgres_runs(ctx: &RuntimeContext) -> bool {
-    let status = ProcessCommand::new(ctx.resources.postgres_bin("pg_ctl"))
-        .args(["status".to_owned(), "-D".to_owned(), ctx.dirs.pgdata.display().to_string()]);
+    let status = ProcessCommand::new(ctx.resources.postgres_bin("pg_ctl")).args([
+        "status".to_owned(),
+        "-D".to_owned(),
+        ctx.dirs.pgdata.display().to_string(),
+    ]);
     build_command(&status).output().map(|o| o.status.success()).unwrap_or(false)
 }
 
@@ -93,7 +102,8 @@ fn postgres_runs(ctx: &RuntimeContext) -> bool {
 /// to the executable, ports, secrets).
 pub(crate) fn context_from_env() -> Result<RuntimeContext, String> {
     let dirs: DataDirs = DataDirs::from_process_env().map_err(|e| e.to_string())?;
-    let exe_dir: Option<PathBuf> = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
+    let exe_dir: Option<PathBuf> =
+        std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
     let resources = resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), exe_dir.as_deref());
     startup::prepare(dirs, resources).map_err(|e| e.message)
 }
@@ -137,7 +147,12 @@ fn execute(command: Command) -> Result<Value, String> {
     })
 }
 
-fn restore(supervisor: &Supervisor, ctx: &RuntimeContext, sink: &JsonSink, archive: &Path) -> Result<Value, String> {
+fn restore(
+    supervisor: &Supervisor,
+    ctx: &RuntimeContext,
+    sink: &JsonSink,
+    archive: &Path,
+) -> Result<Value, String> {
     check_restorable(ctx, archive).map_err(|e| e.to_string())?;
     let dir: PathBuf = backups_dir();
     let safety = create_backup(ctx, &dir, BackupKind::BeforeRestore)

@@ -26,7 +26,9 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/desktop/src-tauri
+          workspaces: |
+            apps/desktop/src-tauri
+            apps/installer/src-tauri
       - run: npm ci
       - run: npm run build --workspace @scip/shared
       - run: npx prisma generate
@@ -48,6 +50,12 @@ jobs:
           cargo clippy --all-targets -- -D warnings
           cargo test
         working-directory: apps/desktop/src-tauri
+      - name: Installer tests and lint
+        run: |
+          npm run lint --workspace @scip/installer
+          npm test --workspace @scip/installer
+      - name: Release tooling tests
+        run: npm run release:test
 
   installer:
     needs: test
@@ -66,7 +74,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: apps/desktop/src-tauri
+          workspaces: |
+            apps/desktop/src-tauri
+            apps/installer/src-tauri
       # PostgreSQL, PostGIS and Node archives: ~500 MB that rarely change.
       - uses: actions/cache@v4
         with:
@@ -80,11 +90,13 @@ jobs:
       - run: npm ci
       - name: Stage runtimes, API, AI and web export
         run: npm run desktop:stage
-      # Unsigned until a code-signing certificate is configured (see DEPLOYMENT.md, Signing).
-      - name: Build the NSIS installer
-        run: npm run desktop:build
+      # SCIP-Setup-<version>.exe, the installer users run (apps/installer). No Authenticode
+      # certificate and no update key here: releases are signed on the publisher's PC
+      # (npm run release, DEPLOYMENT.md "Mises à jour"), so this artifact is for testing.
+      - name: Build SCIP and SCIP Setup
+        run: npm run build --workspace @scip/installer
       - uses: actions/upload-artifact@v4
         with:
           name: scip-windows-installer
-          path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+          path: apps/installer/dist/SCIP-Setup-*.exe
           if-no-files-found: error

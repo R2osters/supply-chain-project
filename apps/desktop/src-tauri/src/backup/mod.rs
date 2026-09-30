@@ -63,7 +63,10 @@ mod tests {
             backups_dir_from(None, Some(documents.clone())),
             documents.join("SCIP").join("Sauvegardes")
         );
-        assert_eq!(backups_dir_from(Some("  ".into()), Some(documents.clone())), documents.join("SCIP").join("Sauvegardes"));
+        assert_eq!(
+            backups_dir_from(Some("  ".into()), Some(documents.clone())),
+            documents.join("SCIP").join("Sauvegardes")
+        );
         assert_eq!(backups_dir_from(Some(r"D:\b".into()), Some(documents)), PathBuf::from(r"D:\b"));
     }
 }

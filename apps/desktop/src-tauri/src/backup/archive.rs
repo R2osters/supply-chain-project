@@ -8,12 +8,19 @@ use super::manifest::{Manifest, DUMP_NAME, FILES_DIR, FORMAT, MANIFEST_NAME};
 use super::BackupError;
 
 /// Writes `out`: the manifest first (so listing reads a few bytes), then the dump, then `files/`.
-pub fn write_archive(out: &Path, manifest: &Manifest, dump: &Path, files_dir: &Path) -> Result<(), BackupError> {
-    let file: File = File::create(out).map_err(|e| BackupError::io(format!("création de {}", out.display()), e))?;
+pub fn write_archive(
+    out: &Path,
+    manifest: &Manifest,
+    dump: &Path,
+    files_dir: &Path,
+) -> Result<(), BackupError> {
+    let file: File =
+        File::create(out).map_err(|e| BackupError::io(format!("création de {}", out.display()), e))?;
     let mut builder = tar::Builder::new(BufWriter::new(file));
     builder.follow_symlinks(false);
 
-    let body: Vec<u8> = serde_json::to_vec_pretty(manifest).map_err(|e| BackupError::Format(e.to_string()))?;
+    let body: Vec<u8> =
+        serde_json::to_vec_pretty(manifest).map_err(|e| BackupError::Format(e.to_string()))?;
     let mut header = tar::Header::new_gnu();
     header.set_size(body.len() as u64);
     header.set_mode(0o644);
@@ -22,9 +29,7 @@ pub fn write_archive(out: &Path, manifest: &Manifest, dump: &Path, files_dir: &P
     builder
         .append_data(&mut header, MANIFEST_NAME, body.as_slice())
         .map_err(|e| BackupError::io("écriture du manifeste", e))?;
-    builder
-        .append_path_with_name(dump, DUMP_NAME)
-        .map_err(|e| BackupError::io("écriture de la base", e))?;
+    builder.append_path_with_name(dump, DUMP_NAME).map_err(|e| BackupError::io("écriture de la base", e))?;
     if files_dir.is_dir() {
         builder
             .append_dir_all(FILES_DIR, files_dir)
@@ -38,16 +43,15 @@ pub fn write_archive(out: &Path, manifest: &Manifest, dump: &Path, files_dir: &P
 
 /// Reads only the manifest (the first entry of our backups).
 pub fn read_manifest(archive: &Path) -> Result<Manifest, BackupError> {
-    let file: File = File::open(archive).map_err(|e| BackupError::io(format!("ouverture de {}", archive.display()), e))?;
+    let file: File =
+        File::open(archive).map_err(|e| BackupError::io(format!("ouverture de {}", archive.display()), e))?;
     let mut tar = tar::Archive::new(BufReader::new(file));
     let entries = tar.entries().map_err(|e| BackupError::io("lecture de la sauvegarde", e))?;
     for entry in entries {
         let mut entry = entry.map_err(|e| BackupError::io("lecture de la sauvegarde", e))?;
         if entry.path().ok().is_some_and(|p| p.as_os_str() == MANIFEST_NAME) {
             let mut body = String::new();
-            entry
-                .read_to_string(&mut body)
-                .map_err(|e| BackupError::io("lecture du manifeste", e))?;
+            entry.read_to_string(&mut body).map_err(|e| BackupError::io("lecture du manifeste", e))?;
             return parse_manifest(&body);
         }
     }
@@ -75,9 +79,11 @@ fn is_safe(path: &Path) -> bool {
 /// Extracts `archive` into `into` after checking every entry, and returns its manifest.
 pub fn extract_archive(archive: &Path, into: &Path) -> Result<Manifest, BackupError> {
     let manifest: Manifest = read_manifest(archive)?;
-    std::fs::create_dir_all(into).map_err(|e| BackupError::io(format!("création de {}", into.display()), e))?;
+    std::fs::create_dir_all(into)
+        .map_err(|e| BackupError::io(format!("création de {}", into.display()), e))?;
 
-    let file: File = File::open(archive).map_err(|e| BackupError::io(format!("ouverture de {}", archive.display()), e))?;
+    let file: File =
+        File::open(archive).map_err(|e| BackupError::io(format!("ouverture de {}", archive.display()), e))?;
     let mut tar = tar::Archive::new(BufReader::new(file));
     let entries = tar.entries().map_err(|e| BackupError::io("lecture de la sauvegarde", e))?;
     for entry in entries {
@@ -85,15 +91,19 @@ pub fn extract_archive(archive: &Path, into: &Path) -> Result<Manifest, BackupEr
         let path = entry.path().map_err(|e| BackupError::io("lecture d'un chemin", e))?.into_owned();
         let kind = entry.header().entry_type();
         if !is_safe(&path) || !(kind.is_file() || kind.is_dir()) {
-            return Err(BackupError::Refused(format!("sauvegarde refusée : entrée suspecte « {} »", path.display())));
+            return Err(BackupError::Refused(format!(
+                "sauvegarde refusée : entrée suspecte « {} »",
+                path.display()
+            )));
         }
         let first = path.components().next().map(|c| c.as_os_str().to_string_lossy().into_owned());
         if !matches!(first.as_deref(), Some(MANIFEST_NAME) | Some(DUMP_NAME) | Some(FILES_DIR)) {
-            return Err(BackupError::Refused(format!("sauvegarde refusée : entrée inattendue « {} »", path.display())));
+            return Err(BackupError::Refused(format!(
+                "sauvegarde refusée : entrée inattendue « {} »",
+                path.display()
+            )));
         }
-        entry
-            .unpack_in(into)
-            .map_err(|e| BackupError::io(format!("extraction de {}", path.display()), e))?;
+        entry.unpack_in(into).map_err(|e| BackupError::io(format!("extraction de {}", path.display()), e))?;
     }
     if !into.join(DUMP_NAME).is_file() {
         return Err(BackupError::Format("sauvegarde incomplète : la base est absente".into()));
@@ -136,7 +146,10 @@ mod tests {
         let out = dir.path().join("out");
         assert_eq!(extract_archive(&archive, &out).unwrap(), manifest());
         assert_eq!(std::fs::read(out.join("database.dump")).unwrap(), b"PGDMP-bytes");
-        assert_eq!(std::fs::read(out.join("files").join("deliveries").join("abc").join("photo.jpg")).unwrap(), b"jpeg");
+        assert_eq!(
+            std::fs::read(out.join("files").join("deliveries").join("abc").join("photo.jpg")).unwrap(),
+            b"jpeg"
+        );
         assert_eq!(std::fs::read(out.join("files").join("sig.png")).unwrap(), b"png");
     }
 

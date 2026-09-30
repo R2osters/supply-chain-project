@@ -35,13 +35,19 @@ impl UpdateManifest {
             .url
             .strip_prefix(allowed_prefix)
             .ok_or_else(|| UpdateError::Manifest("l'installeur ne vient pas des releases de SCIP".into()))?;
-        if rest.is_empty() || rest.contains("..") || rest.contains('\\') || !rest.to_ascii_lowercase().ends_with(".exe") {
+        if rest.is_empty()
+            || rest.contains("..")
+            || rest.contains('\\')
+            || !rest.to_ascii_lowercase().ends_with(".exe")
+        {
             return Err(UpdateError::Manifest("adresse d'installeur invalide".into()));
         }
         if self.size == 0 || self.size > MAX_INSTALLER_BYTES {
             return Err(UpdateError::Manifest("taille d'installeur invalide".into()));
         }
-        if self.sha256.len() != 64 || !self.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        if self.sha256.len() != 64
+            || !self.sha256.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
             return Err(UpdateError::Manifest("empreinte SHA-256 invalide".into()));
         }
         if self.signature.trim().is_empty() {
@@ -78,7 +84,10 @@ mod tests {
         assert_eq!(manifest().validate(ALLOWED_PREFIX).unwrap().to_string(), "0.3.0");
         let parsed = UpdateManifest::parse(&serde_json::to_string(&manifest()).unwrap()).unwrap();
         assert_eq!(parsed, manifest());
-        assert!(UpdateManifest::parse(r#"{"version":"0.3.0","url":"x","size":1,"sha256":"a","signature":"s"}"#).is_ok());
+        assert!(UpdateManifest::parse(
+            r#"{"version":"0.3.0","url":"x","size":1,"sha256":"a","signature":"s"}"#
+        )
+        .is_ok());
     }
 
     #[test]

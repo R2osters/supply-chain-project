@@ -17,7 +17,11 @@ pub fn update_message(version: &str, sha256: &str, size: u64) -> String {
     format!("scip-update-v1\n{version}\n{sha256}\n{size}")
 }
 
-pub fn verify_signature(public_key_b64: &str, message: &[u8], signature_b64: &str) -> Result<(), UpdateError> {
+pub fn verify_signature(
+    public_key_b64: &str,
+    message: &[u8],
+    signature_b64: &str,
+) -> Result<(), UpdateError> {
     let key_bytes: Vec<u8> = STANDARD
         .decode(public_key_b64.trim())
         .map_err(|_| UpdateError::Verification("clé publique de mise à jour illisible".into()))?;
@@ -31,13 +35,17 @@ pub fn verify_signature(public_key_b64: &str, message: &[u8], signature_b64: &st
         .map_err(|_| UpdateError::Verification("signature illisible".into()))?;
     let signature = Signature::from_slice(&signature_bytes)
         .map_err(|_| UpdateError::Verification("signature de mauvaise taille".into()))?;
-    key.verify_strict(message, &signature)
-        .map_err(|_| UpdateError::Verification("signature invalide : cet installeur n'a pas été publié par l'éditeur de SCIP".into()))
+    key.verify_strict(message, &signature).map_err(|_| {
+        UpdateError::Verification(
+            "signature invalide : cet installeur n'a pas été publié par l'éditeur de SCIP".into(),
+        )
+    })
 }
 
 /// SHA-256 (lowercase hex) and size of a file, read in chunks: an installer is ~330 MB.
 pub fn sha256_file(path: &Path) -> Result<(String, u64), UpdateError> {
-    let file: File = File::open(path).map_err(|e| UpdateError::Io(format!("lecture de {} : {e}", path.display())))?;
+    let file: File =
+        File::open(path).map_err(|e| UpdateError::Io(format!("lecture de {} : {e}", path.display())))?;
     let mut reader = BufReader::with_capacity(1 << 20, file);
     let mut hasher = Sha256::new();
     let mut buffer = vec![0u8; 1 << 20];
@@ -55,13 +63,22 @@ pub fn sha256_file(path: &Path) -> Result<(String, u64), UpdateError> {
 }
 
 /// Size, checksum, then the signature binding them to the version.
-pub fn verify_download(path: &Path, manifest: &UpdateManifest, public_key_b64: &str) -> Result<(), UpdateError> {
+pub fn verify_download(
+    path: &Path,
+    manifest: &UpdateManifest,
+    public_key_b64: &str,
+) -> Result<(), UpdateError> {
     let (sha256, size) = sha256_file(path)?;
     if size != manifest.size {
-        return Err(UpdateError::Verification(format!("taille inattendue ({size} octets au lieu de {})", manifest.size)));
+        return Err(UpdateError::Verification(format!(
+            "taille inattendue ({size} octets au lieu de {})",
+            manifest.size
+        )));
     }
     if sha256 != manifest.sha256 {
-        return Err(UpdateError::Verification("empreinte SHA-256 différente : fichier altéré ou incomplet".into()));
+        return Err(UpdateError::Verification(
+            "empreinte SHA-256 différente : fichier altéré ou incomplet".into(),
+        ));
     }
     let message: String = update_message(&manifest.version, &manifest.sha256, manifest.size);
     verify_signature(public_key_b64, message.as_bytes(), &manifest.signature)
@@ -110,7 +127,8 @@ pub mod tests {
     #[test]
     fn accepts_a_signature_from_the_release_script() {
         const PUBLIC: &str = "6kpsY+KcUgq+9VB7Ey7F+ZVHdq6+vnuSQh7qaRRG0iw=";
-        const SIGNATURE: &str = "XT8m7PZ/9BCQ0A0czOYby2gh/r8flnCyc649HWD2af7PZyujTLf0YZyH8xO54seA7oo7wffQN2v1ZTN149xAAQ==";
+        const SIGNATURE: &str =
+            "XT8m7PZ/9BCQ0A0czOYby2gh/r8flnCyc649HWD2af7PZyujTLf0YZyH8xO54seA7oo7wffQN2v1ZTN149xAAQ==";
         assert_eq!(public_b64(&test_key()), PUBLIC);
         let message = update_message("0.3.0", &"ab".repeat(32), 1234);
         assert!(verify_signature(PUBLIC, message.as_bytes(), SIGNATURE).is_ok());
@@ -154,7 +172,8 @@ pub mod tests {
 
         // A forged checksum matching a different file.
         let mut forged = manifest.clone();
-        forged.signature = sign(&SigningKey::from_bytes(&[9u8; 32]), "0.3.0", &manifest.sha256, manifest.size);
+        forged.signature =
+            sign(&SigningKey::from_bytes(&[9u8; 32]), "0.3.0", &manifest.sha256, manifest.size);
         assert!(verify_download(&path, &forged, &key).is_err());
 
         // Garbage signature and garbage key.

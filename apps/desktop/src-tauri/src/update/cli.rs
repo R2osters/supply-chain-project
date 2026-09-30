@@ -43,7 +43,8 @@ pub fn run_cli(command: UpdateCommand) -> i32 {
 
 fn execute(command: UpdateCommand) -> Result<Value, String> {
     let ctx: RuntimeContext = context_from_env()?;
-    let config = UpdateConfig::from_env().ok_or("mises à jour désactivées : aucune clé de l'éditeur dans ce build")?;
+    let config =
+        UpdateConfig::from_env().ok_or("mises à jour désactivées : aucune clé de l'éditeur dans ce build")?;
     let current = Version::parse(env!("CARGO_PKG_VERSION")).ok_or("version de SCIP illisible")?;
     let updater = Updater::new(
         Some(config),

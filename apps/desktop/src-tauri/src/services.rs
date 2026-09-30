@@ -263,7 +263,8 @@ impl RuntimeContext {
 
     /// `WITH (FORCE)` ends any leftover connection; nothing else runs during the startup plan.
     pub fn drop_database_task(&self) -> TaskSpec {
-        let command = self.psql("postgres").args(["-c", &format!("DROP DATABASE IF EXISTS {DB_NAME} WITH (FORCE)")]);
+        let command =
+            self.psql("postgres").args(["-c", &format!("DROP DATABASE IF EXISTS {DB_NAME} WITH (FORCE)")]);
         TaskSpec::new("drop-database", command, Duration::from_secs(120))
     }
 

@@ -96,7 +96,9 @@ pub fn run(args: &Args) -> i32 {
         // An upgrade keeps the data and settings: the plan carries nothing (plan.rs).
         (None, true) if ctx.mode == Mode::Upgrade => InstallPlan::upgrade(),
         (None, true) => return fail("not_installed", "--update: no SCIP installation to update"),
-        (None, false) => return fail("invalid_input", "--silent needs --plan <file.json>, --update or --uninstall"),
+        (None, false) => {
+            return fail("invalid_input", "--silent needs --plan <file.json>, --update or --uninstall")
+        }
         (Some(plan_path), _) => match std::fs::read(plan_path)
             .map_err(|e| e.to_string())
             .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()))

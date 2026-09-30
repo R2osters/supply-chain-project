@@ -23,7 +23,8 @@ impl Version {
         let mut parts = core.split('.');
         let mut number = || -> Option<u64> {
             let part: &str = parts.next()?;
-            (!part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()) && part.len() <= 9).then(|| part.parse().ok())?
+            (!part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()) && part.len() <= 9)
+                .then(|| part.parse().ok())?
         };
         let version = Self { major: number()?, minor: number()?, patch: number()?, pre_release };
         parts.next().is_none().then_some(version)
@@ -32,14 +33,14 @@ impl Version {
 
 impl Ord for Version {
     fn cmp(&self, other: &Self) -> Ordering {
-        (self.major, self.minor, self.patch)
-            .cmp(&(other.major, other.minor, other.patch))
-            .then_with(|| match (&self.pre_release, &other.pre_release) {
+        (self.major, self.minor, self.patch).cmp(&(other.major, other.minor, other.patch)).then_with(
+            || match (&self.pre_release, &other.pre_release) {
                 (None, None) => Ordering::Equal,
                 (None, Some(_)) => Ordering::Greater,
                 (Some(_), None) => Ordering::Less,
                 (Some(a), Some(b)) => a.cmp(b),
-            })
+            },
+        )
     }
 }
 
@@ -84,7 +85,8 @@ mod tests {
 
     #[test]
     fn junk_is_refused() {
-        for bad in ["", "0.3", "0.3.0.1", "a.b.c", "0.3.-1", "0.3.0-", " 1 .2.3", "1.2.3x", "9999999999.0.0"] {
+        for bad in ["", "0.3", "0.3.0.1", "a.b.c", "0.3.-1", "0.3.0-", " 1 .2.3", "1.2.3x", "9999999999.0.0"]
+        {
             assert_eq!(Version::parse(bad), None, "{bad}");
         }
     }

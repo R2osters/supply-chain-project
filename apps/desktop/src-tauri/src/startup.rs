@@ -3,10 +3,10 @@
 
 use std::path::PathBuf;
 
+use crate::backup;
 use crate::events::{
     ErrorCode, ErrorEvent, EventSink, ProgressEvent, ReadyEvent, StepStatus, SupervisorEvent,
 };
-use crate::backup;
 use crate::paths::DataDirs;
 use crate::ports::ServicePorts;
 use crate::secrets;

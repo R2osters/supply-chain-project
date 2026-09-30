@@ -9,10 +9,10 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 
+use crate::backup::backups_dir;
 use crate::backup::manifest::{self as backup_manifest, BackupInfo, BackupKind};
 use crate::backup::pending::{write_pending, PendingRestore};
 use crate::backup::run::{self as backup_run, RestoreResult};
-use crate::backup::backups_dir;
 use crate::events::{
     ErrorEvent, EventSink, StartupSnapshot, SupervisorEvent, ERROR_EVENT, PROGRESS_EVENT, READY_EVENT,
 };
@@ -138,7 +138,11 @@ fn open_backups_folder(app: AppHandle) -> Result<(), String> {
 /// Restores `name` (a backup of the folder): safety backup first, then SCIP restarts its
 /// services and the startup plan rebuilds the database from the backup.
 #[tauri::command]
-async fn schedule_restore(app: AppHandle, state: tauri::State<'_, Arc<AppState>>, name: String) -> Result<(), String> {
+async fn schedule_restore(
+    app: AppHandle,
+    state: tauri::State<'_, Arc<AppState>>,
+    name: String,
+) -> Result<(), String> {
     let ctx: Arc<RuntimeContext> = running_context(&state)?;
     let state: Arc<AppState> = Arc::clone(&state);
     tauri::async_runtime::spawn_blocking(move || {
@@ -148,8 +152,11 @@ async fn schedule_restore(app: AppHandle, state: tauri::State<'_, Arc<AppState>>
         backup_run::check_restorable(&ctx, &archive).map_err(|e| e.to_string())?;
         let safety: BackupInfo = backup_run::create_backup(&ctx, &dir, BackupKind::BeforeRestore)
             .map_err(|e| format!("La sauvegarde de sécurité a échoué, restauration annulée : {e}"))?;
-        write_pending(&ctx.dirs.root, &PendingRestore { archive, safety_backup: Some(dir.join(&safety.name)) })
-            .map_err(|e| e.to_string())?;
+        write_pending(
+            &ctx.dirs.root,
+            &PendingRestore { archive, safety_backup: Some(dir.join(&safety.name)) },
+        )
+        .map_err(|e| e.to_string())?;
         restart_services(app, state);
         Ok(())
     })
@@ -190,7 +197,12 @@ async fn install_update(app: AppHandle, state: tauri::State<'_, Arc<AppState>>) 
 }
 
 /// Verified installer + backup of the data, then the detached installer.
-fn start_installer(updater: &Updater, ctx: &RuntimeContext, state: &AppState, relaunch: bool) -> Result<(), String> {
+fn start_installer(
+    updater: &Updater,
+    ctx: &RuntimeContext,
+    state: &AppState,
+    relaunch: bool,
+) -> Result<(), String> {
     let (installer, version) = updater.ready_installer().map_err(|e| e.to_string())?;
     backup_run::create_backup(ctx, &backups_dir(), BackupKind::BeforeUpdate)
         .map_err(|e| format!("La sauvegarde avant mise à jour a échoué, mise à jour annulée : {e}"))?;
@@ -207,7 +219,8 @@ fn start_updater(app: &AppHandle, state: &AppState, ctx: &RuntimeContext) {
     if slot.is_some() {
         return;
     }
-    let current: Version = Version::parse(env!("CARGO_PKG_VERSION")).expect("the package version is MAJOR.MINOR.PATCH");
+    let current: Version =
+        Version::parse(env!("CARGO_PKG_VERSION")).expect("the package version is MAJOR.MINOR.PATCH");
     let emitter: AppHandle = app.clone();
     let updater = Arc::new(Updater::new(
         UpdateConfig::from_env(),
