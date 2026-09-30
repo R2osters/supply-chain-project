@@ -146,17 +146,26 @@ _PAD_VOICES = ((-8.0, -0.6), (0.0, 0.0), (8.0, 0.6))  # (detune in cents, pan)
 
 
 def pad_chord(freqs, dur: float, attack: float = 0.8, release: float = 1.5, cutoff: float = 1400.0,
-              vibrato_hz: float = 0.0, vibrato_cents: float = 0.0) -> np.ndarray:
+              vibrato_hz: float = 0.0, vibrato_cents: float = 0.0, bend: np.ndarray | None = None,
+              level: float | None = None) -> np.ndarray:
     """Three saws per note at -8, 0 and +8 cents, panned left, centre and right, lowpassed at `cutoff`.
 
     The chord is held for `dur` seconds and then released, so the result lasts dur + release. With
     `vibrato_hz` and `vibrato_cents` every voice gets the same sine vibrato (the demo pad: 5 Hz,
     ±15 cents). Stereo; a triad peaks between 0.4 and 0.45.
+
+    For the score, which plays every pad note through this function:
+    - a note of `freqs` is a float, or a per-sample Hz array (dur + release long) for a note that glides;
+    - `bend` adds a per-sample offset in cents (dur + release long) to every voice, on top of the
+      vibrato: the score places the demo vibrato on the film's clock with it;
+    - `level` replaces the level of each voice, 0.2 / sqrt(len(freqs)), so that notes rendered
+      apart can keep the level of one chord.
     """
     n = _n(dur + release)
     t = _t(n)
-    bend = vibrato_cents * np.sin(2.0 * np.pi * vibrato_hz * t) if vibrato_cents else 0.0
-    level = 0.2 / np.sqrt(len(freqs))
+    vibrato = vibrato_cents * np.sin(2.0 * np.pi * vibrato_hz * t) if vibrato_cents else 0.0
+    bend = vibrato if bend is None else vibrato + bend
+    level = 0.2 / np.sqrt(len(freqs)) if level is None else level
     out = np.zeros((n, 2))
     for f in freqs:
         for cents, p in _PAD_VOICES:

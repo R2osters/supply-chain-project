@@ -82,7 +82,6 @@ FINAL_FADE_S = 2.0
 PAD_LOW, ARP_LOW, BASS_LOW = 50, 57, 33   # MIDI: pad notes in D3..C#4, arp roots in A3..G#4, bass roots in A1..G#2
 PAD_ATTACK, PAD_RELEASE = 0.8, 1.5
 PAD_CUTOFF, PAD_BRIGHT, PAD_OPEN = 1400.0, 2200.0, 2400.0   # default, S10 « le pad s'éclaircit », D major at a click
-_PAD_VOICES = ((-8.0, -0.6), (0.0, 0.0), (8.0, 0.6))       # 3 saws ±8 cents (spec § 5.1), the width of pad_chord
 _D_MINOR = (2, 4, 5, 7, 9, 10, 0)                           # pitch classes of D natural minor
 _NAMES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
 _ARP_STEPS = (0, 1, 2, 3, 4, 3, 2, 1)                       # up and down the chord, twice a bar
@@ -369,9 +368,9 @@ class _Arrangement:
                 dur = min(dur, self.free("bass", start) / SR)
                 if dur < 0.03:
                     continue
-                key = (midi, round(dur, 4))
+                key = (midi, dur)  # the exact duration: a note cut short ends where the block starts
                 if key not in cache:
-                    cache[key] = instruments.bass_note(_name(midi), key[1])
+                    cache[key] = instruments.bass_note(_name(midi), dur)
                 self.add("bass", cache[key], start)
         coda = _frame(scene_start(self.tl, "S18"))  # D1 held into the final fade
         self.add("bass", instruments.bass_note("D1", (N - coda) / SR), coda, -3.0)
@@ -380,23 +379,14 @@ class _Arrangement:
 
     def pad_voice(self, tracks, hold: float, attack: float, release: float, cutoff: float, start: int,
                   level: float | None = None) -> np.ndarray:
-        """instruments.pad_chord with per-sample frequencies (glides) and the demo vibrato.
+        """instruments.pad_chord for a note placed at sample `start`, with the demo vibrato on the film's clock.
 
-        `tracks` holds one float or one per-sample Hz array (hold + release long) per note. Three saws
-        per note at -8, 0 and +8 cents, panned left, centre and right, lowpassed at `cutoff`, linear
-        attack, held, then released. The vibrato applies to whatever part of the note falls in the
-        S14 demo span (only the pad plays there). Stereo; starts and ends on exact silence.
+        `tracks` holds one float or one per-sample Hz array (hold + release long) per note. The
+        vibrato applies to whatever part of the note falls in the S14 demo span (only the pad plays
+        there). Stereo; starts and ends on exact silence.
         """
-        n = _n(hold + release)
-        level = 0.2 / math.sqrt(len(tracks)) if level is None else level
-        bend = self.vibrato(start, n)
-        out = np.zeros((n, 2))
-        for f in tracks:
-            for cents, p in _PAD_VOICES:
-                freq = f * 2.0 ** ((cents + bend) / 1200.0) if bend is not None else f * 2.0 ** (cents / 1200.0)
-                out += level * dsp.pan(dsp.saw(freq, n / SR), p)
-        out = dsp.lowpass(out, cutoff) * dsp.env_adsr(n, attack, 0.0, 1.0, release)[:, None]
-        return instruments.finish(out)
+        bend = self.vibrato(start, _n(hold + release))
+        return instruments.pad_chord(tracks, hold, attack, release, cutoff, bend=bend, level=level)
 
     def vibrato(self, start: int, n: int) -> np.ndarray | None:
         """Per-sample bend in cents (5 Hz, ±15 cents inside the S14 demo span, 50 ms ramps), or None."""
@@ -486,9 +476,9 @@ class _Arrangement:
                 if not self.free("keys", start):
                     continue
                 f = cutoff or _ARP_SWEEP[0] * (_ARP_SWEEP[1] / _ARP_SWEEP[0]) ** ((start - sweep_lo) / (sweep_hi - sweep_lo))
-                key = (tones[_ARP_STEPS[k % 8]] + shift, round(f, 1))
+                key = (tones[_ARP_STEPS[k % 8]] + shift, f)
                 if key not in cache:
-                    cache[key] = instruments.arp_note(_name(key[0]), SIX / SR, key[1])
+                    cache[key] = instruments.arp_note(_name(key[0]), SIX / SR, f)
                 self.add("keys", cache[key], start, LEVEL_DB["arp"] + db + 20 * math.log10(_ACCENTS[k % 4]))
 
     def place_risers(self) -> None:

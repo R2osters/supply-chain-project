@@ -224,3 +224,22 @@ def test_bass_pad_and_tom_are_tuned_and_shaped():
     assert rms(0, 0.05) < 0.1 * rms(1.0, 1.5) and rms(3.3, 3.5) < 0.2 * rms(1.0, 1.5)
     tom = instruments.tom("A2")
     assert abs(_dominant_hz(tom[int(0.08 * SR):int(0.4 * SR)]) - theory.hz("A2")) < 4
+
+
+def test_pad_chord_glides_bends_and_takes_a_level():
+    """score.py plays every pad note through pad_chord: a per-sample Hz array glides, `bend` adds
+    cents on top of the vibrato, and `level` sets the level of each voice."""
+    d4, f4 = theory.hz("D4"), theory.hz("F4")
+    t = np.arange(72_000) / SR  # held 1.2 s, then the 0.3 s release
+    glide = d4 * (f4 / d4) ** np.clip((t - 0.5) / 0.1, 0.0, 1.0)
+    pad = instruments.pad_chord([glide], 1.2, attack=0.05, release=0.3)
+    _assert_clean(pad, "gliding pad")
+    assert abs(_dominant_hz(pad[int(0.1 * SR):int(0.45 * SR), 0]) - d4) < 4
+    assert abs(_dominant_hz(pad[int(0.7 * SR):int(1.2 * SR), 0]) - f4) < 4
+    triad = theory.chord("D", "min", 4)
+    demo = instruments.pad_chord(triad, 1.0, vibrato_hz=5, vibrato_cents=15)
+    sine = np.sin(2.0 * np.pi * 5.0 * (np.arange(len(demo)) / SR))  # the same expression as pad_chord
+    assert np.array_equal(instruments.pad_chord(triad, 1.0, bend=15.0 * sine), demo)
+    assert np.allclose(instruments.pad_chord(triad, 1.0, vibrato_hz=5, vibrato_cents=10, bend=5.0 * sine), demo, atol=1e-9)
+    default = instruments.pad_chord(triad, 1.0)
+    assert np.allclose(instruments.pad_chord(triad, 1.0, level=0.1 / np.sqrt(3)), 0.5 * default, atol=1e-12)
