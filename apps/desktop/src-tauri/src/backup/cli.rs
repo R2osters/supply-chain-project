@@ -50,13 +50,13 @@ pub fn parse(args: &[String]) -> Option<Result<Command, String>> {
     None
 }
 
-fn line(value: Value) {
+pub(crate) fn line(value: Value) {
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{value}");
     let _ = out.flush();
 }
 
-struct JsonSink;
+pub(crate) struct JsonSink;
 
 impl EventSink for JsonSink {
     fn emit(&self, event: SupervisorEvent) {
@@ -89,18 +89,27 @@ fn postgres_runs(ctx: &RuntimeContext) -> bool {
     build_command(&status).output().map(|o| o.status.success()).unwrap_or(false)
 }
 
-fn execute(command: Command) -> Result<Value, String> {
+/// The runtime context of this install, as the app would build it (data folder, resources next
+/// to the executable, ports, secrets).
+pub(crate) fn context_from_env() -> Result<RuntimeContext, String> {
     let dirs: DataDirs = DataDirs::from_process_env().map_err(|e| e.to_string())?;
     let exe_dir: Option<PathBuf> = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
     let resources = resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), exe_dir.as_deref());
-    let ctx: RuntimeContext = startup::prepare(dirs, resources).map_err(|e| e.message)?;
+    startup::prepare(dirs, resources).map_err(|e| e.message)
+}
+
+/// Runs `work` with SCIP's own PostgreSQL started on the data folder, then stops it. Refused
+/// while SCIP is open (its database already runs) or with an external database.
+pub(crate) fn with_own_database<T>(
+    ctx: &RuntimeContext,
+    work: impl FnOnce(&Supervisor, &JsonSink) -> Result<T, String>,
+) -> Result<T, String> {
     if ctx.is_external_database() {
         return Err("SCIP utilise une base PostgreSQL externe : utilisez les outils de ce serveur.".into());
     }
-    if postgres_runs(&ctx) {
-        return Err("SCIP est ouvert (sa base tourne) : fermez-le avant de sauvegarder ou de restaurer.".into());
+    if postgres_runs(ctx) {
+        return Err("SCIP est ouvert (sa base tourne) : fermez-le d'abord.".into());
     }
-
     let sink = Arc::new(JsonSink);
     let supervisor = Supervisor::new(
         Arc::new(StdSpawner),
@@ -109,19 +118,23 @@ fn execute(command: Command) -> Result<Value, String> {
         sink.clone(),
         ctx.dirs.logs.clone(),
     );
-    let result = (|| {
-        startup::run_plan(&supervisor, ctx.database_plan(), sink.as_ref()).map_err(|e| e.to_string())?;
-        match &command {
-            Command::Backup { out } => {
-                let dir: PathBuf = out.clone().unwrap_or_else(backups_dir);
-                let info = create_backup(&ctx, &dir, BackupKind::Manual).map_err(|e| e.to_string())?;
-                Ok(json!({ "backup": info, "directory": dir }))
-            }
-            Command::Restore { archive } => restore(&supervisor, &ctx, sink.as_ref(), archive),
-        }
-    })();
+    let result = startup::run_plan(&supervisor, ctx.database_plan(), sink.as_ref())
+        .map_err(|e| e.to_string())
+        .and_then(|()| work(&supervisor, sink.as_ref()));
     supervisor.stop_all();
     result
+}
+
+fn execute(command: Command) -> Result<Value, String> {
+    let ctx: RuntimeContext = context_from_env()?;
+    with_own_database(&ctx, |supervisor, sink| match &command {
+        Command::Backup { out } => {
+            let dir: PathBuf = out.clone().unwrap_or_else(backups_dir);
+            let info = create_backup(&ctx, &dir, BackupKind::Manual).map_err(|e| e.to_string())?;
+            Ok(json!({ "backup": info, "directory": dir }))
+        }
+        Command::Restore { archive } => restore(supervisor, &ctx, sink, archive),
+    })
 }
 
 fn restore(supervisor: &Supervisor, ctx: &RuntimeContext, sink: &JsonSink, archive: &Path) -> Result<Value, String> {

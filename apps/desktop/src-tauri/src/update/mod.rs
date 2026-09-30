@@ -6,6 +6,7 @@
 //! signature made with the publisher's private key, which never leaves the publisher's PC. A
 //! hijacked GitHub account alone cannot push code to the installed SCIPs.
 
+pub mod cli;
 pub mod launch;
 pub mod manifest;
 pub mod updater;
