@@ -10,6 +10,8 @@ export async function stageApi() {
   const sharedDir = join(REPO_DIR, 'packages', 'shared');
 
   run('npm', ['run', 'build', '--workspace', '@scip/shared'], { cwd: REPO_DIR });
+  // A fresh clone only has the empty Prisma client stub: the API does not compile against it.
+  run('npm', ['run', 'prisma:generate', '--workspace', '@scip/api'], { cwd: REPO_DIR });
   run('npm', ['run', 'build', '--workspace', '@scip/api'], { cwd: REPO_DIR });
 
   const target = join(RESOURCES_DIR, 'api');
