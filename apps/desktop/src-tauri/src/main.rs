@@ -10,6 +10,13 @@ fn main() {
     }
     // Backup / restore / update without a window (DEPLOYMENT.md), same reasons as `--provision`.
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // macOS: the watcher the window starts to stop its services if it dies (unix_orphans.rs).
+    #[cfg(unix)]
+    {
+        if let Some(parent) = scip_desktop_lib::unix_orphans::reap_request(&args) {
+            std::process::exit(scip_desktop_lib::unix_orphans::run_reaper(parent));
+        }
+    }
     if let Some(command) = scip_desktop_lib::update::cli::parse(&args) {
         std::process::exit(scip_desktop_lib::update::cli::run_cli(command));
     }

@@ -364,9 +364,18 @@ fn prepare(app: &AppHandle, state: &AppState) -> Result<RuntimeContext, ErrorEve
     let resources = resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), bundled.as_deref());
     // macOS and Linux, where nothing ties the sidecars to this process: what a killed SCIP left
     // running is stopped here, before `prepare` picks the ports. This is the window's boot, so
-    // the single-instance lock is held: a second launch never gets this far.
+    // the single-instance lock is held: a second launch never gets this far. A backup or a
+    // restore running without a window does not hold that lock: its services are left alone,
+    // and the window waits its turn, as it does on Windows when it finds `pgdata` locked.
     if let Some(root) = &resources {
-        crate::unix_orphans::stop_leftovers(root);
+        if let Err(running) = crate::unix_orphans::stop_leftovers(root) {
+            return Err(ErrorEvent {
+                code: crate::events::ErrorCode::SpawnFailed,
+                message: "SCIP est déjà en cours d'exécution sur ce poste. Attendez la fin de la sauvegarde ou de la restauration en cours, puis rouvrez SCIP.".to_owned(),
+                details: vec![format!("Processus SCIP en cours : {:?}", running.pids)],
+                log_file: None,
+            });
+        }
     }
     startup::prepare(dirs, resources)
 }
@@ -426,6 +435,8 @@ pub fn run() {
         ])
         .setup(move |app| {
             match_system_theme(app.handle());
+            // After the single-instance check: a second launch never starts a watcher.
+            crate::unix_orphans::watch_over_this_process();
             let handle: AppHandle = app.handle().clone();
             let boot_state: Arc<AppState> = Arc::clone(&state);
             // Off the main thread: health checks block for up to minutes on first run.

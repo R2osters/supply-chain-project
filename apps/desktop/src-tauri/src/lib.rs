@@ -12,7 +12,7 @@ pub mod secrets;
 pub mod services;
 pub mod startup;
 pub mod supervisor;
-mod unix_orphans;
+pub mod unix_orphans;
 pub mod update;
 mod win_job;
 
