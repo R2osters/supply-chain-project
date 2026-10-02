@@ -79,3 +79,14 @@ On veut pouvoir installer SCIP sur un Mac et sur un PC Linux, sans machine de bu
 - **Vérifiés par des machines, pas encore par des personnes.** Les deux paquets sont installés
   et testés à chaque build sur les runners de GitHub. Aucun n'a encore été essayé par une
   personne sur un vrai Mac ou un vrai poste Linux : tant que c'est le cas, on le dit.
+
+## Travaux à venir
+
+- **Verrouiller l'environnement conda.** Seuls PostgreSQL et PostGIS sont épinglés ; GEOS, PROJ,
+  GDAL et OpenSSL suivent conda-forge. Le build d'un tag repasse tout le test de bout en bout
+  avant de joindre les paquets : une dérive casse ce build au lieu de sortir un paquet cassé, ce
+  qui suffit pour une version préliminaire. Un fichier de verrouillage par plateforme (liste
+  `@EXPLICIT` avec empreintes) rendrait le build reproductible.
+- **Licences des composants embarqués.** Le paquet liste chaque composant du PostgreSQL embarqué
+  et sa version dans `resources/postgres/PACKAGES.txt` (PostGIS est sous GPL v2, GEOS sous LGPL).
+  Il reste à y joindre leurs textes de licence.

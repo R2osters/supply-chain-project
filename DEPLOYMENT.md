@@ -202,7 +202,8 @@ npm run build --workspace @scip/desktop
 
 The folder created first is where the package will install the embedded PostgreSQL: a conda
 environment is tied to the folder it is created in, so it is created there and then moved into
-the build. `SCIP_POSTGRES_PREFIX` names another folder, for a build that will run from elsewhere.
+the build. What that environment is made of (PostGIS, GEOS, PROJ, GDAL, OpenSSL and the rest,
+with their versions) is listed in `resources/postgres/PACKAGES.txt`, which ships in the package. `SCIP_POSTGRES_PREFIX` names another folder, for a build that will run from elsewhere.
 The staging refuses to run on a machine where SCIP is installed, whose database it would overwrite.
 
 **Install on a Mac.** Open the `.dmg`, drag SCIP into Applications, eject the image. SCIP has no
