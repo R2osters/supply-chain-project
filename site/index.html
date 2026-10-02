@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCIP · Supply Chain Intelligence Platform</title>
+  <meta name="description" content="SCIP est un logiciel Windows tout-en-un : Track suit la marchandise, Optimise décide quoi commander, chez qui, quand et par quel itinéraire. Tout tourne sur votre PC, aucune clé requise.">
+  <meta name="theme-color" content="#e3e4e6">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/base.css?v=20261002e">
+  <link rel="stylesheet" href="css/index.css?v=20261002e">
+</head>
+<body>
+
+  <nav class="nav" aria-label="Navigation principale">
+    <a class="brand" href="index.html" aria-current="page"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+    <div class="segmented">
+      <a href="suivi.html">Suivi</a>
+      <a href="optimisation.html">Optimisation</a>
+      <a href="reseau.html">Réseau</a>
+    </div>
+    <a class="btn btn-sm cta" href="telecharger.html">Télécharger</a>
+  </nav>
+
+  <!-- ============ HÉROS : copie à gauche, vraie fenêtre du logiciel à droite, mot géant derrière ============ -->
+  <header class="hero load-seq tilt-zone">
+    <div class="ghost lo" style="--lo: 1" aria-hidden="true">SCIP</div>
+
+    <div class="hero-copy">
+      <p class="eyebrow lo lo-copy" style="--lo: 2">Track · Optimise · Réseau</p>
+      <h1 class="t-hero lo lo-copy" style="--lo: 3">Suivre la marchandise. <span class="accent">Décider quoi commander.</span></h1>
+      <p class="t-body lo lo-copy" style="--lo: 4">Logiciel Windows tout-en-un. Track suit la marchandise du fournisseur au client ; Optimise décide quoi commander, chez qui, quand et par quel itinéraire. Tout tourne sur votre PC.</p>
+      <div class="hero-actions lo lo-copy" style="--lo: 5">
+        <a class="btn" href="telecharger.html">Télécharger pour Windows <span class="circle" aria-hidden="true">↗</span></a>
+        <a class="btn outline" href="#film">Regarder le film · 2&nbsp;min&nbsp;50</a>
+      </div>
+      <p class="mono hero-meta lo lo-copy" style="--lo: 6"><span data-rel="v">v0.2.1</span> · <span data-rel="size">342&nbsp;Mo</span> · sans droits administrateur · aucune clé requise</p>
+    </div>
+
+    <figure class="shot hero-figure lo lo-figure" style="--lo: 2">
+      <div class="shot-win tilt" data-tilt="4" data-tilt-base="perspective(1400px) rotateY(-7deg)">
+        <img src="assets/screens/carte-live-camion-en-retard.webp" width="1600" height="1000" fetchpriority="high" decoding="async" alt="Écran Carte live de SCIP. Filtre « En retard » actif, deux véhicules en retard. Le camion GT-1274-26 est sélectionné : expédition à bord SHP-DEMO-0054, en retard, destination Kumasi, météo au véhicule.">
+      </div>
+      <figcaption>Track · Carte live <span class="demo-tag">données démo</span></figcaption>
+    </figure>
+  </header>
+
+  <!-- ============ Chiffres vérifiés ============ -->
+  <section class="section stats-section" aria-label="Chiffres du projet">
+    <div class="wrap">
+      <dl class="stats-bar panel reveal">
+        <div><dt class="mono">tests automatisés</dt><dd><span data-count="798">798</span></dd></div>
+        <div><dt class="mono">cartes, lisibles hors ligne</dt><dd><span data-count="6">6</span></dd></div>
+        <div><dt class="mono">fichier d&rsquo;installation</dt><dd><span data-count="1">1</span></dd></div>
+        <div><dt class="mono">clé requise</dt><dd><span data-count="0">0</span></dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ============ Le film « Le Signal » : thème sombre du logiciel ============ -->
+  <section class="section film theme-dark" id="film">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Le film · Le Signal</p>
+          <h2 class="t-section reveal">Un retard, <span class="accent">ça s&rsquo;entend.</span></h2>
+        </div>
+        <p class="t-body reveal">« Le Signal » met la chaîne logistique en musique : 120 BPM, 85 mesures, 18 scènes. Un retard y est une note à contretemps, et SCIP l&rsquo;orchestre qui répond.</p>
+      </div>
+      <div class="film-frame reveal">
+        <video preload="metadata" poster="assets/video/poster.png" playsinline width="1920" height="1080">
+          <source src="assets/video/scip-le-signal-web.mp4" type="video/mp4">
+          Votre navigateur ne lit pas cette vidéo.
+        </video>
+        <button class="play-cover" type="button" aria-label="Lire le film Le Signal, durée 2 minutes 50">
+          <span class="play-circle" aria-hidden="true">▶</span>
+          <span class="mono play-meta">Lire le film · 2 min 50</span>
+        </button>
+        <p aria-live="polite" class="visually-hidden"></p>
+      </div>
+      <p class="mono film-meta reveal">1920 × 1080 · 30 i/s · image et musique générées par du code · voix de synthèse · l&rsquo;expédition SHP&#8209;0142 et son retard de deux jours sont ceux du film, pas des données du logiciel</p>
+    </div>
+  </section>
+
+  <!-- ============ Les trois piliers du logiciel, avec leurs vrais onglets ============ -->
+  <section class="section modules">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Ce que fait SCIP</p>
+          <h2 class="t-section reveal">Trois piliers, <span class="accent">un seul logiciel.</span></h2>
+        </div>
+        <p class="t-body reveal">Ce que Track observe, Optimise le transforme en recommandation. Rien n&rsquo;est envoyé sans votre accord.</p>
+      </div>
+      <div class="bento">
+        <a class="mod mod-track reveal" href="suivi.html">
+          <span class="pill-tag">Track</span>
+          <h3 class="t-card">Suivre la marchandise</h3>
+          <p>Camions, navires, avions, dangers : chaque position sur une carte, chaque retard détecté.</p>
+          <ul class="tabs" aria-label="Onglets de Track">
+            <li>Control</li><li>Carte live</li><li>Situation</li><li>Expéditions</li><li>Incidents</li><li>Livraisons</li><li>Navires</li><li>Balises</li>
+          </ul>
+          <span class="corner" aria-hidden="true"></span>
+        </a>
+        <a class="mod mod-optimise fill-ink reveal" href="optimisation.html">
+          <span class="pill-tag">Optimise</span>
+          <h3 class="t-card">Décider quoi commander</h3>
+          <p>Dix moteurs IA derrière cinq onglets ; chaque recommandation arrive avec ses raisons et ses hypothèses.</p>
+          <ul class="tabs" aria-label="Onglets d'Optimise">
+            <li>Conseils</li><li>Prévisions</li><li>Allocation</li><li>Scénarios</li><li>Tournées</li>
+          </ul>
+          <span class="corner" aria-hidden="true"></span>
+        </a>
+        <a class="mod mod-reseau reveal" href="reseau.html">
+          <span class="pill-tag">Réseau</span>
+          <h3 class="t-card">Tenir le référentiel</h3>
+          <p>Fournisseurs mesurés sur leurs commandes, bons de commande, stocks.</p>
+          <ul class="tabs" aria-label="Onglets de Réseau">
+            <li>Fournisseurs</li><li>Commandes</li><li>Stocks</li><li>Référentiel</li>
+          </ul>
+          <span class="corner" aria-hidden="true"></span>
+        </a>
+        <a class="mod mod-local reveal" href="reseau.html#securite">
+          <span class="pill-tag">Sécurité</span>
+          <h3 class="t-card">Local d&rsquo;abord</h3>
+          <p>Aucun serveur, aucun abonnement. SCIP répond à ce PC seul par défaut.</p>
+          <span class="corner" aria-hidden="true"></span>
+        </a>
+        <a class="mod mod-offline reveal" href="suivi.html#horsligne">
+          <span class="pill-tag">Hors ligne</span>
+          <h3 class="t-card">Sans internet</h3>
+          <p>Fond de carte mondial embarqué de 4&nbsp;Mo : les six cartes restent lisibles.</p>
+          <span class="corner" aria-hidden="true"></span>
+        </a>
+        <a class="mod mod-setup reveal" href="telecharger.html">
+          <span class="pill-tag">Installation</span>
+          <h3 class="t-card">Un fichier, sans droits administrateur</h3>
+          <p><span data-rel="file">SCIP&#8209;Setup&#8209;0.2.1.exe</span> installe l&rsquo;application, sa base, son API et son moteur IA.</p>
+          <span class="corner" aria-hidden="true"></span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ La boucle de décision : l'écran Control réel ============ -->
+  <section class="section loop-section">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Track · Control</p>
+          <h2 class="t-section reveal">Boucle de décision, <span class="accent">quatre étapes.</span></h2>
+        </div>
+        <p class="t-body reveal">Détecter, recommander, décider. Chaque recommandation est expliquée et chiffrée ; rien n&rsquo;est envoyé sans votre accord.</p>
+      </div>
+      <figure class="shot loop-shot reveal">
+        <div class="shot-win" data-float="18">
+          <img src="assets/screens/control.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Control de SCIP : « 2 décisions en attente », six indicateurs, la Boucle de décision en quatre étapes, les décisions en attente et la file d'alertes avec les retards de SHP-DEMO-0054 et SHP-DEMO-0055.">
+        </div>
+        <figcaption>Track · Control <span class="demo-tag">données démo</span> <span class="cap-note">15 expéditions actives dont 2 en retard · 11 camions sur 12 émettent · 3 302 643 GHS de stock sur 10 références</span></figcaption>
+      </figure>
+      <ol class="loop-steps reveal">
+        <li style="--i: 0"><span class="mono n">01</span><b>TRACK détecte</b><span>2 signaux à examiner</span></li>
+        <li style="--i: 1"><span class="mono n">02</span><b>OPTIMISE recalcule</b><span>prévision, allocation, tournées</span></li>
+        <li style="--i: 2"><span class="mono n">03</span><b>Recommandation</b><span>2 ouvertes</span></li>
+        <li style="--i: 3"><span class="mono n">04</span><b>Décision humaine · BC créé</b><span>rien n&rsquo;est envoyé sans accord</span></li>
+      </ol>
+      <p class="loop-note reveal"><span class="demo-tag">données démo</span> Les libellés et les compteurs sont ceux de l&rsquo;écran ci-dessus. Au clavier dans Control : <kbd>J</kbd> <kbd>K</kbd> suivante, précédente · <kbd>A</kbd> accepter · <kbd>W</kbd> pourquoi&nbsp;? · <kbd>/</kbd> rechercher.</p>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="section cta-section">
+    <div class="wrap cta-inner">
+      <h2 class="t-hero reveal">Installez SCIP <span class="accent">sur votre PC.</span></h2>
+      <div class="hero-actions reveal">
+        <a class="btn" href="telecharger.html">Télécharger SCIP <span data-rel="n">0.2.1</span> <span class="circle" aria-hidden="true">↗</span></a>
+        <a class="link-arrow" href="https://github.com/R2osters/supply-chain-project">Voir le code sur GitHub</a>
+      </div>
+      <p class="mono cta-meta reveal">Windows 10 (1809) ou plus récent · jeu de démo inclus</p>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="cols">
+      <div>
+        <a class="brand-foot" href="index.html"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+        <p class="meta">Supply Chain Intelligence Platform. Suivre la marchandise du portail du fournisseur au quai du client, et décider quoi commander, chez qui, quand et par quel itinéraire.</p>
+      </div>
+      <div>
+        <h4>Pages</h4>
+        <a href="suivi.html">Suivi</a>
+        <a href="optimisation.html">Optimisation</a>
+        <a href="reseau.html">Réseau</a>
+        <a href="telecharger.html">Télécharger</a>
+      </div>
+      <div>
+        <h4>Projet</h4>
+        <a href="https://github.com/R2osters/supply-chain-project">Code source</a>
+        <a href="https://github.com/R2osters/supply-chain-project/releases/latest">Version <span data-rel="n">0.2.1</span></a>
+        <a href="reseau.html#securite">Sécurité</a>
+      </div>
+      <div>
+        <h4>Le film</h4>
+        <a href="index.html#film">Le Signal · 2 min 50</a>
+      </div>
+    </div>
+    <p class="legal"><span>SCIP <span data-rel="n">0.2.1</span></span><span>Logiciel Windows</span><span>Projet d&rsquo;école, non commercial</span></p>
+  </footer>
+
+  <script src="js/site.js?v=20261002e" defer></script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+/* ============================================================
+   SCIP — suivi (Track). Héros : tête à deux colonnes, puis la
+   vraie Carte live en grand, inclinée ; mot géant TRACK derrière.
+   Puis : sources de la flotte, couches sans clé / avec clé à côté
+   de Situation et Navires empilés, hors ligne, fiche d'expédition.
+   ============================================================ */
+
+/* ---------- Héros ---------- */
+.hero {
+  position: relative; overflow: hidden;
+  padding: clamp(104px, 14vh, 160px) var(--gutter) clamp(36px, 5vh, 72px);
+}
+.hero .ghost { left: -0.04em; top: 4%; font-size: 37vw; }
+.hero .wrap { position: relative; z-index: 2; }
+.hero-head { display: grid; grid-template-columns: 1.25fr .75fr; gap: 40px; align-items: end; margin-bottom: clamp(26px, 3vw, 48px); }
+.hero-head .t-hero { max-width: 14ch; }
+.hero-head .t-body { justify-self: end; }
+.hero-shot { perspective: 2000px; }
+.hero-shot .shot-win { transform: perspective(2000px) rotateX(4deg); transform-origin: 50% 0; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 32px; }
+@media (max-width: 860px) {
+  .hero { padding-top: 150px; }
+  .hero .ghost { font-size: 58vw; top: 9%; }
+  .hero-head { grid-template-columns: 1fr; gap: 18px; }
+  .hero-head .t-body { justify-self: start; }
+  .hero-shot .shot-win { transform: none; }
+}
+
+/* ---------- Colonnes ---------- */
+.cols-3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+.col { border-left: 1px solid var(--line); padding: 6px clamp(18px, 2vw, 34px) 10px; }
+.col:first-child { border-left: 0; padding-left: 0; }
+.col .n { color: var(--muted); display: block; margin-bottom: 14px; }
+.col h3 { margin-bottom: 10px; }
+.col p { margin: 0; color: var(--muted); font-size: 14.5px; max-width: 36ch; }
+@media (max-width: 860px) {
+  .cols-3 { grid-template-columns: 1fr; gap: 24px; }
+  .col { border-left: 0; border-top: 1px solid var(--line); padding: 22px 0 0; }
+  .col:first-child { border-top: 0; padding-top: 0; }
+}
+
+/* ---------- Couches + captures empilées ---------- */
+.layers-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: clamp(28px, 4vw, 64px); align-items: start; }
+.layers { list-style: none; margin: 0; padding: 0; }
+.layers li { padding: 18px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
+.layers li:first-child { border-top: 0; padding-top: 0; }
+.layers b { font-family: var(--display); font-size: clamp(20px, 1.7vw, 27px); font-weight: 600; }
+.src { display: flex; align-items: center; gap: 10px; font-size: 13.5px; color: var(--ink); }
+.chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; flex: none;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted);
+}
+.chip.free { color: var(--ink); border-color: var(--ink); }   /* neutre : « sans clé » n'est pas un événement */
+/* deux fenêtres qui se chevauchent : la seconde décalée vers le bas à droite */
+.stack { position: relative; padding-bottom: 18%; }
+.stack-a { width: 86%; }
+.stack-b { position: absolute; right: 0; bottom: 0; width: 58%; }
+.stack-b figcaption { justify-content: flex-end; }
+@media (max-width: 1000px) {
+  .layers-grid { grid-template-columns: 1fr; }
+  .stack { padding-bottom: 0; }
+  .stack-a { width: 100%; }
+  .stack-b { position: static; width: 100%; margin-top: 22px; }
+  .stack-b figcaption { justify-content: flex-start; }
+}
+
+/* ---------- Hors ligne ---------- */
+.offline-section { padding-top: clamp(24px, 3vw, 48px); padding-bottom: clamp(24px, 3vw, 48px); }
+.offline-tabs li { height: 34px; padding: 0 16px; font-size: 13.5px; }
+
+/* ---------- Retards et preuves ---------- */
+.delay-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, .65fr); gap: clamp(22px, 3vw, 48px); align-items: start; }
+.proofs { display: grid; gap: 12px; }
+.proof { padding: clamp(20px, 2vw, 28px); display: flex; flex-direction: column; gap: 10px; }
+.proof:first-child { background: var(--surface-2); }
+.proof .pill-tag { color: var(--muted); }
+.proof p { margin: 0; font-size: 14px; color: var(--muted); max-width: 44ch; }
+@media (max-width: 1000px) { .delay-grid { grid-template-columns: 1fr; } }
+
+/* ---------- CTA ---------- */
+.cta-section { padding-bottom: clamp(72px, 8vw, 128px); }
