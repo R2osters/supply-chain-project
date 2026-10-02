@@ -65,6 +65,23 @@ Reste à faire : certificat de signature de code, mise à jour automatique (plug
 hébergement des versions), HTTPS sur le réseau local pour le GPS de la PWA chauffeur, sauvegarde
 et restauration depuis l'interface.
 
+## macOS et Linux
+
+La même coque est construite pour macOS (Apple Silicon) et Linux (x86_64) par la CI : décision et
+écarts dans l'[ADR 0002](adr/0002-macos-et-linux.md), installation dans
+[DEPLOYMENT.md](../DEPLOYMENT.md#macos-and-linux). Ce qui change dans le schéma ci-dessus :
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Fenêtre | WebView2 | WKWebView | WebKitGTK 4.1 |
+| Données | `%LOCALAPPDATA%\com.scip.desktop\` | `~/Library/Application Support/com.scip.desktop/` | `~/.local/share/com.scip.desktop/` |
+| Base embarquée | PostgreSQL 16 d'EDB | PostgreSQL 18 de conda-forge | PostgreSQL 18 de conda-forge |
+| Services liés à la vie de SCIP | objet Job (`win_job.rs`) | nettoyage au démarrage (`unix_orphans.rs`) | signal à la mort du parent, et nettoyage au démarrage |
+| Mise à jour | automatique, signée | manuelle | manuelle |
+
+Le test de bout en bout qui manque sous Windows existe pour ces deux systèmes :
+`apps/desktop/scripts/e2e-unix.mjs` installe le paquet sur le runner et le fait tourner.
+
 ## Tests
 
 - Unitaires Rust (`npm run desktop:test`) : ports, secrets, chemins, spécifications des services,

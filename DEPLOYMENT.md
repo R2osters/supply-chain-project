@@ -2,7 +2,8 @@
 
 SCIP ships as one Windows installer. There is no server to deploy: each installation runs its
 own database, API and AI engine on the user's computer. Why, and what that costs:
-[ADR 0001](docs/adr/0001-logiciel-de-bureau-tout-en-un.md).
+[ADR 0001](docs/adr/0001-logiciel-de-bureau-tout-en-un.md). A macOS and a Linux package are built
+by CI from the same code: [macOS and Linux](#macos-and-linux).
 
 ## Build the installer
 
@@ -159,6 +160,84 @@ publish a build with a new key (`release:keygen --rotate`) and reinstall it by h
 `SCIP_UPDATE_FEED` points SCIP at another feed (tests; whatever it serves must still carry the
 publisher's signature). `SCIP_UPDATE_PUBLIC_KEY` replaces the key only in debug builds or builds
 made with `--features update-test`: a released SCIP trusts `update-key.pub` and nothing else.
+
+## macOS and Linux
+
+SCIP is also built for macOS on Apple Silicon (`SCIP-<version>-macos-arm64.dmg`, macOS 13.5 or
+later) and for Linux x86_64 (`SCIP-<version>-linux-amd64.deb`, Ubuntu 22.04 or later, Debian 12 or
+later). Same shell, API, AI engine and interface as on Windows; what differs, and why:
+[ADR 0002](docs/adr/0002-macos-et-linux.md).
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Package | `SCIP-Setup-<version>.exe`, SCIP's own installer | `.dmg`: drag SCIP into Applications | `.deb` |
+| Program | `%LOCALAPPDATA%\Programs\SCIP` | `/Applications/SCIP.app` | `/usr/bin/scip-desktop`, `/usr/lib/SCIP` |
+| Data | `%LOCALAPPDATA%\com.scip.desktop` | `~/Library/Application Support/com.scip.desktop` | `~/.local/share/com.scip.desktop` (`$XDG_DATA_HOME`) |
+| Backups | `Documents\SCIP\Sauvegardes` | `~/Documents/SCIP/Sauvegardes` | `SCIP/Sauvegardes` in the Documents folder (the home folder when the session declares none) |
+| Embedded database | PostgreSQL 16.15, PostGIS 3.6.2 | PostgreSQL 18.6, PostGIS 3.6.2 (conda-forge) | as macOS |
+| First run | choices made in the installer | in-app assistant: create the company or load the demo | as macOS |
+| Updates | automatic, signed (above) | by hand: download the new package | as macOS |
+| Signature | none: SmartScreen warns | ad hoc, not notarised: Gatekeeper blocks the first launch | none |
+
+**Build.** `.github/workflows/desktop-unix.yml` builds both packages on GitHub's runners, installs
+each on its runner and runs `apps/desktop/scripts/e2e-unix.mjs` against it: provisioning with the
+demo, sign-in, PostGIS queries, the AI engines, a second launch, a `kill -9` followed by a new
+launch, backup and restore. The staging scripts are the Windows ones; on these systems Node comes
+from the matching nodejs.org archive, the AI engine from `services/ai/build-desktop.sh`, and
+PostgreSQL with PostGIS from conda-forge (`stage-postgres-unix.mjs`, installed by a micromamba
+pinned by checksum). To build on a Mac or a Linux PC:
+
+```bash
+npm install
+mkdir -p /Applications/SCIP.app/Contents/Resources/resources                      # macOS
+sudo mkdir -p /usr/lib/SCIP/resources && sudo chown -R "$USER" /usr/lib/SCIP     # Linux
+npm run desktop:stage
+npm run build --workspace @scip/desktop
+```
+
+The folder created first is where the package will install the embedded PostgreSQL: a conda
+environment is tied to the folder it is created in, so it is created there and then moved into
+the build. `SCIP_POSTGRES_PREFIX` names another folder, for a build that will run from elsewhere.
+The staging refuses to run on a machine where SCIP is installed, whose database it would overwrite.
+
+**Install on a Mac.** Open the `.dmg`, drag SCIP into Applications, eject the image. SCIP has no
+Apple Developer ID and is not notarised, so macOS refuses to open the downloaded application.
+Either allow it in System Settings → Privacy & Security → "Open Anyway" (since macOS 15 a
+right-click → Open is no longer enough), or remove the quarantine mark in Terminal:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/SCIP.app
+```
+
+SCIP must stay in `/Applications`: opened from the disk image or from Downloads, it says so and
+stops.
+
+**Install on Linux.** `sudo apt install ./SCIP-<version>-linux-amd64.deb`, then open SCIP from the
+applications menu. The package depends on WebKitGTK 4.1, which Ubuntu 22.04 and Debian 12 are the
+first to ship. Nothing is written under `/usr/lib/SCIP`.
+
+**Publishing.** Nothing changes on the publisher's PC: `npm run release` builds and signs the
+Windows installer, tags and creates the release. The tag starts `desktop-unix.yml`; once both
+packages have passed their checks, its `release` job waits for the release to exist and attaches
+the `.dmg`, the `.deb` and `SHA256SUMS`. That job is the only one in this repository with write
+access, it only adds files to a release, and it never replaces one that is already there. The
+packages are not covered by the Ed25519 signature: `shasum -a 256 -c SHA256SUMS` (macOS) or
+`sha256sum -c SHA256SUMS` (Linux) checks a download against the release.
+
+**What differs in use.**
+
+- Updates are manual: Settings → Mises à jour says so, and nothing is downloaded in the background.
+- A backup made on Windows restores on macOS and Linux. The reverse does not: `pg_restore` 16
+  cannot read the archive of a `pg_dump` 18, and SCIP then falls back on its safety backup.
+- The data folder, `config.json` and the backups are readable by their owner only (modes 700 and
+  600): nothing there plays the part of the ACL of `%LOCALAPPDATA%`.
+- No Job Object: on Linux every service asks the kernel for a signal when SCIP dies; on both
+  systems SCIP stops, at start-up, whatever a killed SCIP left running.
+- The headless modes are the same: `/Applications/SCIP.app/Contents/MacOS/scip-desktop --backup`
+  on a Mac, `scip-desktop --backup` on Linux.
+
+Both packages are installed and exercised by every build. Neither has yet been tried by a person
+on a real Mac or a real Linux desktop.
 
 ## Environment (development)
 

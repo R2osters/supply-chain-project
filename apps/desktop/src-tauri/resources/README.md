@@ -19,3 +19,8 @@ resources/
 
 At runtime the app looks for this folder in `<install dir>/resources`, or in the path given
 by the `SCIP_RESOURCES_DIR` environment variable (handy in development).
+
+On macOS and Linux the layout is the same without `.exe`, and `postgres/` is a conda-forge
+environment built for its install folder (`postgres/INSTALL_PREFIX` names it, see
+`scripts/stage-postgres-unix.mjs`): `/Applications/SCIP.app/Contents/Resources/resources` on a
+Mac, `/usr/lib/SCIP/resources` on Linux.
