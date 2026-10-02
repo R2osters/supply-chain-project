@@ -467,6 +467,9 @@ export interface RiskAnalyzeRequest {
     leadTimeDays: number;
     incomingQuantity: number;
     incomingArrivalDays: number | null;
+    /** Set when the position is one short warehouse, not the network: its name, and the stock held elsewhere. */
+    siteName?: string | null;
+    stockElsewhere?: number | null;
   }>;
   suppliers: Array<{
     supplierId: string;

@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Sequence
 
 from .inventory import stockout_probability
+from ..formatting import fr_num
 
 #: Weight of each category in the health score. They sum to 100, so the worst possible score is 0.
 #: NATURAL_HAZARD (earthquakes, eruptions, wildfires) took its 5 points from DEMAND_RISK: erratic demand is
@@ -279,20 +280,20 @@ def _stockout_findings(products: Sequence[dict]) -> list[RiskFinding]:
                 subject_type="PRODUCT",
                 subject_id=str(product.get("productId", "")),
                 recommended_action=(
-                    f"Commandez au moins {units_at_risk:,.0f} unités, ou accélérez les "
-                    f"{incoming:,.0f} déjà en commande."
+                    f"Commandez au moins {fr_num(units_at_risk)} unités, ou accélérez les "
+                    f"{fr_num(incoming)} déjà en commande."
                     if units_at_risk > 0
                     else "Surveillez : la couverture est faible, mais la position couvre encore "
                     "la demande attendue."
                 ),
                 reasons=[
-                    f"{current:,.0f} en stock plus {incoming:,.0f} en stock entrant, face à une "
-                    f"demande attendue de {demand * lead_time:,.0f} sur un délai "
+                    f"{fr_num(current)} en stock plus {fr_num(incoming)} en stock entrant, face à une "
+                    f"demande attendue de {fr_num(demand * lead_time)} sur un délai "
                     f"d’approvisionnement de {lead_time:.0f} jours.",
                     f"{days_of_cover:.1f} jours de couverture restants au rythme actuel de la "
                     "demande.",
                     f"Probabilité de rupture avant réapprovisionnement : {probability:.1%}.",
-                    f"Environ {units_at_risk:,.0f} unités à risque, pour une valeur de {impact:,.0f}.",
+                    f"Environ {fr_num(units_at_risk)} unités à risque, pour une valeur de {fr_num(impact)}.",
                 ],
                 assumptions=[
                     "La demande pendant le délai d’approvisionnement est approchée par une loi "
@@ -408,7 +409,7 @@ def _transport_findings(shipments: Sequence[dict]) -> list[RiskFinding]:
                 f"{len(at_risk)} expédition(s) présentent une probabilité de retard de 40 % ou "
                 "plus.",
                 f"Leur probabilité de retard moyenne est de {mean_probability:.1%}.",
-                f"Valeur totale des marchandises à risque : {total_value:,.0f}.",
+                f"Valeur totale des marchandises à risque : {fr_num(total_value)}.",
             ],
             assumptions=[
                 "La probabilité de retard est reprise telle quelle de la fiche de l’expédition.",
@@ -456,8 +457,8 @@ def _demand_findings(products: Sequence[dict]) -> list[RiskFinding]:
                     "l’absorber par du stock ou commander plus souvent."
                 ),
                 reasons=[
-                    f"Coefficient de variation {cv:.2f} (σ {demand_std:,.1f} pour une moyenne de "
-                    f"{demand:,.1f}/jour) — au-delà de 0.5, la demande est considérée comme "
+                    f"Coefficient de variation {cv:.2f} (σ {fr_num(demand_std, 1)} pour une moyenne de "
+                    f"{fr_num(demand, 1)}/jour) — au-delà de 0.5, la demande est considérée comme "
                     "erratique.",
                     "Une prévision sur cette série aura des intervalles larges, quelle que soit la "
                     "qualité du modèle ; la solution est la politique de stock, pas un meilleur "
@@ -563,7 +564,7 @@ def _hazard_findings(hazards: Sequence[dict], reference_impact: float) -> list[R
         label = closest.get("subjectLabel")
         target = f"de {label}" if label else "d’un site suivi"
         reasons = [
-            f"{title} (niveau {LEVEL_LABELS.get(level, level)}) se trouve à {distance:,.0f} km "
+            f"{title} (niveau {LEVEL_LABELS.get(level, level)}) se trouve à {fr_num(distance)} km "
             f"{target}.",
             f"Probabilité estimée d’une perturbation de ce site : {probability:.0%}.",
         ]
