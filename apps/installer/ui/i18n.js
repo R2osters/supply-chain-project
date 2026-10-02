@@ -86,7 +86,7 @@
       "type.production": "Production",
       "type.productionDesc": "Une base vide pour vos propres données : votre organisation, vos sites, votre compte administrateur.",
       "type.demo": "Démonstration",
-      "type.demoDesc": "Données fictives (Accra Foods Distribution) et comptes de démonstration, pour découvrir SCIP sans rien saisir.",
+      "type.demoDesc": "Données fictives (Demo Distribution Ghana) et comptes de démonstration, pour découvrir SCIP sans rien saisir.",
       "type.group": "Type d'installation",
 
       "db.title": "Base de données",
@@ -339,7 +339,7 @@
       "type.production": "Production",
       "type.productionDesc": "An empty database for your own data: your organisation, your sites, your administrator account.",
       "type.demo": "Demo",
-      "type.demoDesc": "Sample data (Accra Foods Distribution) and demo accounts, to explore SCIP without entering anything.",
+      "type.demoDesc": "Sample data (Demo Distribution Ghana) and demo accounts, to explore SCIP without entering anything.",
       "type.group": "Installation type",
 
       "db.title": "Database",
