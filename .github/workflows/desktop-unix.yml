@@ -1,0 +1,247 @@
+# SCIP for macOS and Linux (docs/adr/0002-macos-et-linux.md): the shell's tests on both systems,
+# then the package (.dmg, .deb), installed on the runner and exercised end to end. On a version
+# tag, the packages are attached to the release the publisher created (npm run release).
+name: desktop-unix
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'services/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/desktop-unix.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-unix-${{ github.ref }}
+  cancel-in-progress: true
+
+# Read the code, nothing else. One job below, on a version tag only, is given more: see `release`.
+permissions:
+  contents: read
+
+# Every action is pinned to a commit (tag in the comment), as in desktop.yml.
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macos-arm64
+            runner: macos-15
+          # The oldest Ubuntu still served: what is built here runs on 22.04 and later.
+          - name: linux-amd64
+            runner: ubuntu-22.04
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 150
+    env:
+      BUNDLE: apps/desktop/src-tauri/target/release/bundle
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      # build-desktop.sh builds the AI sidecar with python3.12 and installs PyInstaller itself.
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Linux libraries and disk space
+        if: runner.os == 'Linux'
+        run: |
+          # Preinstalled toolchains nothing here uses: the build needs the 20 GB they take.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev libxdo-dev \
+            libssl-dev build-essential file xvfb dbus
+      # Node archive and micromamba (~70 MB), pinned in the staging scripts.
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: apps/desktop/.cache
+          key: desktop-downloads-${{ matrix.name }}-${{ hashFiles('apps/desktop/scripts/stage-node.mjs', 'apps/desktop/scripts/stage-postgres-unix.mjs') }}
+      # Natural Earth data and glyphs for the offline basemap (~80 MB of sources, pinned versions).
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: apps/web/.basemap-cache
+          key: basemap-sources-${{ runner.os }}-${{ hashFiles('apps/web/scripts/fetch-basemap.mjs') }}
+      - run: npm ci
+
+      - name: Desktop shell tests and lint
+        working-directory: apps/desktop/src-tauri
+        run: |
+          # Tauri's build script embeds the frontend folder, which must exist even for tests.
+          mkdir -p ../web-dist
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+      # A conda environment is tied to the folder it is created in, so the embedded PostgreSQL
+      # is created where the package will install it (scripts/stage-postgres-unix.mjs).
+      - name: Folder the embedded PostgreSQL is built for
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo mkdir -p /usr/lib/SCIP/resources
+            sudo chown -R "$USER" /usr/lib/SCIP
+          else
+            mkdir -p /Applications/SCIP.app/Contents/Resources/resources
+          fi
+      # The web export is staged by the build itself (beforeBuildCommand).
+      - name: Stage runtimes, API and AI
+        run: node apps/desktop/scripts/stage-all.mjs node postgres api ai defaults
+      - name: Drop what staging no longer needs
+        run: |
+          rm -rf services/ai/.venv-build services/ai/build services/ai/dist apps/desktop/.cache/mamba
+          if [ "$RUNNER_OS" = Linux ]; then sudo rm -rf /usr/lib/SCIP; else rm -rf /Applications/SCIP.app; fi
+          du -sh apps/desktop/src-tauri/resources/*
+      # No Apple Developer ID and no notarisation: the application gets an ad-hoc signature
+      # (tauri.macos.conf.json), which macOS requires to run anything on Apple Silicon.
+      - name: Build SCIP and its package
+        run: npm run build --workspace @scip/desktop
+
+      - name: Package layout
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            deb=$(ls "$BUNDLE"/deb/*.deb)
+            dpkg-deb --info "$deb"
+            dpkg-deb --contents "$deb" > contents.txt
+            grep -q ' \./usr/bin/scip-desktop$' contents.txt
+            grep -q ' \./usr/lib/SCIP/resources/postgres/bin/postgres$' contents.txt
+            grep -q ' \./usr/lib/SCIP/resources/node/node$' contents.txt
+            grep -q ' \./usr/lib/SCIP/resources/ai/scip-ai$' contents.txt
+            # Tauri drops linked folders and copies linked files: the staging must leave none.
+            if grep ' -> ' contents.txt; then echo 'symbolic links in the package' >&2; exit 1; fi
+          else
+            app="$BUNDLE/macos/SCIP.app"
+            test -x "$app/Contents/MacOS/scip-desktop"
+            test -x "$app/Contents/Resources/resources/postgres/bin/postgres"
+            test -x "$app/Contents/Resources/resources/node/node"
+            test -x "$app/Contents/Resources/resources/ai/scip-ai"
+            find "$app" -type l > links.txt
+            if [ -s links.txt ]; then echo 'symbolic links in the application' >&2; head -20 links.txt; exit 1; fi
+            codesign --verify --strict --verbose=2 "$app"
+            ls -la "$BUNDLE"/dmg
+          fi
+      - name: Install the package
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get install -y "./$(ls "$BUNDLE"/deb/*.deb)"
+            ldd /usr/bin/scip-desktop
+          else
+            hdiutil attach "$(ls "$BUNDLE"/dmg/*.dmg)" -nobrowse -readonly -mountpoint /Volumes/SCIP-package
+            ditto /Volumes/SCIP-package/SCIP.app /Applications/SCIP.app
+            hdiutil detach /Volumes/SCIP-package
+          fi
+          # The package is installed: its build tree gives the disk back for the run.
+          rm -rf apps/desktop/src-tauri/resources/postgres apps/desktop/src-tauri/resources/node \
+            apps/desktop/src-tauri/resources/api apps/desktop/src-tauri/resources/ai \
+            apps/desktop/src-tauri/resources/web "$BUNDLE"/macos "$BUNDLE"/deb/*/
+      - name: End-to-end check of the installed package
+        env:
+          # No GPU on the runner: WebKitGTK must not try its accelerated paths.
+          WEBKIT_DISABLE_DMABUF_RENDERER: '1'
+          WEBKIT_DISABLE_COMPOSITING_MODE: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a dbus-run-session -- node apps/desktop/scripts/e2e-unix.mjs
+          else
+            node apps/desktop/scripts/e2e-unix.mjs
+          fi
+
+      # Not a check: a record of what a downloaded copy meets. A browser marks the disk image as
+      # quarantined and the Finder passes the mark to every file it copies; nobody can click
+      # "Open Anyway" here, so this only tells whether the embedded programs still run under
+      # the mark, which decides the install instructions (DEPLOYMENT.md, "Install on a Mac").
+      - name: Gatekeeper, as a downloaded copy would meet it
+        if: runner.os == 'macOS'
+        continue-on-error: true
+        run: |
+          app=/Applications/SCIP.app
+          xattr -r -w com.apple.quarantine "0083;$(printf '%x' "$(date +%s)");Safari;" "$app"
+          spctl --assess --type execute --verbose=4 "$app" || true
+          res="$app/Contents/Resources/resources"
+          "$res/postgres/bin/postgres" --version || echo "postgres refused under quarantine ($?)"
+          "$res/node/node" --version || echo "node refused under quarantine ($?)"
+          "$res/ai/scip-ai" --help > /dev/null && echo "scip-ai runs" || echo "scip-ai refused under quarantine ($?)"
+          xattr -dr com.apple.quarantine "$app"
+          "$res/postgres/bin/postgres" --version
+
+      - name: Name the package after its version and system
+        run: |
+          version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+          mkdir -p dist
+          if [ "$RUNNER_OS" = Linux ]; then
+            cp "$BUNDLE"/deb/*.deb "dist/SCIP-$version-linux-amd64.deb"
+          else
+            cp "$BUNDLE"/dmg/*.dmg "dist/SCIP-$version-macos-arm64.dmg"
+          fi
+          ls -la dist
+      # Not a release: unsigned and for testing, like the Windows artifact of desktop.yml.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scip-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+          compression-level: 0
+
+  # The one job of this repository that may write, and only to add files to a release.
+  #
+  # On a version tag it attaches the two packages built above, from the commit of that tag, to
+  # the release of that tag. The release is created by the publisher from their PC
+  # (npm run release, DEPLOYMENT.md): this job waits for it, never creates, edits or deletes a
+  # release, and refuses to replace a file that is already there. The packages are not covered
+  # by the Ed25519 signature of the Windows installer, hence the SHA256SUMS file next to them.
+  release:
+    name: attach to the release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          pattern: scip-*
+          merge-multiple: true
+      - name: Check the packages carry the version of the tag
+        working-directory: dist
+        run: |
+          ls -la
+          test -f "SCIP-${TAG#v}-macos-arm64.dmg"
+          test -f "SCIP-${TAG#v}-linux-amd64.deb"
+          sha256sum "SCIP-${TAG#v}-macos-arm64.dmg" "SCIP-${TAG#v}-linux-amd64.deb" > SHA256SUMS
+          cat SHA256SUMS
+      - name: Wait for the publisher's release
+        run: |
+          for attempt in $(seq 1 120); do
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 30
+          done
+          echo "No release $TAG after an hour: nothing was attached." >&2
+          exit 1
+      - name: Attach the packages and their checksums
+        working-directory: dist
+        run: gh release upload "$TAG" "SCIP-${TAG#v}-macos-arm64.dmg" "SCIP-${TAG#v}-linux-amd64.deb" SHA256SUMS
