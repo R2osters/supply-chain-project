@@ -139,6 +139,7 @@ mod tests {
             counts: Counts::default(),
             files: 2,
             safety: false,
+            postgres_major: None,
         }
     }
 

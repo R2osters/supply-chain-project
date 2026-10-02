@@ -60,7 +60,14 @@ pub struct Manifest {
     /// Taken automatically before a restore.
     #[serde(default)]
     pub safety: bool,
+    /// Major version of the PostgreSQL that made the dump. Absent from the backups made before
+    /// the macOS and Linux builds existed: those all come from the Windows build, PostgreSQL 16.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub postgres_major: Option<u32>,
 }
+
+/// What a backup without `postgresMajor` was made with (see `Manifest::postgres_major`).
+pub const POSTGRES_MAJOR_WHEN_UNSAID: u32 = 16;
 
 /// One row of the Settings list.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -146,6 +153,21 @@ pub fn migration_is_supported(backup: Option<&str>, shipped_latest: Option<&str>
     }
 }
 
+/// The PostgreSQL major version of a cluster: what `initdb` wrote in its `PG_VERSION` file.
+pub fn cluster_major(pgdata: &Path) -> Option<u32> {
+    std::fs::read_to_string(pgdata.join("PG_VERSION")).ok()?.trim().parse().ok()
+}
+
+/// `pg_restore` cannot read the archive of a newer `pg_dump`: the macOS and Linux builds ship
+/// PostgreSQL 18, the Windows build 16, so a backup crosses from Windows to them and not back.
+/// `Some((backup, here))` when the backup comes from a newer PostgreSQL than this cluster's;
+/// `None` when it can be restored, or when this cluster's version is unknown (`pg_restore` then
+/// decides).
+pub fn newer_postgres(backup: Option<u32>, cluster: Option<u32>) -> Option<(u32, u32)> {
+    let backup: u32 = backup.unwrap_or(POSTGRES_MAJOR_WHEN_UNSAID);
+    cluster.filter(|here: &u32| backup > *here).map(|here: u32| (backup, here))
+}
+
 /// The newest migration shipped with this build (`resources/api/prisma/migrations`).
 pub fn latest_shipped_migration(api_dir: &Path) -> Option<String> {
     std::fs::read_dir(api_dir.join("prisma").join("migrations"))
@@ -172,7 +194,40 @@ mod tests {
             counts: Counts { shipments: 55, purchase_orders: 180, users: 7 },
             files: 0,
             safety: false,
+            postgres_major: None,
         }
+    }
+
+    #[test]
+    fn a_backup_from_a_newer_postgres_is_refused() {
+        assert_eq!(newer_postgres(Some(18), Some(16)), Some((18, 16)), "macOS or Linux to Windows");
+        assert_eq!(newer_postgres(Some(16), Some(18)), None, "Windows to macOS or Linux");
+        assert_eq!(newer_postgres(Some(18), Some(18)), None);
+        assert_eq!(newer_postgres(None, Some(16)), None, "a backup made before the field existed");
+        assert_eq!(newer_postgres(None, Some(18)), None);
+        assert_eq!(newer_postgres(Some(18), None), None, "no cluster yet: pg_restore decides");
+    }
+
+    #[test]
+    fn the_postgres_version_is_optional_in_the_manifest_and_read_from_the_cluster() {
+        // A backup made by SCIP 0.2.1 has no such field and stays readable.
+        let old: Manifest = serde_json::from_str(
+            r#"{"format":1,"appVersion":"0.2.1","createdAt":"2026-10-01T10:00:00+02:00","company":null,
+                "latestMigration":null,"counts":{"shipments":0,"purchaseOrders":0,"users":1},"files":0}"#,
+        )
+        .unwrap();
+        assert_eq!(old.postgres_major, None);
+        assert!(!serde_json::to_string(&old).unwrap().contains("postgresMajor"));
+
+        let new = Manifest { postgres_major: Some(18), ..old };
+        let json: String = serde_json::to_string(&new).unwrap();
+        assert!(json.contains(r#""postgresMajor":18"#), "{json}");
+        assert_eq!(serde_json::from_str::<Manifest>(&json).unwrap(), new);
+
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(cluster_major(dir.path()), None, "initdb has not run");
+        std::fs::write(dir.path().join("PG_VERSION"), "18\n").unwrap();
+        assert_eq!(cluster_major(dir.path()), Some(18));
     }
 
     #[test]

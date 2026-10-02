@@ -121,6 +121,7 @@ pub fn create_backup(ctx: &RuntimeContext, dir: &Path, kind: BackupKind) -> Resu
             counts,
             files: count_files(&ctx.dirs.files),
             safety: kind.is_automatic(),
+            postgres_major: manifest::cluster_major(&ctx.dirs.pgdata),
         };
         write_archive(&part, &manifest, &dump, &ctx.dirs.files)?;
         std::fs::rename(&part, dir.join(&name))
@@ -133,7 +134,8 @@ pub fn create_backup(ctx: &RuntimeContext, dir: &Path, kind: BackupKind) -> Resu
     result
 }
 
-/// Checks a backup before scheduling it: readable, and not from a newer SCIP.
+/// Checks a backup before scheduling it: readable, not from a newer SCIP, and not from a newer
+/// PostgreSQL than this install's (a backup made on macOS or Linux, brought to Windows).
 pub fn check_restorable(ctx: &RuntimeContext, archive: &Path) -> Result<Manifest, BackupError> {
     if ctx.is_external_database() {
         return Err(BackupError::Refused(
@@ -146,6 +148,12 @@ pub fn check_restorable(ctx: &RuntimeContext, archive: &Path) -> Result<Manifest
         return Err(BackupError::Refused(format!(
             "Cette sauvegarde vient d'une version plus récente de SCIP ({}) : mettez SCIP à jour avant de la restaurer.",
             manifest.app_version
+        )));
+    }
+    let here: Option<u32> = manifest::cluster_major(&ctx.dirs.pgdata);
+    if let Some((backup, here)) = manifest::newer_postgres(manifest.postgres_major, here) {
+        return Err(BackupError::Refused(format!(
+            "Cette sauvegarde vient d'un SCIP macOS ou Linux (PostgreSQL {backup}) ; elle ne peut pas être restaurée sur ce poste (PostgreSQL {here})."
         )));
     }
     Ok(manifest)
@@ -313,6 +321,56 @@ mod tests {
         swap_in_files(&files, &dir.path().join("none"), &dir.path().join("before")).unwrap();
         assert!(files.is_dir());
         assert_eq!(std::fs::read_dir(&files).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_backup_from_a_newer_postgres_is_refused_before_anything_is_touched() {
+        use crate::paths::DataDirs;
+        use crate::ports::ServicePorts;
+        use crate::services::ResourceLayout;
+
+        let dir = tempfile::tempdir().unwrap();
+        let ctx = RuntimeContext {
+            dirs: DataDirs::from_root(dir.path().join("data")),
+            ports: ServicePorts { postgres: 1, api: 2, ai: 3 },
+            secrets: Default::default(),
+            resources: ResourceLayout::new(dir.path().join("res")),
+            database: Default::default(),
+            simulator: true,
+            lan_access: false,
+        };
+        std::fs::create_dir_all(&ctx.dirs.pgdata).unwrap();
+        let dump = dir.path().join("d.dump");
+        std::fs::write(&dump, b"dump").unwrap();
+        let archive = dir.path().join("SCIP-sauvegarde-x.scip-backup");
+        let made_with = |postgres_major: Option<u32>| Manifest {
+            format: FORMAT,
+            app_version: "0.3.0".into(),
+            created_at: "2026-10-02T10:00:00+02:00".into(),
+            company: None,
+            latest_migration: None,
+            counts: Counts::default(),
+            files: 0,
+            safety: false,
+            postgres_major,
+        };
+
+        // Made on macOS or Linux, brought to a Windows PC.
+        write_archive(&archive, &made_with(Some(18)), &dump, &dir.path().join("none")).unwrap();
+        std::fs::write(ctx.dirs.pgdata.join("PG_VERSION"), "16\n").unwrap();
+        let refused: BackupError = check_restorable(&ctx, &archive).unwrap_err();
+        assert!(
+            matches!(&refused, BackupError::Refused(m) if m.contains("PostgreSQL 18") && m.contains("PostgreSQL 16")),
+            "{refused}"
+        );
+
+        // The same backup where it was made, and a Windows backup on either side: accepted.
+        std::fs::write(ctx.dirs.pgdata.join("PG_VERSION"), "18\n").unwrap();
+        assert!(check_restorable(&ctx, &archive).is_ok());
+        write_archive(&archive, &made_with(None), &dump, &dir.path().join("none")).unwrap();
+        assert!(check_restorable(&ctx, &archive).is_ok());
+        std::fs::write(ctx.dirs.pgdata.join("PG_VERSION"), "16\n").unwrap();
+        assert!(check_restorable(&ctx, &archive).is_ok());
     }
 
     #[test]
