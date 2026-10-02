@@ -179,6 +179,9 @@ jobs:
           WEBKIT_DISABLE_COMPOSITING_MODE: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
+          # What a user's computer does not have: the cache Prisma filled while the package was
+          # built. With it, Prisma never looks at the engines the package carries.
+          rm -rf "$HOME/.cache/prisma"
           if [ "$RUNNER_OS" = Linux ]; then
             xvfb-run -a dbus-run-session -- node apps/desktop/scripts/e2e-unix.mjs
           else

@@ -488,6 +488,11 @@ impl RuntimeContext {
             .env("CHECKPOINT_DISABLE", "1")
             .env("PRISMA_HIDE_UPDATE_MESSAGE", "1")
             .cwd(self.resources.api_dir());
+        // Prisma reads its configuration through jiti, which creates a cache folder in the
+        // API's node_modules: inside the application, whose content a macOS signature seals.
+        // Nothing is transpiled there, so the cache would stay empty anyway.
+        #[cfg(unix)]
+        let command = command.env("JITI_FS_CACHE", "false");
         TaskSpec::new("migrate", command, Duration::from_secs(300))
     }
 
@@ -777,6 +782,14 @@ mod tests {
         assert_eq!(task.command.program, c.resources.node());
         assert_eq!(task.command.args[1..3], ["migrate".to_owned(), "deploy".to_owned()]);
         assert_eq!(task.command.env.get("DATABASE_URL"), Some(&c.database_url()));
+    }
+
+    /// The API folder is inside the installed application: Prisma must not write its cache there.
+    #[cfg(unix)]
+    #[test]
+    fn migrate_writes_no_cache_in_the_application() {
+        let task = ctx().migrate_task();
+        assert_eq!(task.command.env.get("JITI_FS_CACHE").map(String::as_str), Some("false"));
     }
 
     #[test]
