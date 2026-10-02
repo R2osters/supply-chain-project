@@ -1,0 +1,124 @@
+/* ============================================================
+   SCIP — télécharger. Couverture : mot géant en deux lignes
+   (SCIP plein, SETUP en contour gris), vrai écran de
+   l'installeur devant la ligne 2, métadonnées dans les coins,
+   paragraphe étroit en bas à droite. Puis : les dix étapes et
+   trois écrans décalés, le cycle de vie, les limites dites.
+   ============================================================ */
+
+/* ---------- Couverture ---------- */
+.cover {
+  position: relative; min-height: 100svh; overflow: hidden;
+  padding: clamp(96px, 12vh, 150px) var(--gutter) clamp(120px, 14vh, 180px);
+}
+.meta-corner { position: absolute; z-index: 5; margin: 0; color: var(--muted); }
+.meta-corner.tl { top: 84px; left: var(--gutter); }
+.meta-corner.tr { top: 84px; right: var(--gutter); }
+
+.giant-stack {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column; align-items: center;
+  font-family: var(--display); font-weight: 700; line-height: .8; letter-spacing: -.02em;
+  font-size: clamp(110px, 27vw, 430px);
+  color: var(--ink); user-select: none;
+}
+.g-line { display: block; }
+.load-seq .g-line { transform: translateY(.2em); clip-path: inset(0 0 100% 0); }
+.load-seq.ready .g-line {
+  transform: none; clip-path: inset(-10% 0 -10% 0);
+  transition: transform .8s var(--ease), clip-path .8s var(--ease);
+  transition-delay: calc(var(--lo, 0) * .1s);
+}
+.g-line:last-child { color: transparent; -webkit-text-stroke: 2px rgba(20, 21, 22, .28); }
+
+/* l'installeur devant la ligne 2 */
+.setup {
+  position: relative; z-index: 2; margin: clamp(-230px, -17vw, -70px) auto 0;
+  width: min(720px, 90vw); perspective: 1400px;
+}
+.setup .shot-win { transform: perspective(1400px) rotateX(5deg); }
+.setup figcaption { justify-content: center; }
+
+.cover-cta { position: relative; z-index: 3; text-align: center; margin-top: clamp(22px, 3vh, 38px); }
+.cover-note { margin: 14px 0 0; color: var(--muted); }
+.cover-par {
+  position: absolute; z-index: 3; right: var(--gutter); bottom: clamp(24px, 4vh, 52px);
+  max-width: 36ch; margin: 0;
+  font-size: 13.5px; line-height: 1.6; color: var(--muted);
+}
+@media (max-width: 1100px) {
+  .cover { padding-bottom: 72px; min-height: 0; }
+  .cover-par { position: static; margin: 32px auto 0; text-align: center; }
+}
+@media (max-width: 700px) {
+  .cover { padding-top: 150px; }
+  .meta-corner.tl, .meta-corner.tr { display: none; }
+  .setup { margin-top: -8vw; }
+  .setup .shot-win { transform: none; }
+  .cover-cta .btn { width: 100%; white-space: normal; height: auto; min-height: 44px; padding: 12px 18px; line-height: 1.3; }
+}
+
+/* ---------- Tous les téléchargements ---------- */
+.versions-section { padding-top: clamp(40px, 5vw, 80px); }
+.versions { list-style: none; margin: 0; padding: clamp(8px, 1vw, 14px) clamp(18px, 2.4vw, 36px); }
+.versions li {
+  display: grid; grid-template-columns: minmax(160px, 260px) 1fr auto; gap: 18px; align-items: center;
+  padding: 18px 0; border-top: 1px solid var(--line);
+}
+.versions li:first-child { border-top: 0; }
+.versions b { font-family: var(--display); font-size: clamp(19px, 1.6vw, 25px); font-weight: 600; }
+.versions .mono { color: var(--muted); letter-spacing: .08em; }
+.versions .actions { display: inline-flex; gap: 8px; justify-self: end; }
+@media (max-width: 760px) {
+  .versions li { grid-template-columns: 1fr; gap: 10px; }
+  .versions .actions { justify-self: start; }
+}
+
+/* ---------- Les dix étapes ---------- */
+.steps-tabs { margin-bottom: clamp(26px, 3vw, 46px); }
+.screens { display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(14px, 2vw, 30px); align-items: start; }
+.screens .shot:nth-child(2) { margin-top: clamp(24px, 4vw, 64px); }   /* trois fenêtres décalées */
+.screens .shot p { margin: 10px 0 0; font-size: 14px; color: var(--muted); max-width: 38ch; }
+@media (max-width: 900px) {
+  .screens { grid-template-columns: 1fr; }
+  .screens .shot:nth-child(2) { margin-top: 0; }
+}
+.warn {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  margin: clamp(26px, 3vw, 46px) 0 0; padding: 16px 20px;
+  font-size: 14.5px; color: var(--ink);
+}
+.chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; flex: none;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+  font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted);
+}
+.chip.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+
+/* ---------- Cycle de vie ---------- */
+.care-section { padding-top: clamp(24px, 3vw, 48px); }
+.care-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(26px, 4vw, 64px); align-items: center; }
+.care-list { list-style: none; margin: 0; padding: 0; }
+.care-list li { display: flex; flex-direction: column; gap: 5px; padding: 16px 0; border-top: 1px solid var(--line); }
+.care-list li:first-child { border-top: 0; padding-top: 0; }
+.care-list b { font-weight: 600; font-size: clamp(16px, 1.2vw, 19px); }
+.care-list span { color: var(--muted); font-size: 14px; line-height: 1.55; max-width: 58ch; }
+@media (max-width: 960px) { .care-grid { grid-template-columns: 1fr; } }
+
+/* ---------- Limites ---------- */
+.limits-section { padding-top: clamp(24px, 3vw, 48px); }
+.limits { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.limits li {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: clamp(18px, 1.8vw, 26px) clamp(16px, 1.6vw, 24px);
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.limits b { font-weight: 600; font-size: clamp(16px, 1.2vw, 19px); }
+.limits span { color: var(--muted); font-size: 14px; }
+@media (max-width: 860px) { .limits { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .limits { grid-template-columns: 1fr; } }
+
+/* ---------- CTA ---------- */
+.cta-section { padding-bottom: clamp(72px, 8vw, 128px); }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 32px; }
