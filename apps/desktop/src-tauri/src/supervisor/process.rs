@@ -49,7 +49,7 @@ impl ProcessSpawner for StdSpawner {
     fn spawn(&self, command: &ProcessCommand, log_file: &Path) -> io::Result<Box<dyn ChildProcess>> {
         rotate_if_large(log_file, MAX_LOG_BYTES)?;
         let log: Arc<Mutex<File>> = Arc::new(Mutex::new(open_append(log_file)?));
-        let mut child: Child = build_command(command).spawn()?;
+        let mut child: Child = spawn_sidecar(build_command(command))?;
         crate::win_job::adopt(&child);
         if let (Some(input), Some(mut stdin)) = (command.stdin.clone(), child.stdin.take()) {
             // A separate thread, because a large script could fill the pipe while we wait.
@@ -65,6 +65,45 @@ impl ProcessSpawner for StdSpawner {
         }
         Ok(Box::new(StdChild { child }))
     }
+}
+
+/// Windows: started where it is asked for; the job object ties it to the process (`win_job`).
+#[cfg(not(unix))]
+fn spawn_sidecar(mut command: Command) -> io::Result<Child> {
+    command.spawn()
+}
+
+/// macOS and Linux: started from one thread that lives as long as the process.
+///
+/// Linux signals a child when the *thread* that started it dies (`unix_orphans`), and the
+/// threads that ask for sidecars come and go: a boot that fails, the restart after a restore.
+/// Started from one of them, a sidecar would be stopped while SCIP still runs.
+#[cfg(unix)]
+fn spawn_sidecar(command: Command) -> io::Result<Child> {
+    use std::sync::mpsc::{channel, Sender};
+    use std::sync::OnceLock;
+
+    type Request = (Command, Sender<io::Result<Child>>);
+    static SPAWNER: OnceLock<Option<Sender<Request>>> = OnceLock::new();
+
+    let spawner: &Option<Sender<Request>> = SPAWNER.get_or_init(|| {
+        let (requests, queue) = channel::<Request>();
+        let thread = std::thread::Builder::new().name("spawner".into()).spawn(move || {
+            for (mut command, reply) in queue {
+                let _ = reply.send(command.spawn());
+            }
+        });
+        thread.ok().map(|_| requests)
+    });
+    let Some(spawner) = spawner else {
+        // No thread to be had: better a sidecar tied to this one than no sidecar.
+        let mut command: Command = command;
+        return command.spawn();
+    };
+    let gone = || io::Error::other("the thread that starts sidecars is gone");
+    let (reply, answer) = channel();
+    spawner.send((command, reply)).map_err(|_| gone())?;
+    answer.recv().map_err(|_| gone())?
 }
 
 struct StdChild {
@@ -100,6 +139,7 @@ pub(crate) fn build_command(command: &ProcessCommand) -> Command {
         cmd.current_dir(dir);
     }
     hide_console_window(&mut cmd);
+    crate::unix_orphans::die_with_parent(&mut cmd);
     cmd
 }
 
@@ -214,5 +254,52 @@ mod tests {
         }
         assert!(content.contains("hello"), "log was: {content}");
         assert!(content.contains("[stderr] oops"), "log was: {content}");
+    }
+
+    /// The same check on macOS and Linux, where the shell is `sh`. On Linux it also proves a
+    /// child still starts with the request to die with its parent (`unix_orphans`).
+    #[cfg(unix)]
+    #[test]
+    fn real_process_output_lands_in_the_log_on_unix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let log: PathBuf = tmp.path().join("logs").join("echo.log");
+        let cmd = ProcessCommand::new("sh").args(["-c", "echo hello; echo oops 1>&2"]);
+        let mut child = StdSpawner.spawn(&cmd, &log).unwrap();
+        let deadline: Instant = Instant::now() + Duration::from_secs(10);
+        let exit: ExitInfo = loop {
+            if let Some(exit) = child.try_wait().unwrap() {
+                break exit;
+            }
+            assert!(Instant::now() < deadline, "sh did not exit");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        assert!(exit.success());
+        // Pump threads may still be flushing right after exit.
+        let mut content: String = String::new();
+        for _ in 0..50 {
+            content = std::fs::read_to_string(&log).unwrap_or_default();
+            if content.contains("hello") && content.contains("[stderr] oops") {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(content.contains("hello"), "log was: {content}");
+        assert!(content.contains("[stderr] oops"), "log was: {content}");
+    }
+
+    /// Linux stops a child when the thread that started it ends, and sidecars are asked for by
+    /// threads that end: a boot that fails, the restart after a restore (`bridge`). Whoever asks,
+    /// the sidecar must keep running.
+    #[cfg(unix)]
+    #[test]
+    fn a_sidecar_outlives_the_thread_that_asked_for_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let log: PathBuf = tmp.path().join("sleep.log");
+        let cmd = ProcessCommand::new("sleep").args(["30"]);
+        let mut child = std::thread::spawn(move || StdSpawner.spawn(&cmd, &log).unwrap()).join().unwrap();
+        // The asking thread is gone: started from it, the child would be signalled on Linux.
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(child.try_wait().unwrap().is_none(), "the sidecar stopped with the thread that asked for it");
+        child.kill().unwrap();
     }
 }

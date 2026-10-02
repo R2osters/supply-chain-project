@@ -17,7 +17,7 @@ use super::pending::{write_pending, PendingRestore};
 use super::run::{self, check_restorable, create_backup};
 use crate::events::{EventSink, SupervisorEvent};
 use crate::paths::DataDirs;
-use crate::services::{resolve_resources_root, RuntimeContext, RESOURCES_DIR_ENV};
+use crate::services::{bundled_resource_dir, resolve_resources_root, RuntimeContext, RESOURCES_DIR_ENV};
 use crate::startup;
 use crate::supervisor::clock::SystemClock;
 use crate::supervisor::health::NetProber;
@@ -102,9 +102,9 @@ fn postgres_runs(ctx: &RuntimeContext) -> bool {
 /// to the executable, ports, secrets).
 pub(crate) fn context_from_env() -> Result<RuntimeContext, String> {
     let dirs: DataDirs = DataDirs::from_process_env().map_err(|e| e.to_string())?;
-    let exe_dir: Option<PathBuf> =
-        std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
-    let resources = resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), exe_dir.as_deref());
+    let bundled: Option<PathBuf> =
+        std::env::current_exe().ok().and_then(|exe| exe.parent().map(bundled_resource_dir));
+    let resources = resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), bundled.as_deref());
     startup::prepare(dirs, resources).map_err(|e| e.message)
 }
 

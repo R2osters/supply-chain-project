@@ -129,7 +129,7 @@ export class RecommendationsService {
     switch (recommendation.type) {
       case 'ORDER_NOW':
       case 'SPLIT_ORDER':
-        executed = await this.executeOrder(user, payload);
+        executed = await this.executeOrder(user, id, payload);
         break;
 
       case 'INCREASE_SAFETY_STOCK':
@@ -169,8 +169,15 @@ export class RecommendationsService {
     };
   }
 
-  /** Raises a real purchase order (or one per supplier, for a split) from the payload. */
-  private async executeOrder(user: AuthenticatedUser, payload: Record<string, unknown>) {
+  /**
+   * Raises a real purchase order (or one per supplier, for a split) from the payload. Each order
+   * keeps the id of the recommendation: that link is what the Orders screen shows as its origin.
+   */
+  private async executeOrder(
+    user: AuthenticatedUser,
+    recommendationId: string,
+    payload: Record<string, unknown>,
+  ) {
     const productId = payload.productId as string;
     const warehouseId = (payload.warehouseId as string | undefined) ?? undefined;
     const lines = payload.lines as
@@ -199,6 +206,7 @@ export class RecommendationsService {
             ? { expectedDeliveryDate: String(payload.requiredByDate) }
             : {}),
           notes: RECOMMENDATION_ORDER_NOTE,
+          sourceRecommendationId: recommendationId,
         });
         created.push(order.orderNumber);
       }
@@ -239,6 +247,7 @@ export class RecommendationsService {
       warehouseId,
       items: [{ productId, quantity }],
       notes: RECOMMENDATION_ORDER_NOTE,
+      sourceRecommendationId: recommendationId,
     });
 
     return {

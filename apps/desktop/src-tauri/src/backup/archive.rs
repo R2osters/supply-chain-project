@@ -15,7 +15,7 @@ pub fn write_archive(
     files_dir: &Path,
 ) -> Result<(), BackupError> {
     let file: File =
-        File::create(out).map_err(|e| BackupError::io(format!("création de {}", out.display()), e))?;
+        create_private(out).map_err(|e| BackupError::io(format!("création de {}", out.display()), e))?;
     let mut builder = tar::Builder::new(BufWriter::new(file));
     builder.follow_symlinks(false);
 
@@ -39,6 +39,19 @@ pub fn write_archive(
         .into_inner()
         .and_then(|mut writer| std::io::Write::flush(&mut writer))
         .map_err(|e| BackupError::io("finalisation de la sauvegarde", e))
+}
+
+/// `File::create`, and on macOS and Linux a file only its owner can read, wherever the backup
+/// folder is: a backup holds every account and the business data.
+fn create_private(path: &Path) -> std::io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    options.open(path)
 }
 
 /// Reads only the manifest (the first entry of our backups).
@@ -126,6 +139,7 @@ mod tests {
             counts: Counts::default(),
             files: 2,
             safety: false,
+            postgres_major: None,
         }
     }
 

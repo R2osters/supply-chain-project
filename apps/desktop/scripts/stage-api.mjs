@@ -1,9 +1,21 @@
 // Stages the NestJS API as a self-contained folder: resources/api/{dist,prisma,node_modules}.
 // It is a regular `npm install --omit=dev` of the built API rather than a bundle, because Nest
 // relies on decorator metadata that bundlers strip, and Prisma loads its engine from disk.
-import { cpSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_DIR, RESOURCES_DIR, run, isMain } from './lib/fetch.mjs';
+import { IS_WINDOWS, REPO_DIR, RESOURCES_DIR, run, isMain } from './lib/fetch.mjs';
+import { flattenLinks, signUnsignedBinaries, walk } from './lib/unix.mjs';
+
+/**
+ * Linux: Prisma takes the engines built for the OpenSSL it finds where it is installed, and the
+ * build machine is not the user's. GitHub's Ubuntu 22.04 runner carries libssl 1.1 next to
+ * libssl 3 and Prisma picked 1.1: the package then held no engine for a stock Ubuntu or Debian,
+ * where the migration tried to download one into /usr/lib/SCIP and stopped. So the engines are
+ * named: OpenSSL 3, which every supported system has, and 1.1 for a system that has it as well,
+ * where Prisma may pick it as it did on the runner.
+ */
+const LINUX_PRISMA_TARGETS = ['debian-openssl-3.0.x', 'debian-openssl-1.1.x'];
+const IS_LINUX = process.platform === 'linux';
 
 export async function stageApi() {
   const apiDir = join(REPO_DIR, 'apps', 'api');
@@ -25,6 +37,7 @@ export async function stageApi() {
     // Seeds are TypeScript run through ts-node, a dev tool; the desktop app starts empty.
     filter: (source) => !/seed[^/\\]*\.ts$/.test(source),
   });
+  if (IS_LINUX) pinPrismaTargets(join(target, 'prisma', 'schema.prisma'), LINUX_PRISMA_TARGETS);
 
   // The workspace link to @scip/shared does not exist outside the monorepo: vendor its build.
   const vendoredShared = join(target, 'vendor', 'shared');
@@ -49,6 +62,8 @@ export async function stageApi() {
 
   run('npm', ['install', '--omit=dev', '--no-audit', '--no-fund', '--no-package-lock'], {
     cwd: target,
+    // The command-line tool downloads its own engines when it is installed (migrations).
+    env: IS_LINUX ? { ...process.env, PRISMA_CLI_BINARY_TARGETS: LINUX_PRISMA_TARGETS.join(',') } : process.env,
   });
   // npm links `file:` directories. The installer does not carry links, so the API would start
   // without @scip/shared: swap the link for a real copy.
@@ -58,6 +73,7 @@ export async function stageApi() {
     cpSync(vendoredShared, sharedInstall, { recursive: true });
   }
   run('npx', ['prisma', 'generate', '--schema', 'prisma/schema.prisma'], { cwd: target });
+  if (IS_LINUX) checkPrismaEngines(join(target, 'node_modules'), LINUX_PRISMA_TARGETS);
 
   // The demo seed is TypeScript run through ts-node in development. Bundle it into one JS file
   // so a fresh install can offer "load demo data" (see the API's setup module). Only the seed's
@@ -72,7 +88,49 @@ export async function stageApi() {
     `--outfile=${join(target, 'seed.js')}`,
   ], { cwd: REPO_DIR });
   pruneUnusedPrismaEngines(join(target, 'node_modules'));
+  if (!IS_WINDOWS) dropLinks(target);
   console.log(`  api -> ${target}`);
+}
+
+/**
+ * Names the engines to generate, in the staged copy of the schema: the source keeps "native",
+ * which is right on Windows and macOS, where one build serves every machine.
+ */
+function pinPrismaTargets(schemaPath, targets) {
+  const schema = readFileSync(schemaPath, 'utf8');
+  const provider = /(generator\s+client\s*\{[^}]*?provider\s*=\s*"prisma-client-js"[^\n]*\n)/;
+  if (!provider.test(schema) || schema.includes('binaryTargets')) {
+    throw new Error(`${schemaPath}: expected a "generator client" block without binaryTargets`);
+  }
+  const list = targets.map((target) => `"${target}"`).join(', ');
+  writeFileSync(schemaPath, schema.replace(provider, `$1  binaryTargets = [${list}]\n`));
+}
+
+/** Every engine named above must be in the staged API: migrations and queries each load one. */
+function checkPrismaEngines(nodeModules, targets) {
+  for (const target of targets) {
+    const engines = [
+      join(nodeModules, '@prisma', 'engines', `schema-engine-${target}`),
+      join(nodeModules, '.prisma', 'client', `libquery_engine-${target}.so.node`),
+    ];
+    for (const engine of engines) {
+      if (!existsSync(engine)) throw new Error(`Prisma engine missing from the staged API: ${engine}`);
+    }
+  }
+  console.log(`  prisma engines: ${targets.join(', ')}`);
+}
+
+/**
+ * macOS and Linux: npm fills `node_modules/.bin` with links to command-line scripts, where
+ * Windows gets .cmd files. Nothing runs them (the supervisor starts Prisma by its entry file),
+ * and the bundle cannot carry links: the folders go, any other link becomes a copy.
+ */
+function dropLinks(target) {
+  for (const { path, entry } of [...walk(join(target, 'node_modules'))]) {
+    if (entry.isDirectory() && entry.name === '.bin') rmSync(path, { recursive: true, force: true });
+  }
+  flattenLinks(target);
+  signUnsignedBinaries(target);
 }
 
 /**

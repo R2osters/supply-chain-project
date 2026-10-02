@@ -3141,6 +3141,7 @@ dependencies = [
  "dirs",
  "ed25519-dalek",
  "getrandom 0.3.4",
+ "libc",
  "log",
  "serde",
  "serde_json",

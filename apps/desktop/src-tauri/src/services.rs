@@ -10,6 +10,9 @@
 //!   ai/scip-ai.exe
 //! ```
 //!
+//! macOS and Linux have the same layout without `.exe`; their PostgreSQL comes from conda-forge
+//! and needs an environment and a fixed install folder (`unix_postgres_env`, `misplaced_postgres`).
+//!
 //! Everything here is pure: it builds data, the supervisor does the I/O.
 
 use std::collections::BTreeMap;
@@ -101,6 +104,51 @@ impl ResourceLayout {
     pub fn missing_files(&self) -> Vec<PathBuf> {
         self.required_files().into_iter().filter(|p: &PathBuf| !p.is_file()).collect()
     }
+
+    /// macOS and Linux: what the PostgreSQL programs need in their environment.
+    ///
+    /// `PROJ_DATA` and `GDAL_DATA` are what conda's activation scripts set; they never run here.
+    /// `LC_ALL` is for macOS, where an application opened from the Finder has no locale: libintl
+    /// then asks CoreFoundation for one, which starts a thread, and the server refuses to run
+    /// ("postmaster became multithreaded during startup"). `C` is what `initdb --no-locale`
+    /// gives the cluster anyway.
+    pub fn unix_postgres_env(&self) -> [(&'static str, String); 3] {
+        let share: PathBuf = self.root.join("postgres").join("share");
+        [
+            ("LC_ALL", "C".to_owned()),
+            ("PROJ_DATA", path_arg(&share.join("proj"))),
+            ("GDAL_DATA", path_arg(&share.join("gdal"))),
+        ]
+    }
+
+    /// macOS and Linux: the folder this PostgreSQL was built for, when it does not run from
+    /// there. A conda environment carries its own path (time zones, OpenSSL settings): moved,
+    /// the server starts and then answers wrongly. `scripts/stage-postgres-unix.mjs` writes the
+    /// marker read here. `None` on Windows, whose build has no such tie, and whenever a
+    /// PostgreSQL does sit at that path (a developer's link to the source tree).
+    pub fn misplaced_postgres(&self) -> Option<PathBuf> {
+        let here: PathBuf = self.root.join("postgres");
+        let marker: String = std::fs::read_to_string(here.join("INSTALL_PREFIX")).ok()?;
+        let built_for: PathBuf = PathBuf::from(marker.trim());
+        let in_place: bool =
+            matches!((built_for.canonicalize(), here.canonicalize()), (Ok(a), Ok(b)) if a == b);
+        (!in_place && !built_for.join("bin").is_dir()).then_some(built_for)
+    }
+}
+
+/// The folder Tauri puts `resources/` in, from the folder of the running executable: that very
+/// folder on Windows and in a development build, `../Resources` in a macOS application,
+/// `../lib/SCIP` in a Linux package (tauri-utils `resource_dir`). For the modes that run
+/// without a window (`--provision`, `--backup`, `--update`), which have no Tauri handle to ask.
+pub fn bundled_resource_dir(exe_dir: &Path) -> PathBuf {
+    if cfg!(unix) && !exe_dir.join("resources").is_dir() {
+        for packaged in [exe_dir.join("..").join("Resources"), exe_dir.join("..").join("lib").join("SCIP")] {
+            if packaged.join("resources").is_dir() {
+                return packaged.canonicalize().unwrap_or(packaged);
+            }
+        }
+    }
+    exe_dir.to_path_buf()
 }
 
 /// `SCIP_RESOURCES_DIR` wins, else `<tauri resource dir>/resources`.
@@ -270,7 +318,8 @@ impl RuntimeContext {
 
     /// `pg_restore` of a custom-format dump into the freshly created database.
     pub fn restore_task(&self, dump: &Path) -> TaskSpec {
-        let command = ProcessCommand::new(self.resources.postgres_bin("pg_restore"))
+        let command = self
+            .postgres_tool("pg_restore")
             .args([
                 "--no-owner".to_owned(),
                 "--no-privileges".to_owned(),
@@ -293,7 +342,7 @@ impl RuntimeContext {
     /// `pg_dump` of the running database into `out` (custom format: compressed, and restorable
     /// by `pg_restore`). The password travels in the environment, never on the command line.
     pub fn pg_dump_command(&self, out: &Path) -> ProcessCommand {
-        ProcessCommand::new(self.resources.postgres_bin("pg_dump"))
+        self.postgres_tool("pg_dump")
             .args([
                 "--format=custom".to_owned(),
                 "--no-owner".to_owned(),
@@ -320,10 +369,23 @@ impl RuntimeContext {
 
     // ------------------------------------------------------------ postgres
 
+    /// One of the bundled PostgreSQL programs, with the environment its macOS and Linux build
+    /// needs (`ResourceLayout::unix_postgres_env`); nothing is added on Windows.
+    fn postgres_tool(&self, name: &str) -> ProcessCommand {
+        let command = ProcessCommand::new(self.resources.postgres_bin(name));
+        if !cfg!(unix) {
+            return command;
+        }
+        self.resources
+            .unix_postgres_env()
+            .into_iter()
+            .fold(command, |command, (key, value)| command.env(key, value))
+    }
+
     /// First run only: `PG_VERSION` is written by initdb once the cluster is complete.
     pub fn initdb_task(&self) -> TaskSpec {
         let pwfile: PathBuf = self.dirs.root.join("initdb-password.tmp");
-        let command = ProcessCommand::new(self.resources.postgres_bin("initdb")).args([
+        let command = self.postgres_tool("initdb").args([
             "-D".to_owned(),
             path_arg(&self.dirs.pgdata),
             "-U".to_owned(),
@@ -345,7 +407,7 @@ impl RuntimeContext {
     /// the supervisor watching nothing. Note it refuses to run from an elevated (admin)
     /// process; SCIP runs as a normal user so this is fine.
     pub fn postgres_service(&self) -> ServiceSpec {
-        let command = ProcessCommand::new(self.resources.postgres_bin("postgres")).args([
+        let mut command = self.postgres_tool("postgres").args([
             "-D".to_owned(),
             path_arg(&self.dirs.pgdata),
             "-p".to_owned(),
@@ -353,7 +415,12 @@ impl RuntimeContext {
             "-c".to_owned(),
             "listen_addresses=127.0.0.1".to_owned(),
         ]);
-        let stop = ProcessCommand::new(self.resources.postgres_bin("pg_ctl")).args([
+        if cfg!(unix) {
+            // No Unix socket: every client here connects to 127.0.0.1, and the default socket
+            // folder (/tmp) is shared with the other accounts of the computer.
+            command = command.args(["-c", "unix_socket_directories="]);
+        }
+        let stop = self.postgres_tool("pg_ctl").args([
             "stop".to_owned(),
             "-D".to_owned(),
             path_arg(&self.dirs.pgdata),
@@ -373,7 +440,7 @@ impl RuntimeContext {
     }
 
     fn psql(&self, database: &str) -> ProcessCommand {
-        ProcessCommand::new(self.resources.postgres_bin("psql"))
+        self.postgres_tool("psql")
             .args([
                 "-h",
                 "127.0.0.1",
@@ -420,6 +487,10 @@ impl RuntimeContext {
             // Prisma otherwise tries to phone home and to prompt for updates.
             .env("CHECKPOINT_DISABLE", "1")
             .env("PRISMA_HIDE_UPDATE_MESSAGE", "1")
+            // Prisma reads its configuration through jiti, which creates a cache folder in the
+            // API's node_modules: inside the program folder, where nothing is to be written on
+            // any system, and inside what a macOS signature seals. The cache would stay empty.
+            .env("JITI_FS_CACHE", "false")
             .cwd(self.resources.api_dir());
         TaskSpec::new("migrate", command, Duration::from_secs(300))
     }
@@ -712,6 +783,13 @@ mod tests {
         assert_eq!(task.command.env.get("DATABASE_URL"), Some(&c.database_url()));
     }
 
+    /// The API folder is inside the installed application: Prisma must not write its cache there.
+    #[test]
+    fn migrate_writes_no_cache_in_the_application() {
+        let task = ctx().migrate_task();
+        assert_eq!(task.command.env.get("JITI_FS_CACHE").map(String::as_str), Some("false"));
+    }
+
     #[test]
     fn missing_files_lists_everything_absent() {
         let tmp = tempfile::tempdir().unwrap();
@@ -742,5 +820,57 @@ mod tests {
             PathBuf::from(r"\\srv\share\SCIP")
         );
         assert_eq!(without_verbatim_prefix(Path::new(r"D:\SCIP")), PathBuf::from(r"D:\SCIP"));
+    }
+
+    #[test]
+    fn postgres_programs_get_their_conda_environment_on_macos_and_linux_only() {
+        let c = ctx();
+        let server = c.postgres_service();
+        assert_eq!(server.command.args.iter().any(|a| a == "unix_socket_directories="), cfg!(unix));
+        let dump = c.pg_dump_command(Path::new("/b/x.dump"));
+        for command in [&server.command, &c.initdb_task().command, &dump, &c.postgis_task().command] {
+            assert_eq!(command.env.get("LC_ALL").map(String::as_str), cfg!(unix).then_some("C"));
+            assert_eq!(command.env.contains_key("PROJ_DATA"), cfg!(unix));
+            assert_eq!(command.env.contains_key("GDAL_DATA"), cfg!(unix));
+        }
+        let StopMethod::Command(stop) = &server.stop else { panic!("postgres stops through pg_ctl") };
+        assert_eq!(stop.env.contains_key("LC_ALL"), cfg!(unix));
+    }
+
+    #[test]
+    fn a_moved_postgres_is_detected_from_its_marker() {
+        let tmp = tempfile::tempdir().unwrap();
+        let layout = ResourceLayout::new(tmp.path().join("res"));
+        let here: PathBuf = layout.root.join("postgres");
+        std::fs::create_dir_all(here.join("bin")).unwrap();
+        assert_eq!(layout.misplaced_postgres(), None, "no marker: the Windows build");
+
+        let built_for: PathBuf = tmp.path().join("Applications").join("postgres");
+        std::fs::write(here.join("INSTALL_PREFIX"), format!("{}\n", built_for.display())).unwrap();
+        assert_eq!(layout.misplaced_postgres(), Some(built_for.clone()));
+
+        // A PostgreSQL does sit where these binaries look: nothing to report.
+        std::fs::create_dir_all(built_for.join("bin")).unwrap();
+        assert_eq!(layout.misplaced_postgres(), None);
+
+        std::fs::remove_dir_all(&built_for).unwrap();
+        std::fs::write(here.join("INSTALL_PREFIX"), here.display().to_string()).unwrap();
+        assert_eq!(layout.misplaced_postgres(), None, "running from the folder it was built for");
+    }
+
+    #[test]
+    fn resources_are_next_to_the_executable_unless_packaged_for_macos_or_linux() {
+        let tmp = tempfile::tempdir().unwrap();
+        let exe_dir: PathBuf = tmp.path().join("SCIP.app").join("Contents").join("MacOS");
+        std::fs::create_dir_all(&exe_dir).unwrap();
+        assert_eq!(bundled_resource_dir(&exe_dir), exe_dir, "nothing staged anywhere");
+
+        let packaged: PathBuf = tmp.path().join("SCIP.app").join("Contents").join("Resources");
+        std::fs::create_dir_all(packaged.join("resources")).unwrap();
+        let expected: PathBuf = if cfg!(unix) { packaged.canonicalize().unwrap() } else { exe_dir.clone() };
+        assert_eq!(bundled_resource_dir(&exe_dir), expected);
+
+        std::fs::create_dir_all(exe_dir.join("resources")).unwrap();
+        assert_eq!(bundled_resource_dir(&exe_dir), exe_dir, "a folder next to the executable wins");
     }
 }

@@ -6,6 +6,11 @@ API (on a bundled `node.exe`) and the AI sidecar (`scip-ai.exe`).
 Architecture and decisions: [docs/desktop-architecture.md](../../docs/desktop-architecture.md),
 [ADR 0001](../../docs/adr/0001-logiciel-de-bureau-tout-en-un.md).
 
+The same shell is built for macOS (WKWebView) and Linux (WebKitGTK) by CI, with a `.dmg` and a
+`.deb` instead of the installer: [ADR 0002](../../docs/adr/0002-macos-et-linux.md) and
+[DEPLOYMENT.md](../../DEPLOYMENT.md#macos-and-linux). What follows describes Windows; the code
+that differs elsewhere is under `cfg(unix)`.
+
 ## Prerequisites
 
 Rust (stable, MSVC toolchain), Node 20+, WebView2 (preinstalled on Windows 11).
@@ -81,4 +86,5 @@ PostgreSQL) and `simulator: true|false` (passed to the API as `SIMULATOR_ENABLED
 | `startup.rs` | Runs the plan and reports progress |
 | `bridge.rs` | Tauri glue: state, commands, events, shutdown |
 | `win_job.rs` | Job Object so sidecars die with SCIP.exe even on a crash |
+| `unix_orphans.rs` | The same guarantee on macOS and Linux: a signal at SCIP's death (Linux), a watcher that outlives SCIP (macOS), and leftovers stopped at start-up |
 | `provision/` | `--provision` (installer, headless): `plan.rs` plan types and validation, `mod.rs` orchestration, `runtime.rs` supervisor side, `api_client.rs` HTTP calls, `output.rs` stdout protocol and redaction |

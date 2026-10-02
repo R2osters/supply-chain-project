@@ -32,6 +32,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import numpy as np
+from ..formatting import fr_num
 
 DEFAULT_ITERATIONS = 2_000
 MAX_ITERATIONS = 50_000
@@ -400,12 +401,12 @@ def _reasons(cases: list[CaseResult], levers: Levers, horizon_days: int) -> list
     reasons = [
         f"Simulation sur {horizon_days} jours"
         + (f" avec {', '.join(described)}." if described else " sans aucun levier appliqué."),
-        f"Cas de base : coût {base.total_cost:,.0f} (90 % des tirages entre "
-        f"{base.total_cost_p05:,.0f} et {base.total_cost_p95:,.0f}), risque de rupture "
+        f"Cas de base : coût {fr_num(base.total_cost)} (90 % des tirages entre "
+        f"{fr_num(base.total_cost_p05)} et {fr_num(base.total_cost_p95)}), risque de rupture "
         f"{base.stockout_risk:.1%}, taux de service {base.fill_rate:.1%}.",
-        f"Pire cas : coût {worst.total_cost:,.0f} ({_delta(base.total_cost, worst.total_cost)}), "
+        f"Pire cas : coût {fr_num(worst.total_cost)} ({_delta(base.total_cost, worst.total_cost)}), "
         f"risque de rupture {worst.stockout_risk:.1%}.",
-        f"Meilleur cas : coût {best.total_cost:,.0f} "
+        f"Meilleur cas : coût {fr_num(best.total_cost)} "
         f"({_delta(base.total_cost, best.total_cost)}), "
         f"risque de rupture {best.stockout_risk:.1%}.",
     ]
@@ -420,7 +421,7 @@ def _reasons(cases: list[CaseResult], levers: Levers, horizon_days: int) -> list
     if base.orders_placed > 0:
         reasons.append(
             f"Le cas de base passe {base.orders_placed:.1f} commande(s) sur l’horizon et détient "
-            f"en moyenne {base.average_inventory_units:,.0f} unités."
+            f"en moyenne {fr_num(base.average_inventory_units)} unités."
         )
 
     return reasons

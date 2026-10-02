@@ -13,6 +13,13 @@ export const REPO_DIR = resolve(DESKTOP_DIR, '..', '..');
 export const CACHE_DIR = join(DESKTOP_DIR, '.cache');
 export const RESOURCES_DIR = join(DESKTOP_DIR, 'src-tauri', 'resources');
 
+/** Staging always targets the machine it runs on: Windows, or macOS and Linux (lib/unix.mjs). */
+export const IS_WINDOWS = process.platform === 'win32';
+/** `.exe` on Windows, nothing elsewhere: the rule of `ResourceLayout::exe` in src/services.rs. */
+export const EXE = IS_WINDOWS ? '.exe' : '';
+/** `darwin-arm64`, `linux-x64`...: the key of the per-platform tables in the staging scripts. */
+export const PLATFORM_KEY = `${process.platform}-${process.arch}`;
+
 /** Downloads `url` into the cache once and returns the local path. */
 export async function download(url, fileName) {
   mkdirSync(CACHE_DIR, { recursive: true });
@@ -35,7 +42,10 @@ export function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-/** Extracts a zip with the bsdtar that ships with Windows 10+, avoiding an unzip dependency. */
+/**
+ * Extracts a zip with the bsdtar that ships with Windows 10+, avoiding an unzip dependency.
+ * On macOS and Linux the archives are .tar.gz, which every tar reads.
+ */
 export function extractZip(archive, destination) {
   mkdirSync(destination, { recursive: true });
   // Full path: under Git Bash a bare `tar` is GNU tar, which cannot read zip archives.

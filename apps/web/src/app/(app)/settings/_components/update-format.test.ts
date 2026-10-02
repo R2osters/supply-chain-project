@@ -25,6 +25,11 @@ describe('updateView', () => {
   it('never checks in a build without the publisher key', () => {
     expect(updateView({ ...base, state: 'disabled' }).canCheck).toBe(false);
   });
+
+  it('says updates are manual on macOS and Linux, with nothing to check or install', () => {
+    const view = updateView({ ...base, state: 'manual' });
+    expect(view).toMatchObject({ key: 'settings.update.manual', tone: 'info', canCheck: false, canInstall: false });
+  });
 });
 
 describe('shouldToast', () => {

@@ -465,6 +465,10 @@ class RiskProductIn(Wire):
     service_level: float = Field(default=0.95, gt=0.5, lt=1)
     warehouse_id: str | None = None
     ordering_cost: float | None = Field(default=None, ge=0)
+    #: Set when the position is one warehouse that is short rather than the whole network:
+    #: its name, and the stock the other warehouses hold.
+    site_name: str | None = None
+    stock_elsewhere: float | None = Field(default=None, ge=0)
 
 
 class RiskSupplierIn(Wire):

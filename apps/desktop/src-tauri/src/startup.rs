@@ -40,7 +40,10 @@ pub fn prepare(dirs: DataDirs, resources_root: Option<PathBuf>) -> Result<Runtim
 fn check_resources(resources: &ResourceLayout) -> Result<(), ErrorEvent> {
     let missing: Vec<PathBuf> = resources.missing_files();
     if missing.is_empty() {
-        return Ok(());
+        return match resources.misplaced_postgres() {
+            Some(built_for) => Err(misplaced(&built_for)),
+            None => Ok(()),
+        };
     }
     Err(error(
         ErrorCode::MissingResources,
@@ -51,6 +54,22 @@ fn check_resources(resources: &ResourceLayout) -> Result<(), ErrorEvent> {
         ),
         missing.iter().map(|p: &PathBuf| p.display().to_string()).collect(),
     ))
+}
+
+/// macOS and Linux: SCIP was copied out of the folder its PostgreSQL was built for
+/// (`ResourceLayout::misplaced_postgres`). On a Mac that is an application opened from the disk
+/// image or from Downloads instead of Applications.
+fn misplaced(built_for: &std::path::Path) -> ErrorEvent {
+    let message: &str = if cfg!(target_os = "macos") {
+        "SCIP doit se trouver dans le dossier Applications. Quittez SCIP, glissez-le dans Applications, puis rouvrez-le."
+    } else {
+        "Cette copie de SCIP a été déplacée hors de son dossier d'installation. Réinstallez le paquet SCIP."
+    };
+    error(
+        ErrorCode::MissingResources,
+        message.to_owned(),
+        vec![format!("Emplacement attendu de la base embarquée : {}", built_for.display())],
+    )
 }
 
 fn error(code: ErrorCode, message: String, details: Vec<String>) -> ErrorEvent {
@@ -234,6 +253,28 @@ mod tests {
         std::fs::write(&dirs.config_file, "{}").unwrap();
         let ctx: RuntimeContext = prepare(dirs, Some(res.root)).unwrap();
         assert!(!ctx.is_external_database() && ctx.simulator, "defaults: embedded, simulator on");
+    }
+
+    #[test]
+    fn prepare_refuses_a_postgres_moved_out_of_the_folder_it_was_built_for() {
+        let tmp = tempfile::tempdir().unwrap();
+        let res = ResourceLayout::new(tmp.path().join("res"));
+        for file in res.required_files() {
+            std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+            std::fs::write(file, "").unwrap();
+        }
+        let built_for: PathBuf = tmp.path().join("Applications").join("postgres");
+        std::fs::write(res.root.join("postgres").join("INSTALL_PREFIX"), built_for.display().to_string())
+            .unwrap();
+        let err: ErrorEvent =
+            prepare(DataDirs::from_root(tmp.path().join("data")), Some(res.root.clone())).unwrap_err();
+        assert_eq!(err.code, ErrorCode::MissingResources);
+        assert!(err.details[0].contains("Applications"), "{:?}", err.details);
+
+        // Installed where it was built for: the marker names this very folder.
+        let here: PathBuf = res.root.join("postgres");
+        std::fs::write(here.join("INSTALL_PREFIX"), here.display().to_string()).unwrap();
+        assert!(prepare(DataDirs::from_root(tmp.path().join("data")), Some(res.root)).is_ok());
     }
 
     #[test]

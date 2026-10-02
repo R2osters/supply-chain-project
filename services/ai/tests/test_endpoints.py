@@ -720,6 +720,42 @@ class TestRiskAndRecommendations:
 
         assert_explained(body)
 
+    def test_a_short_site_is_ordered_for_and_said_to_be(self, client: TestClient):
+        company = self._company()
+        # Accra short of water while the other warehouses hold plenty: the API sends Accra's own
+        # stock and demand, with the name of the site and what the others hold.
+        company["products"] = [
+            {
+                "productId": "p6",
+                "sku": "SKU-006",
+                "currentStock": 610,
+                "reservedStock": 10,
+                "averageDailyDemand": 320,
+                "demandStdDev": 60,
+                "leadTimeDays": 3,
+                "leadTimeStdDevDays": 0.6,
+                "unitCost": 18,
+                "warehouseId": "wh-acc",
+                "siteName": "Accra Central DC",
+                "stockElsewhere": 4712,
+            }
+        ]
+
+        body = client.post("/recommendations/generate", json=company).json()
+
+        orders = [r for r in body["recommendations"] if r["type"] in {"ORDER_NOW", "SPLIT_ORDER"}]
+        assert len(orders) == 1, "two days of cover at a site must produce an order"
+        assert orders[0]["payload"]["warehouseId"] == "wh-acc"
+        first_reason = orders[0]["explanation"]["reasons"][0]
+        assert "Accra Central DC" in first_reason
+        assert "4 712" in first_reason and "transfert" in first_reason
+
+    def test_a_network_position_says_nothing_about_a_site(self, client: TestClient):
+        body = client.post("/recommendations/generate", json=self._company()).json()
+
+        for recommendation in body["recommendations"]:
+            assert not any("Le calcul porte sur" in r for r in recommendation["explanation"]["reasons"])
+
     def test_priority_ordering_puts_urgency_first(self, client: TestClient):
         body = client.post("/recommendations/generate", json=self._company()).json()
         order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}

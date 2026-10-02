@@ -156,6 +156,7 @@ export function BackupPanel() {
             )}
             {restore.error && <ErrorNote error={new Error(errorText(restore.error))} />}
             <p className="m-0 text-[12px] text-[var(--color-muted)]">{t('settings.backup.keepSafe')}</p>
+            <p className="m-0 text-[12px] text-[var(--color-muted)]">{t('settings.backup.crossSystem')}</p>
           </>
         )}
       </div>

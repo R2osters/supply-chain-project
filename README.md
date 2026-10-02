@@ -25,7 +25,7 @@ three minutes.
 
 ## Install (Windows)
 
-SCIP is a Windows desktop application. Run `SCIP_<version>_x64-setup.exe`, then open **SCIP**
+SCIP is a Windows desktop application. Run `SCIP-Setup-<version>.exe`, then open **SCIP**
 from the Start menu. Everything runs on this computer: the app starts its own PostgreSQL +
 PostGIS, API and AI engine, and stores its data in `%LOCALAPPDATA%\com.scip.desktop`.
 
@@ -84,12 +84,12 @@ npm run desktop:stage
 ```
 
 ```bash
-npm run desktop:build
+npm run build --workspace @scip/installer
 ```
 
 The first command downloads the pinned runtimes and builds every component into
 `apps/desktop/src-tauri/resources`; the second writes the installer to
-`apps/desktop/src-tauri/target/release/bundle/nsis/`.
+`apps/installer/dist/SCIP-Setup-<version>.exe`.
 
 ### Where things listen in development
 

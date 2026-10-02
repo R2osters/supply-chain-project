@@ -2,9 +2,11 @@
 // EDB's "binaries" zip is the official no-installer build; the PostGIS bundle from OSGeo is laid
 // out to be copied over it. pgAdmin, docs, headers and debug symbols are dropped: they are most of
 // the archive and nothing at runtime needs them.
+// Both archives are Windows builds: macOS and Linux get theirs from stage-postgres-unix.mjs.
 import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { CACHE_DIR, RESOURCES_DIR, download, extractZip, isMain } from './lib/fetch.mjs';
+import { CACHE_DIR, IS_WINDOWS, RESOURCES_DIR, download, extractZip, isMain } from './lib/fetch.mjs';
+import { stagePostgresUnix } from './stage-postgres-unix.mjs';
 
 export const POSTGRES_VERSION = '16.15';
 export const POSTGIS_BUNDLE = 'postgis-bundle-pg16-3.6.2x64';
@@ -12,6 +14,7 @@ export const POSTGIS_BUNDLE = 'postgis-bundle-pg16-3.6.2x64';
 const KEEP = ['bin', 'lib', 'share'];
 
 export async function stagePostgres() {
+  if (!IS_WINDOWS) return stagePostgresUnix();
   const pgZip = await download(
     `https://get.enterprisedb.com/postgresql/postgresql-${POSTGRES_VERSION}-1-windows-x64-binaries.zip`,
     `postgresql-${POSTGRES_VERSION}-windows-x64-binaries.zip`,
