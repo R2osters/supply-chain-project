@@ -86,5 +86,5 @@ PostgreSQL) and `simulator: true|false` (passed to the API as `SIMULATOR_ENABLED
 | `startup.rs` | Runs the plan and reports progress |
 | `bridge.rs` | Tauri glue: state, commands, events, shutdown |
 | `win_job.rs` | Job Object so sidecars die with SCIP.exe even on a crash |
-| `unix_orphans.rs` | The same guarantee on macOS and Linux: a signal at SCIP's death (Linux), and leftovers stopped at start-up |
+| `unix_orphans.rs` | The same guarantee on macOS and Linux: a signal at SCIP's death (Linux), a watcher that outlives SCIP (macOS), and leftovers stopped at start-up |
 | `provision/` | `--provision` (installer, headless): `plan.rs` plan types and validation, `mod.rs` orchestration, `runtime.rs` supervisor side, `api_client.rs` HTTP calls, `output.rs` stdout protocol and redaction |

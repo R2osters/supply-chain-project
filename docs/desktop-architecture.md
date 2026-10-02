@@ -76,11 +76,13 @@ La même coque est construite pour macOS (Apple Silicon) et Linux (x86_64) par l
 | Fenêtre | WebView2 | WKWebView | WebKitGTK 4.1 |
 | Données | `%LOCALAPPDATA%\com.scip.desktop\` | `~/Library/Application Support/com.scip.desktop/` | `~/.local/share/com.scip.desktop/` |
 | Base embarquée | PostgreSQL 16 d'EDB | PostgreSQL 18 de conda-forge | PostgreSQL 18 de conda-forge |
-| Services liés à la vie de SCIP | objet Job (`win_job.rs`) | nettoyage au démarrage (`unix_orphans.rs`) | signal à la mort du parent, et nettoyage au démarrage |
+| Services liés à la vie de SCIP | objet Job (`win_job.rs`) | veilleur `--reap`, et nettoyage au démarrage (`unix_orphans.rs`) | signal à la mort du parent, et nettoyage au démarrage |
 | Mise à jour | automatique, signée | manuelle | manuelle |
 
 Le test de bout en bout qui manque sous Windows existe pour ces deux systèmes :
-`apps/desktop/scripts/e2e-unix.mjs` installe le paquet sur le runner et le fait tourner.
+`apps/desktop/scripts/e2e-unix.mjs` fait tourner le paquet installé sur le runner. Le `.deb` est
+en plus installé dans des images vierges d'Ubuntu 22.04 et 24.04 et de Debian 12 et 13, qui
+n'ont rien du build : c'est là qu'on voit ce que le paquet oublie d'embarquer ou de déclarer.
 
 ## Tests
 

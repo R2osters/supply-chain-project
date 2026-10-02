@@ -30,7 +30,9 @@ On veut pouvoir installer SCIP sur un Mac et sur un PC Linux, sans machine de bu
    charge la démonstration.
 5. **Construits et testés par GitHub Actions** (`.github/workflows/desktop-unix.yml`) : tests et
    lint de la coque sur les deux systèmes, puis le paquet est installé sur le runner et exercé de
-   bout en bout (`apps/desktop/scripts/e2e-unix.mjs`).
+   bout en bout (`apps/desktop/scripts/e2e-unix.mjs`). Le `.deb` est en plus installé et exercé
+   dans des images vierges d'Ubuntu 22.04 et 24.04 et de Debian 12 et 13 : une machine de build
+   a des bibliothèques et des caches qu'un poste d'utilisateur n'a pas.
 6. **Publiés avec la release.** Sur un tag de version, un job attache le `.dmg`, le `.deb` et leur
    fichier `SHA256SUMS` à la release créée par l'éditeur depuis son PC. C'est le seul job du dépôt
    qui a le droit d'écrire, et seulement pour cela.

@@ -182,10 +182,15 @@ later). Same shell, API, AI engine and interface as on Windows; what differs, an
 **Build.** `.github/workflows/desktop-unix.yml` builds both packages on GitHub's runners, installs
 each on its runner and runs `apps/desktop/scripts/e2e-unix.mjs` against it: provisioning with the
 demo, sign-in, PostGIS queries, the AI engines, a second launch, a `kill -9` followed by a new
-launch, backup and restore. The staging scripts are the Windows ones; on these systems Node comes
-from the matching nodejs.org archive, the AI engine from `services/ai/build-desktop.sh`, and
-PostgreSQL with PostGIS from conda-forge (`stage-postgres-unix.mjs`, installed by a micromamba
-pinned by checksum). To build on a Mac or a Linux PC:
+launch, backup and restore. The `.deb` is then installed with `apt` in clean images of Ubuntu
+22.04, Ubuntu 24.04, Debian 12 and Debian 13, where the same check runs: a build machine has
+libraries and caches a user's computer does not, and only a system without them shows what the
+package forgot. The staging scripts are the Windows ones; on these systems Node comes from the
+matching nodejs.org archive, the AI engine from `services/ai/build-desktop.sh`, and PostgreSQL
+with PostGIS from conda-forge (`stage-postgres-unix.mjs`, installed by a micromamba pinned by
+checksum). On Linux the Prisma engines are named instead of taken from what the build machine
+has (`stage-api.mjs`): OpenSSL 3, and OpenSSL 1.1 for a system that has both. To build on a Mac
+or a Linux PC:
 
 ```bash
 npm install
@@ -214,7 +219,7 @@ stops.
 
 **Install on Linux.** `sudo apt install ./SCIP-<version>-linux-amd64.deb`, then open SCIP from the
 applications menu. The package depends on WebKitGTK 4.1, which Ubuntu 22.04 and Debian 12 are the
-first to ship. Nothing is written under `/usr/lib/SCIP`.
+first to ship, and on OpenSSL 3 (`libssl3`). Nothing is written under `/usr/lib/SCIP`.
 
 **Publishing.** Nothing changes on the publisher's PC: `npm run release` builds and signs the
 Windows installer, tags and creates the release. The tag starts `desktop-unix.yml`; once both
