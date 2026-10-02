@@ -1,0 +1,285 @@
+/* ============================================================
+   SCIP — site vitrine · base partagée.
+   Identité = celle du logiciel (charte v1.0, source unique :
+   apps/web/src/app/globals.css). Mêmes tokens, mêmes polices
+   (IBM Plex Sans / Sans Condensed / Mono), mêmes composants :
+   .btn en pilule, .segmented, .panel plat, .chip, .t-label.
+   Palette volontairement pauvre : 90 % de gris neutre, l'encre
+   porte la seule action, la couleur n'apparaît que sur les
+   événements, le violet ne dit que « démo » ou « simulé ».
+   Ce que le site ajoute au logiciel : l'échelle (titres et mots
+   géants en Plex Sans Condensed 700), la profondeur des fenêtres
+   de capture (perspective + ombres de la charte), le flou de la
+   barre de navigation.
+   ============================================================ */
+
+:root {
+  color-scheme: light;
+  /* neutres */
+  --bg: #e3e4e6;
+  --surface: #f1f2f3;
+  --surface-2: #ffffff;
+  --line: #d6d8db;
+  --ink: #141516;
+  --muted: #5c6166;
+  --dim: #747a80;
+  --map: #dcdee1;
+  /* action : une seule couleur */
+  --accent: #141516;
+  --on-accent: #ffffff;
+  /* événements et provenance : petites surfaces seulement */
+  --crit: #c8412f;  --crit-bg: rgb(200 65 47 / .1);
+  --warn: #a8740f;
+  --ok: #3f8a5c;
+  --live: #2f8a55;  --live-bg: rgb(47 138 85 / .12);
+  --info: #3b6fb0;
+  --sim: #6e56c9;   --sim-bg: rgb(110 86 201 / .1);
+  /* forme et profondeur */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-panel: 14px;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.08);
+  --shadow-md: 0 6px 18px rgb(0 0 0 / 0.14);
+  --shadow-lg: 0 20px 48px rgb(0 0 0 / 0.24);
+  /* polices du logiciel */
+  --body-font: "IBM Plex Sans", system-ui, sans-serif;
+  --display: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --ease: cubic-bezier(.22, 1, .36, 1);   /* --ease-out de la charte */
+  --gutter: clamp(20px, 4vw, 56px);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--body-font);
+  font-size: clamp(15px, .95vw, 17px);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+img, video { display: block; max-width: 100%; }
+a { color: inherit; }
+::selection { background: color-mix(in srgb, var(--info) 25%, transparent); }
+:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; border-radius: 4px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- Type ---------- */
+h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 700; letter-spacing: -.01em; }
+.t-hero { font-size: clamp(42px, 5.6vw, 92px); line-height: .95; font-weight: 700; text-wrap: balance; }
+.t-section { font-size: clamp(30px, 3.9vw, 62px); line-height: .98; font-weight: 700; text-wrap: balance; }
+.t-card { font-size: clamp(20px, 1.7vw, 27px); line-height: 1.08; font-weight: 600; }
+.t-body { max-width: 45ch; color: var(--muted); margin: 0; }
+.t-body strong { color: var(--ink); font-weight: 600; }
+/* la deuxième voix d'un titre : le gris de la charte, jamais une couleur */
+.accent { color: var(--dim); }
+/* .t-label du logiciel */
+.mono, .eyebrow, .pill-tag {
+  font-family: var(--mono);
+  font-size: clamp(11px, .72vw, 12px);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+}
+.eyebrow { color: var(--muted); margin: 0 0 18px; }
+.num, [data-count] { font-variant-numeric: tabular-nums; }
+
+/* ---------- Provenance : .chip démo du logiciel ---------- */
+.demo-tag {
+  display: inline-flex; align-items: center;
+  height: 20px; padding: 0 7px;
+  font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--sim); background: var(--sim-bg);
+  border: 1px dashed var(--sim); border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* ---------- Surfaces : plates, comme dans le logiciel ---------- */
+.panel { position: relative; background: var(--surface); border-radius: var(--radius-panel); }
+.panel .panel, .tile { background: var(--surface-2); border-radius: var(--radius); }
+
+/* ---------- Fenêtre de capture : le seul élément en relief ---------- */
+.shot {
+  margin: 0; position: relative;
+}
+.shot-win {
+  border-radius: var(--radius-panel); overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-lg);
+  will-change: transform;
+}
+.shot-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-bottom: 1px solid var(--line);
+  background: var(--surface); color: var(--muted);
+  font-family: var(--body-font); font-size: 12px; font-weight: 500;
+}
+.shot-bar svg { display: block; color: var(--ink); }
+.shot-bar .ctl { margin-left: auto; display: inline-flex; gap: 16px; font-family: var(--mono); font-size: 11px; color: var(--dim); letter-spacing: 0; }
+.shot-win img { width: 100%; height: auto; display: block; }
+.shot figcaption {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 14px; color: var(--muted);
+  font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase;
+}
+
+/* ---------- Barre de navigation : celle du logiciel ---------- */
+.nav {
+  position: fixed; z-index: 40; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px clamp(14px, 2vw, 28px);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--line);
+}
+.nav .brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--body-font); font-weight: 600; font-size: 15px; letter-spacing: .01em;
+  text-decoration: none; color: var(--ink);
+}
+.nav .brand svg { display: block; }
+.segmented {
+  display: inline-flex; gap: 4px; padding: 4px;
+  border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line);
+}
+.segmented > a {
+  display: inline-flex; align-items: center;
+  height: 30px; padding: 0 14px; border-radius: 999px;
+  color: var(--muted); text-decoration: none;
+  font-size: 12px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase;
+  transition: background-color .2s var(--ease), color .2s var(--ease);
+}
+.segmented > a[aria-current="page"] { background: var(--ink); color: var(--on-accent); }
+.nav .cta { margin-left: auto; }
+@media (hover:hover) and (pointer:fine) {
+  .segmented > a:hover { color: var(--ink); }
+  .segmented > a[aria-current="page"]:hover { color: var(--on-accent); }
+}
+@media (max-width: 700px) {
+  .nav { flex-wrap: wrap; row-gap: 8px; }
+  .nav .segmented { order: 3; width: 100%; justify-content: space-between; }
+  .nav .segmented > a { flex: 1; justify-content: center; padding: 0 6px; font-size: 11px; }
+}
+
+/* ---------- Boutons : .btn du logiciel (pilule), l'encre = l'action ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 44px; padding: 0 22px;
+  border: 1px solid var(--ink); border-radius: 999px;
+  background: var(--ink); color: var(--on-accent);
+  font: 600 14px/1 var(--body-font); text-decoration: none; white-space: nowrap;
+  transition: opacity .12s ease-out, transform .12s var(--ease), border-color .12s ease-out;
+}
+.btn.btn-sm { height: 36px; padding: 0 16px; font-size: 13.5px; }
+.btn .circle { font-size: 14px; }
+.btn.outline { background: var(--surface-2); color: var(--ink); border-color: var(--line); font-weight: 500; }
+@media (hover:hover) and (pointer:fine) {
+  .btn:hover { opacity: .86; }
+  .btn.outline:hover { opacity: 1; border-color: var(--muted); }
+}
+.btn:active, .play-cover:active { transform: scale(.97); }
+.link-arrow { color: var(--ink); font-size: 14px; font-weight: 500; text-decoration: underline; text-underline-offset: 5px; }
+.link-arrow::after { content: " ↗"; }
+
+/* ---------- Coin flèche (caractère texte) ---------- */
+.corner {
+  position: absolute; top: 16px; right: 16px;
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid currentColor; opacity: .55;
+  display: grid; place-items: center; font-size: 14px;
+  transition: transform .3s var(--ease), opacity .3s var(--ease);
+}
+.corner::before { content: "↗"; }
+
+/* ---------- Sections ---------- */
+.section { position: relative; padding: clamp(64px, 8vw, 120px) var(--gutter); }
+.wrap { max-width: 1480px; margin: 0 auto; position: relative; }
+.head { display: grid; grid-template-columns: 1.2fr .8fr; gap: 40px; align-items: end; margin-bottom: clamp(30px, 3.6vw, 56px); }
+.head .t-body { justify-self: end; }
+@media (max-width: 860px) { .head { grid-template-columns: 1fr; } .head .t-body { justify-self: start; } }
+
+/* ---------- Mot géant de page (gris sur gris) ---------- */
+.ghost {
+  position: absolute; z-index: 0;
+  font-family: var(--display); font-weight: 700; line-height: .82; letter-spacing: -.02em;
+  text-transform: uppercase; white-space: nowrap;
+  color: rgba(20, 21, 22, .065);
+  pointer-events: none; user-select: none;
+}
+
+/* ---------- Footer ---------- */
+.footer { position: relative; overflow: hidden; padding: clamp(56px, 6.5vw, 100px) var(--gutter) 0; border-top: 1px solid var(--line); background: var(--surface); }
+.footer .cols { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 36px; max-width: 1480px; margin: 0 auto 8vw; position: relative; z-index: 2; }
+.footer h4 { margin: 0 0 14px; font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.footer a { display: block; text-decoration: none; color: var(--ink); font-size: 14px; padding: 5px 0; }
+.footer a:hover { text-decoration: underline; text-underline-offset: 4px; }
+.footer .meta { font-size: 13.5px; color: var(--muted); max-width: 42ch; margin: 12px 0 0; }
+.footer .brand-foot { display: inline-flex; align-items: center; gap: 9px; font-family: var(--body-font); font-size: 18px; font-weight: 600; text-decoration: none; padding: 0; }
+.footer .giant-foot {
+  position: relative; z-index: 1; display: block; text-align: center;
+  font-family: var(--display); font-size: 26vw; font-weight: 700; line-height: .72; letter-spacing: -.02em;
+  color: rgba(20, 21, 22, .06);
+  margin: 0 calc(var(--gutter) * -1) -0.1em; pointer-events: none; user-select: none;
+}
+@media (max-width: 860px) { .footer .cols { grid-template-columns: 1fr 1fr; } }
+
+/* ---------- Mouvement : court, une fois, comme le .rise du logiciel ---------- */
+.reveal { opacity: 0; transform: translateY(18px); }
+.reveal.in {
+  opacity: 1; transform: none;
+  transition: opacity .6s var(--ease), transform .6s var(--ease);
+  transition-delay: var(--d, 0s);
+}
+.load-seq .lo { opacity: 0; }
+.load-seq.ready .lo {
+  opacity: 1; transform: none;
+  transition: opacity .7s var(--ease), transform .7s var(--ease);
+  transition-delay: calc(var(--lo, 0) * .1s);
+}
+.load-seq .lo-figure { transform: scale(.97); }
+.load-seq .lo-copy   { transform: translateY(18px); }
+.load-seq.ready .lo-figure { transition-duration: .9s; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal, .load-seq .lo { opacity: 1 !important; transform: none !important; transition: opacity .2s linear !important; }
+  .tilt { transform: none !important; }
+}
+
+/* ---------- Thème sombre du logiciel (mêmes rôles, autres valeurs) ---------- */
+.theme-dark {
+  --bg: #121314; --surface: #1b1c1e; --surface-2: #242528; --line: #2c2e31;
+  --ink: #ececec; --muted: #9a9ea3; --dim: #80858a; --map: #1a1b1d;
+  --accent: #f2f2f2; --on-accent: #111213;
+  --crit: #e0685a; --warn: #d4a24a; --ok: #6fb58a; --live: #5fc98b; --info: #7aa7dc; --sim: #a993ec;
+  --sim-bg: rgb(169 147 236 / .12);
+  background: var(--bg); color: var(--ink);
+}
+.theme-dark .btn { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* ---------- Pilules d'onglet (.pill du logiciel, en lecture seule) ---------- */
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tabs li {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface-2);
+  font-size: 12.5px; font-weight: 500; color: var(--ink); white-space: nowrap;
+}
+kbd {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px;
+  background: var(--surface-2); color: var(--muted);
+}
+.footer .legal { max-width: 1480px; margin: 0 auto; padding: 18px 0 26px; border-top: 1px solid var(--line); color: var(--muted); font-family: var(--mono); font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+.footer .cols { margin-bottom: clamp(36px, 4vw, 60px); }
+/* le mot-symbole du logiciel : mono, espacé (écran de connexion, barre haute) */
+.nav .brand span, .footer .brand-foot span { font-family: var(--mono); font-weight: 600; letter-spacing: .12em; }
+.t-body, .mod p, .col p { text-wrap: pretty; }
+/* éventail et galeries de captures */
+.shot-win img { background: var(--bg); }
+.shot figcaption .cap-note { text-transform: none; letter-spacing: 0; font-family: var(--body-font); font-size: 13px; font-weight: 400; }

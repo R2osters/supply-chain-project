@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Réseau · SCIP</title>
+  <meta name="description" content="Réseau : Fournisseurs, Commandes, Stocks, Référentiel. Fournisseurs mesurés sur leur historique de commandes, bons de commande nés d'une recommandation, sécurité locale d'abord.">
+  <meta name="theme-color" content="#e3e4e6">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/base.css?v=20261002e">
+  <link rel="stylesheet" href="css/reseau.css?v=20261002e">
+</head>
+<body>
+
+  <nav class="nav" aria-label="Navigation principale">
+    <a class="brand" href="index.html"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+    <div class="segmented">
+      <a href="suivi.html">Suivi</a>
+      <a href="optimisation.html">Optimisation</a>
+      <a href="reseau.html" aria-current="page">Réseau</a>
+    </div>
+    <a class="btn btn-sm cta" href="telecharger.html">Télécharger</a>
+  </nav>
+
+  <!-- ============ HÉROS : copie à gauche, vrai écran Fournisseurs à droite, mot géant RÉSEAU ============ -->
+  <header class="hero load-seq tilt-zone">
+    <div class="ghost lo" style="--lo: 1" aria-hidden="true">RÉSEAU</div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow lo lo-copy" style="--lo: 2">Réseau</p>
+        <h1 class="t-hero lo lo-copy" style="--lo: 3">Fournisseurs, commandes, <span class="accent">stocks, référentiel.</span></h1>
+        <p class="t-body lo lo-copy" style="--lo: 4">La fiabilité d&rsquo;un fournisseur est calculée à partir de son historique de commandes ; elle n&rsquo;est pas saisie à la main.</p>
+        <div class="hero-actions lo lo-copy" style="--lo: 5">
+          <a class="btn" href="telecharger.html">Télécharger pour Windows <span class="circle" aria-hidden="true">↗</span></a>
+          <a class="btn outline" href="#securite">Voir la sécurité</a>
+        </div>
+      </div>
+      <figure class="shot hero-figure lo lo-figure" style="--lo: 3">
+        <div class="shot-win tilt" data-tilt="3" data-tilt-base="perspective(1400px) rotateY(-7deg)">
+          <img src="assets/screens/fournisseurs.webp" width="1600" height="1000" fetchpriority="high" decoding="async" alt="Écran Fournisseurs de SCIP : « Tous les fournisseurs mesurés tiennent le seuil de fiabilité », cinq fournisseurs classés avec fiabilité, ponctualité, qualité, taux de service, délai et nombre de commandes, tous marqués « Mesuré ».">
+        </div>
+        <figcaption>Réseau · Fournisseurs <span class="demo-tag">données démo</span> <span class="cap-note">5 fournisseurs classés, ponctualité moyenne 86,5&nbsp;%</span></figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <!-- ============ Stocks, puis Commandes : un bloc par onglet ============ -->
+  <section class="section">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Fournisseurs · Commandes · Stocks</p>
+          <h2 class="t-section reveal">Mesuré, <span class="accent">pas déclaré.</span></h2>
+        </div>
+        <p class="t-body reveal">Le jeu de démo est celui de Demo Distribution Ghana : trois entrepôts, cinq fournisseurs, des montants en GHS.</p>
+      </div>
+
+      <article class="tab-block">
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14"><img src="assets/screens/stocks-sku-006.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Stocks de SCIP : « Sous le point de commande : 1 · en rupture : 0 ». Le SKU-006 a 610 unités libres à WH-ACC pour un point de commande de 1 466 ; panneau « Projection 10 j » : « Déjà sous le point de commande »."></div>
+          <figcaption>Réseau · Stocks <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+        <div class="tab-copy reveal">
+          <span class="mono n">Stocks</span>
+          <h3 class="t-section">La rupture, vue avant.</h3>
+          <p class="t-body">Ce qui va manquer, et où : la couverture par référence et par site, avec une « Projection 10&nbsp;j » et le bouton « Demander une recommandation ».</p>
+          <p class="fact">Dans la démo : SKU&#8209;006, 610 unités à WH&#8209;ACC pour un point de commande de 1&nbsp;466. Valeur du stock : 3&nbsp;302&nbsp;643 GHS sur 10 références.</p>
+        </div>
+      </article>
+
+      <article class="tab-block flip">
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14"><img src="assets/screens/commandes.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Commandes de SCIP : « 1 commande en retard sur 3 ouvertes », liste des bons de commande avec leur statut."></div>
+          <figcaption>Réseau · Commandes <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+        <div class="tab-copy reveal">
+          <span class="mono n">Commandes</span>
+          <h3 class="t-section">De la recommandation au bon.</h3>
+          <p class="t-body">Un bon de commande né d&rsquo;un conseil porte l&rsquo;origine « Recommandation ». Le menu « passer à… » le fait avancer : En attente, puis Confirmée.</p>
+          <p class="fact">Dans la démo : 1 commande en retard sur 3 ouvertes. Dans cette capture, toutes les commandes sont d&rsquo;origine « Manuelle ».</p>
+        </div>
+      </article>
+
+      <div class="score reveal">
+        <span class="mono n">Fournisseurs</span>
+        <p>Le score de fiabilité combine la ponctualité, la qualité acceptée, le taux de service, les annulations et la stabilité du délai. Quand les commandes sont peu nombreuses, les taux sont ramenés vers une valeur neutre.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Référentiel ============ -->
+  <section class="section ref-section">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Référentiel</p>
+          <h2 class="t-section reveal">Produits, sites, flotte <span class="accent">et partenaires.</span></h2>
+        </div>
+        <p class="t-body reveal">Chaque fiche nourrit les calculs d&rsquo;Optimise : un créneau de livraison contraint une tournée, un taux de service fixe un stock de sécurité.</p>
+      </div>
+      <div class="ref-layout">
+        <ul class="ref-grid">
+          <li class="reveal"><b>Produits</b><span>référence (SKU), taux de service, périssable, durée de conservation</span></li>
+          <li class="reveal"><b>Entrepôts</b><span>code, ville, capacité, rayon d&rsquo;arrivée</span></li>
+          <li class="reveal"><b>Véhicules</b><span>plaque, type, capacité, coût au km</span></li>
+          <li class="reveal"><b>Chauffeurs</b><span>n° de permis, téléphone, véhicule habituel</span></li>
+          <li class="reveal"><b>Clients</b><span>adresse, créneau de livraison</span></li>
+          <li class="reveal"><b>Transporteurs</b><span>coût par km, ponctualité, véhicules</span></li>
+        </ul>
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="12"><img src="assets/screens/referentiel.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Référentiel de SCIP : « Produits, sites, flotte et partenaires »."></div>
+          <figcaption>Réseau · Référentiel <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Sécurité ============ -->
+  <section class="section sec-section" id="securite">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Sécurité</p>
+          <h2 class="t-section reveal">Local <span class="accent">d&rsquo;abord.</span></h2>
+        </div>
+        <p class="t-body reveal">Aucun serveur, aucun abonnement. L&rsquo;application lance sa propre base, son API et son moteur IA sur le PC.</p>
+      </div>
+      <div class="sec-panel panel reveal">
+        <div class="sec-grid">
+          <div class="sec-item"><b>Mots de passe Argon2id</b><p>Et verrouillage du compte après des échecs répétés.</p></div>
+          <div class="sec-item"><b>Rôles et permissions</b><p>Sept comptes de démo, dont six proposés à l&rsquo;écran de connexion. L&rsquo;interface masque ce que l&rsquo;API refuserait.</p></div>
+          <div class="sec-item"><b>Isolation des données</b><p>Chaque entreprise ne voit que les siennes : un filtre explicite dans l&rsquo;API, testé.</p></div>
+          <div class="sec-item"><b>Jetons surveillés</b><p>Rafraîchis, avec détection de rejeu.</p></div>
+          <div class="sec-item"><b>API locale par défaut</b><p>SCIP répond à ce PC seul. Le réseau local s&rsquo;active dans Réglages.</p></div>
+          <div class="sec-item"><b>Audit rejouable</b><p>Un audit de sécurité dynamique, scripté dans le dépôt.</p></div>
+        </div>
+        <p class="sec-meta">798 tests automatisés couvrent l&rsquo;API, le web, l&rsquo;application et l&rsquo;installeur. <a class="link-arrow" href="https://github.com/R2osters/supply-chain-project/blob/master/docs/security-audit.md">Lire l&rsquo;audit de sécurité</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section cta-section">
+    <div class="wrap">
+      <h2 class="t-hero reveal">Vos données restent <span class="accent">sur votre PC.</span></h2>
+      <div class="hero-actions reveal">
+        <a class="btn" href="telecharger.html">Télécharger SCIP <span data-rel="n">0.2.1</span> <span class="circle" aria-hidden="true">↗</span></a>
+        <a class="btn outline" href="suivi.html">Voir Track</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="cols">
+      <div>
+        <a class="brand-foot" href="index.html"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+        <p class="meta">Supply Chain Intelligence Platform. Suivre la marchandise du portail du fournisseur au quai du client, et décider quoi commander, chez qui, quand et par quel itinéraire.</p>
+      </div>
+      <div>
+        <h4>Pages</h4>
+        <a href="suivi.html">Suivi</a>
+        <a href="optimisation.html">Optimisation</a>
+        <a href="reseau.html">Réseau</a>
+        <a href="telecharger.html">Télécharger</a>
+      </div>
+      <div>
+        <h4>Projet</h4>
+        <a href="https://github.com/R2osters/supply-chain-project">Code source</a>
+        <a href="https://github.com/R2osters/supply-chain-project/releases/latest">Version <span data-rel="n">0.2.1</span></a>
+        <a href="reseau.html#securite">Sécurité</a>
+      </div>
+      <div>
+        <h4>Le film</h4>
+        <a href="index.html#film">Le Signal · 2 min 50</a>
+      </div>
+    </div>
+    <p class="legal"><span>SCIP <span data-rel="n">0.2.1</span></span><span>Logiciel Windows</span><span>Projet d&rsquo;école, non commercial</span></p>
+  </footer>
+
+  <script src="js/site.js?v=20261002e" defer></script>
+</body>
+</html>

@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Optimisation · SCIP</title>
+  <meta name="description" content="Optimise : Conseils, Prévisions, Allocation, Scénarios, Tournées. Dix moteurs IA tournent sur votre PC ; chaque recommandation arrive avec ses raisons et ses hypothèses, et rien n'est envoyé sans accord.">
+  <meta name="theme-color" content="#e3e4e6">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/base.css?v=20261002e">
+  <link rel="stylesheet" href="css/optimisation.css?v=20261002e">
+</head>
+<body>
+
+  <nav class="nav" aria-label="Navigation principale">
+    <a class="brand" href="index.html"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+    <div class="segmented">
+      <a href="suivi.html">Suivi</a>
+      <a href="optimisation.html" aria-current="page">Optimisation</a>
+      <a href="reseau.html">Réseau</a>
+    </div>
+    <a class="btn btn-sm cta" href="telecharger.html">Télécharger</a>
+  </nav>
+
+  <!-- ============ HÉROS : copie à gauche, trois vrais écrans en éventail, mot géant OPTIMISE ============ -->
+  <header class="hero load-seq tilt-zone">
+    <div class="ghost lo" style="--lo: 1" aria-hidden="true">OPTIMISE</div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow lo lo-copy" style="--lo: 2">Optimise</p>
+        <h1 class="t-hero lo lo-copy" style="--lo: 3">Optimise recalcule. <span class="accent">Vous décidez.</span></h1>
+        <p class="t-body lo lo-copy" style="--lo: 4">Quand Track détecte un retard, Optimise réévalue le risque et régénère ses recommandations. Rien n&rsquo;est envoyé sans accord humain.</p>
+        <div class="hero-actions lo lo-copy" style="--lo: 5">
+          <a class="btn" href="telecharger.html">Télécharger pour Windows <span class="circle" aria-hidden="true">↗</span></a>
+          <a class="btn outline" href="#onglets">Voir les cinq onglets</a>
+        </div>
+      </div>
+      <figure class="shot fan-figure lo lo-figure" style="--lo: 3">
+        <div class="fan">
+          <div class="shot-win fan-a tilt" data-tilt="2" data-tilt-base="rotate(-5deg)">
+            <img src="assets/screens/previsions.webp" width="1600" height="1000" decoding="async" alt="Écran Prévisions de SCIP : SKU-006, 9 102 unités attendues sur 30 jours, six modèles comparés.">
+          </div>
+          <div class="shot-win fan-c tilt" data-tilt="2" data-tilt-base="rotate(6deg)">
+            <img src="assets/screens/tournees.webp" width="1600" height="1000" decoding="async" alt="Écran Tournées de SCIP : une tournée, cinq arrêts, trois non desservis.">
+          </div>
+          <div class="shot-win fan-b tilt" data-tilt="2" data-tilt-base="rotate(1deg)">
+            <img src="assets/screens/conseils.webp" width="1600" height="1000" fetchpriority="high" decoding="async" alt="Écran Conseils de SCIP : « 2 conseils ouverts ».">
+          </div>
+        </div>
+        <figcaption>Prévisions · Conseils · Tournées <span class="demo-tag">données démo</span></figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <!-- ============ Les cinq onglets d'Optimise, chacun avec son vrai écran ============ -->
+  <section class="section" id="onglets">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Les onglets d&rsquo;Optimise</p>
+          <h2 class="t-section reveal">Cinq onglets, <span class="accent">dix moteurs IA.</span></h2>
+        </div>
+        <p class="t-body reveal">Tout tourne sur votre PC, moteur IA compris. S&rsquo;il s&rsquo;arrête, la barre affiche « IA hors ligne » ; le suivi et les stocks continuent.</p>
+      </div>
+
+      <article class="tab-block">
+        <div class="tab-copy reveal">
+          <span class="mono n">01</span>
+          <h3 class="t-section">Conseils</h3>
+          <p class="t-body">Chaque recommandation porte « Pourquoi cette recommandation&nbsp;? » : un résumé, des raisons, des hypothèses. Deux boutons : « accepter et exécuter », « écarter ».</p>
+          <p class="fact">Dans la démo : 2 conseils ouverts. « Réduire le volume confié à Abidjan Import Partners », 72&nbsp;% de ponctualité ; « SKU&#8209;008 représente 158 jours de couverture ».</p>
+        </div>
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14"><img src="assets/screens/conseils-pourquoi.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Conseils de SCIP, « Pourquoi cette recommandation ? » déplié : trois raisons, une hypothèse, les boutons « accepter et exécuter » et « écarter », la mention « Rien n'est envoyé sans accord humain »."></div>
+          <figcaption>Optimise · Conseils <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+      </article>
+
+      <article class="tab-block flip">
+        <div class="tab-copy reveal">
+          <span class="mono n">02</span>
+          <h3 class="t-section">Prévisions</h3>
+          <p class="t-body">Six modèles s&rsquo;affrontent en validation glissante. La sélection se fait sur le WAPE, et le tableau montre celui de chaque modèle, pas seulement du vainqueur.</p>
+          <p class="fact">Dans la démo : SKU&#8209;006, 9&nbsp;102 unités attendues sur 30 jours ; « gradient boosting » retenu, WAPE 22,30.</p>
+        </div>
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14"><img src="assets/screens/previsions.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Prévisions de SCIP : « SKU-006 : 9 102 unités attendues sur 30 jours », courbe de prévision avec intervalle à 80 %, comparaison des six modèles en WAPE, MAE et RMSE, gradient boosting retenu."></div>
+          <figcaption>Optimise · Prévisions <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+      </article>
+
+      <article class="tab-block">
+        <div class="tab-copy reveal">
+          <span class="mono n">03</span>
+          <h3 class="t-section">Allocation</h3>
+          <p class="t-body">Vous donnez un produit, une quantité, un délai, une part maximale par fournisseur. SCIP répartit les volumes, en MILP.</p>
+          <p class="fact">Dans la démo : 20&nbsp;000 unités du SKU&#8209;006 sous 7 jours, part maximale 0,5 : 2 fournisseurs, coût total GHS 354&nbsp;020.</p>
+        </div>
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14"><img src="assets/screens/allocation.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Allocation de SCIP : 20 000 unités du SKU-006 sous 7 jours, part maximale 0,5 ; résultat : 2 fournisseurs, coût total GHS 354 020."></div>
+          <figcaption>Optimise · Allocation <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+      </article>
+
+      <article class="tab-block flip">
+        <div class="tab-copy reveal">
+          <span class="mono n">04</span>
+          <h3 class="t-section">Scénarios</h3>
+          <p class="t-body">Un Monte&#8209;Carlo, 2&nbsp;000 itérations par défaut, compare le meilleur cas, le cas de base et le pire.</p>
+          <p class="fact">Dans la démo : SKU&#8209;006, risque de rupture de 41,6&nbsp;% dans le pire cas, 42,8&nbsp;% dans le cas de base.</p>
+        </div>
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14"><img src="assets/screens/scenarios.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Scénarios de SCIP : simulation Monte-Carlo de 2 000 itérations sur le SKU-006, trois cartes Meilleur cas, Cas de base et Pire cas ; risque de rupture de 41,6 % dans le pire cas et de 42,8 % dans le cas de base."></div>
+          <figcaption>Optimise · Scénarios <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+      </article>
+
+      <article class="tab-block">
+        <div class="tab-copy reveal">
+          <span class="mono n">05</span>
+          <h3 class="t-section">Tournées</h3>
+          <p class="t-body">Un dépôt, des arrêts, des véhicules : SCIP ordonne les arrêts en CVRP avec fenêtres horaires, et dit ce qu&rsquo;il n&rsquo;a pas pu desservir.</p>
+          <p class="fact">Dans la démo : dépôt WH&#8209;ACC, 1 tournée, 5 arrêts, 3 non desservis. Distance : vol d&rsquo;oiseau × 1,25 tant qu&rsquo;aucun serveur OSRM n&rsquo;est branché.</p>
+        </div>
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14"><img src="assets/screens/tournees.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Tournées de SCIP : dépôt WH-ACC, tous les arrêts ; résultat : 1 tournée, 5 arrêts, 3 non desservis."></div>
+          <figcaption>Optimise · Tournées <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+      </article>
+
+      <p class="engines-note reveal">Les dix moteurs : ETA avec incertitude, probabilité de retard, détection d&rsquo;anomalies, prévision de demande, stock de sécurité et point de commande, score fournisseur, allocation, tournées, scénarios, score de risque.</p>
+    </div>
+  </section>
+
+  <section class="section cta-section">
+    <div class="wrap">
+      <h2 class="t-hero reveal">Essayez Optimise <span class="accent">sur le jeu de démo.</span></h2>
+      <div class="hero-actions reveal">
+        <a class="btn" href="telecharger.html">Télécharger SCIP <span data-rel="n">0.2.1</span> <span class="circle" aria-hidden="true">↗</span></a>
+        <a class="btn outline" href="reseau.html">Voir Réseau</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="cols">
+      <div>
+        <a class="brand-foot" href="index.html"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+        <p class="meta">Supply Chain Intelligence Platform. Suivre la marchandise du portail du fournisseur au quai du client, et décider quoi commander, chez qui, quand et par quel itinéraire.</p>
+      </div>
+      <div>
+        <h4>Pages</h4>
+        <a href="suivi.html">Suivi</a>
+        <a href="optimisation.html">Optimisation</a>
+        <a href="reseau.html">Réseau</a>
+        <a href="telecharger.html">Télécharger</a>
+      </div>
+      <div>
+        <h4>Projet</h4>
+        <a href="https://github.com/R2osters/supply-chain-project">Code source</a>
+        <a href="https://github.com/R2osters/supply-chain-project/releases/latest">Version <span data-rel="n">0.2.1</span></a>
+        <a href="reseau.html#securite">Sécurité</a>
+      </div>
+      <div>
+        <h4>Le film</h4>
+        <a href="index.html#film">Le Signal · 2 min 50</a>
+      </div>
+    </div>
+    <p class="legal"><span>SCIP <span data-rel="n">0.2.1</span></span><span>Logiciel Windows</span><span>Projet d&rsquo;école, non commercial</span></p>
+  </footer>
+
+  <script src="js/site.js?v=20261002e" defer></script>
+</body>
+</html>
