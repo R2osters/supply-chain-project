@@ -46,6 +46,11 @@ Une barre haute collante : logo hexagone + « SCIP », sélecteur segmenté des 
 capitales (TRACK · OPTIMISE · RÉSEAU), champ « Rechercher expéditions, véhicules, navires, SKU… »
 avec la touche « / », pastille « IA en ligne » / « IA hors ligne », cloche « Alertes », menu du
 compte. Dessous, les onglets du pilier actif. Libellés français : `apps/web/src/lib/i18n.tsx`.
+En mode démo, la barre porte aussi la pastille violette « ESPACE DÉMO », le choix EN / FR et le
+bouton de thème.
+
+Les captures réelles de la version 0.2.1 sont dans `docs/captures/v0.2.1/` (index et état de chaque
+écran dans son `README.md`). Un écran montré sur le site est l'une de ces captures.
 
 | Pilier | Onglets, dans l'ordre (libellé exact) |
 |---|---|
@@ -90,17 +95,22 @@ Entreprise « Demo Distribution Ghana », devise GHS (`apps/api/prisma/seed.ts`,
 
 | Sujet | Valeur réelle |
 |---|---|
-| Entrepôts | Accra Central DC (principal, `WH-ACC`) · Kumasi Regional DC (`WH-KUM`) |
+| Entrepôts | Accra Central DC (principal, `WH-ACC`) · Kumasi Regional DC (`WH-KUM`) · Takoradi Port Store (`WH-TAK`) |
 | Fournisseurs | SUP-A Volta Grain Cooperative (Ho) · SUP-B Sahel Commodities Ltd · SUP-C Tema Port Distributors (Tema) · SUP-D Ashanti Wholesale Group (Kumasi) · SUP-E Abidjan Import Partners |
 | Ponctualité mesurée | SUP-C 96,9 % · SUP-A 94,8 % · SUP-D 89,3 % · SUP-B 79,2 % · SUP-E 74,2 % (`README.md`) |
 | Expéditions | `SHP-DEMO-0041` à `SHP-DEMO-0055` |
 | Retards de la démo | `SHP-DEMO-0054` (Accra → Kumasi) et `SHP-DEMO-0055` (Tema → Takoradi), détectés en direct |
-| Rupture de la démo | SKU-006, eau en bouteille 12×1,5 L : 620 unités à Accra Central DC, environ 310 vendues par jour, soit deux jours de stock |
+| Pénurie de la démo | SKU-006 (« Bottled water 12×1.5 L ») : environ 620 unités à Accra Central DC pour 310 vendues par jour, soit deux jours de stock, sous le point de commande (1 466) |
+| Conseils réellement produits | changer de fournisseur (Abidjan Import Partners, 72 % de ponctualité) · réduire le stock du SKU-008 (158 jours de couverture) |
+| Prévision du SKU-006 | 9 102 unités sur 30 jours, « gradient boosting » retenu parmi six modèles |
 | Navires | huit navires de démo ; recherche par nom, IMO ou MMSI (exemple : « Ashanti ») |
 | Comptes | Admin société, Supply chain, Logistique, Achats, Entrepôt, Chauffeur |
 
 `SHP-0142` n'existe pas dans le logiciel : c'est l'expédition du film « Le Signal ». « 3 000 unités
-chez le fournisseur C » vient du schéma du `README.md` : une illustration, pas un écran.
+chez le fournisseur C » vient du schéma du `README.md` : une illustration, pas un écran. En 0.2.1, le
+scénario de démo ne produit d'ailleurs aucune recommandation de commande pour le SKU-006 (défaut
+relevé dans `docs/captures/v0.2.1/README.md`) : le site ne montre pas cet écran tant qu'il n'existe
+pas.
 
 ## 5. Chiffres autorisés
 
