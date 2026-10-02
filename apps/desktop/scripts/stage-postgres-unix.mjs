@@ -186,7 +186,10 @@ function gatherExtensions(prefix) {
   const servers = controls.find((control) => basename(control) === 'plpgsql.control');
   if (!servers) throw new Error(`plpgsql.control is not in ${prefix}: where does this server read its extensions?`);
   const home = join(prefix, dirname(servers));
-  const strays = [...new Set(controls.map((control) => join(prefix, dirname(control))))].filter((dir) => dir !== home);
+  // Only another folder of extensions: a control file elsewhere belongs to something else.
+  const strays = [...new Set(controls.map((control) => join(prefix, dirname(control))))].filter(
+    (dir) => dir !== home && basename(dir) === basename(home),
+  );
   for (const dir of strays) {
     for (const name of readdirSync(dir)) {
       if (existsSync(join(home, name))) throw new Error(`${name} is in both ${dir} and ${home}`);

@@ -5,6 +5,7 @@ import {
   closeSync,
   copyFileSync,
   cpSync,
+  mkdtempSync,
   openSync,
   readSync,
   readdirSync,
@@ -13,6 +14,7 @@ import {
   rmSync,
   statSync,
 } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, sep } from 'node:path';
 
 /** Every entry under `dir`, children before their folder. Links are reported, never followed. */
@@ -150,24 +152,52 @@ function isMachO(path) {
   return MACH_O_MAGICS.has(head.readUInt32BE(0));
 }
 
+function hasValidSignature(file) {
+  try {
+    execFileSync('codesign', ['--verify', file], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * macOS only. Apple Silicon kills a binary that has no signature. conda-forge, Node.js and
  * PyInstaller sign what they ship; this catches the one that would not be, with an ad-hoc
  * signature: the kind Tauri gives the application itself (tauri.macos.conf.json).
+ *
+ * What the system checks before it runs or loads a binary is the signature inside the file.
+ * codesign, given the binary of a framework, judges the whole framework instead, and the one
+ * PyInstaller ships (Python.framework) is no longer one once its links are plain copies:
+ * "bundle format is ambiguous". A binary that fails where it lies is therefore judged again,
+ * and signed if need be, as a copy outside any bundle.
  */
 export function signUnsignedBinaries(root) {
   if (process.platform !== 'darwin') return;
+  const scratch = mkdtempSync(join(tmpdir(), 'scip-sign-'));
   let checked = 0;
+  let alone = 0;
   let signed = 0;
-  for (const { path, entry } of walk(root)) {
-    if (!entry.isFile() || !isMachO(path)) continue;
-    checked += 1;
-    try {
-      execFileSync('codesign', ['--verify', path], { stdio: 'ignore' });
-    } catch {
-      execFileSync('codesign', ['--force', '--sign', '-', path], { stdio: 'inherit' });
-      signed += 1;
+  try {
+    for (const { path, entry } of walk(root)) {
+      if (!entry.isFile() || !isMachO(path)) continue;
+      checked += 1;
+      if (hasValidSignature(path)) continue;
+      // Same file name: an ad-hoc signature takes its identifier from it.
+      const copy = join(scratch, basename(path));
+      copyFileSync(path, copy);
+      alone += 1;
+      if (!hasValidSignature(copy)) {
+        execFileSync('codesign', ['--force', '--sign', '-', copy], { stdio: 'inherit' });
+        copyFileSync(copy, path);
+        signed += 1;
+      }
+      rmSync(copy);
     }
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
   }
-  console.log(`  signatures in ${root}: ${checked} binaries checked, ${signed} signed ad hoc`);
+  console.log(
+    `  signatures in ${root}: ${checked} binaries checked (${alone} outside their bundle), ${signed} signed ad hoc`,
+  );
 }
