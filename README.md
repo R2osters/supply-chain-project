@@ -39,16 +39,20 @@ par adresse.
 
 À chaque nouvelle version, mettre quand même à jour les valeurs de repli et les captures.
 
+Sans JavaScript, une feuille `<noscript>` dans chaque page montre ce que le script révèle
+d'habitude au défilement (`.reveal`, `.load-seq .lo`) : sans elle, les pages restaient vides.
+
 ### macOS et Linux
 
-Les lignes macOS et Linux de la page Télécharger sont dans le HTML, masquées (`hidden`,
-`data-if="unix"`). `js/site.js` ne les affiche que si la dernière release contient les deux
-paquets (`SCIP-<version>-macos-arm64.dmg` et `SCIP-<version>-linux-amd64.deb`), contrôlés comme
-l'installeur : nom attendu, version de la release, lien de cette release. Dans ce cas seulement,
-les deux phrases « Il n'existe pas de version macOS ni Linux » (`data-unless="unix"`) laissent la
-place à leurs variantes. Sans script, ou si l'API ne répond pas, la page reste dans l'état écrit
-dans le HTML : le jour où une release publie ces paquets, inverser les attributs `hidden` des
-éléments `data-if` et `data-unless` pour que cet état de repli dise vrai.
+Les lignes macOS et Linux de la page Télécharger sont dans le HTML (`data-if="unix"`), comme les
+deux phrases « Il n'existe pas de version macOS ni Linux » (`data-unless="unix"`). `js/site.js`
+n'affiche les lignes que si la dernière release contient les deux paquets
+(`SCIP-<version>-macos-arm64.dmg` et `SCIP-<version>-linux-amd64.deb`), contrôlés comme
+l'installeur : nom attendu, version de la release, lien de cette release ; sinon il les masque et
+remet les deux phrases. Sans script, ou si l'API ne répond pas, la page reste dans l'état écrit
+dans le HTML. Depuis la 0.3.0, première version qui publie ces paquets, cet état les montre (nom,
+taille, commande d'installation) ; une release qui ne les porterait plus demanderait de remettre
+`hidden` sur les éléments `data-if` et de l'ôter des éléments `data-unless`.
 
 Chaque ligne porte ses limites, visibles sans clic : version préliminaire, non signée (avec la
 marche à suivre sur Mac), mise à jour manuelle, construite et testée automatiquement mais pas
