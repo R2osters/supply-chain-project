@@ -3,7 +3,8 @@
 // relies on decorator metadata that bundlers strip, and Prisma loads its engine from disk.
 import { cpSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { REPO_DIR, RESOURCES_DIR, run, isMain } from './lib/fetch.mjs';
+import { IS_WINDOWS, REPO_DIR, RESOURCES_DIR, run, isMain } from './lib/fetch.mjs';
+import { flattenLinks, signUnsignedBinaries, walk } from './lib/unix.mjs';
 
 export async function stageApi() {
   const apiDir = join(REPO_DIR, 'apps', 'api');
@@ -72,7 +73,21 @@ export async function stageApi() {
     `--outfile=${join(target, 'seed.js')}`,
   ], { cwd: REPO_DIR });
   pruneUnusedPrismaEngines(join(target, 'node_modules'));
+  if (!IS_WINDOWS) dropLinks(target);
   console.log(`  api -> ${target}`);
+}
+
+/**
+ * macOS and Linux: npm fills `node_modules/.bin` with links to command-line scripts, where
+ * Windows gets .cmd files. Nothing runs them (the supervisor starts Prisma by its entry file),
+ * and the bundle cannot carry links: the folders go, any other link becomes a copy.
+ */
+function dropLinks(target) {
+  for (const { path, entry } of [...walk(join(target, 'node_modules'))]) {
+    if (entry.isDirectory() && entry.name === '.bin') rmSync(path, { recursive: true, force: true });
+  }
+  flattenLinks(target);
+  signUnsignedBinaries(target);
 }
 
 /**
