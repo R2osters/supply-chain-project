@@ -29,7 +29,7 @@ Captures prises après Réglages → « Préparer la démo » (`docs/DEMO-scenar
 
 SCIP 0.2.1 ne produit pas de recommandation de commande pour le SKU-006 dans ce scénario (voir
 « Écarts constatés ») : aucune capture ne montre « Commander … chez le fournisseur C ». Le défaut est
-corrigé après la 0.2.1 ; les écrans correspondants sont dans `../v0.2.2/`.
+corrigé dans la 0.3.0 ; les écrans correspondants sont dans `../v0.3.0/`.
 
 ## Optimise, avec un résultat
 

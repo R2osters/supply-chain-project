@@ -1,8 +1,8 @@
-# Captures de SCIP après la 0.2.1 : la démo corrigée
+# Captures de SCIP 0.3.0 : la démo corrigée
 
 Prises le 2 octobre 2026 sur une installation de test de `SCIP-Setup-0.2.1.exe` dont l'API et le
-moteur IA ont été remplacés par ceux de cette branche. Elles montrent ce que la version suivante
-affichera ; les autres écrans sont inchangés et restent dans `../v0.2.1/`. Même format : 1440×900 à
+moteur IA ont été remplacés par ceux de la 0.3.0. Elles montrent ce que la 0.3.0
+affiche ; les autres écrans sont inchangés et restent dans `../v0.2.1/`. Même format : 1440×900 à
 l'échelle 2, jeu de démo, interface en français.
 
 | Fichier | Écran | Ce qu'on y voit |
