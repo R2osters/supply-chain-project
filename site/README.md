@@ -39,6 +39,21 @@ par adresse.
 
 À chaque nouvelle version, mettre quand même à jour les valeurs de repli et les captures.
 
+### macOS et Linux
+
+Les lignes macOS et Linux de la page Télécharger sont dans le HTML, masquées (`hidden`,
+`data-if="unix"`). `js/site.js` ne les affiche que si la dernière release contient les deux
+paquets (`SCIP-<version>-macos-arm64.dmg` et `SCIP-<version>-linux-amd64.deb`), contrôlés comme
+l'installeur : nom attendu, version de la release, lien de cette release. Dans ce cas seulement,
+les deux phrases « Il n'existe pas de version macOS ni Linux » (`data-unless="unix"`) laissent la
+place à leurs variantes. Sans script, ou si l'API ne répond pas, la page reste dans l'état écrit
+dans le HTML : le jour où une release publie ces paquets, inverser les attributs `hidden` des
+éléments `data-if` et `data-unless` pour que cet état de repli dise vrai.
+
+Chaque ligne porte ses limites, visibles sans clic : version préliminaire, non signée (avec la
+marche à suivre sur Mac), mise à jour manuelle, construite et testée automatiquement mais pas
+encore essayée par une personne. Windows reste le bouton principal.
+
 ## Publier
 
 GitHub Pages sert la branche `gh-pages`, qui ne contient que ce dossier. Depuis la racine du dépôt,

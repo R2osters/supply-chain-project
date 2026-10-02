@@ -69,9 +69,25 @@
 .versions b { font-family: var(--display); font-size: clamp(19px, 1.6vw, 25px); font-weight: 600; }
 .versions .mono { color: var(--muted); letter-spacing: .08em; }
 .versions .actions { display: inline-flex; gap: 8px; justify-self: end; }
+/* macOS et Linux : le nom porte son statut, et les limites s'écrivent sous le bouton, sans clic */
+.versions .name { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.versions .notes {
+  grid-column: 1 / -1; list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px clamp(18px, 2.4vw, 36px);
+  font-size: 14px; line-height: 1.55; color: var(--muted);
+}
+.versions .notes li { display: block; padding: 0; border: 0; }
+.versions .notes .long { grid-column: 2; grid-row: 1 / span 3; }   /* la marche à suivre, en regard des trois faits courts */
+.versions code {
+  font-family: var(--mono); font-size: 12.5px; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 6px;
+  overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
 @media (max-width: 760px) {
   .versions li { grid-template-columns: 1fr; gap: 10px; }
   .versions .actions { justify-self: start; }
+  .versions .notes { grid-template-columns: 1fr; }
+  .versions .notes .long { grid-column: auto; grid-row: auto; }
 }
 
 /* ---------- Les dix étapes ---------- */
