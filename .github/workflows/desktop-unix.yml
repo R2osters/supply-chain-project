@@ -135,10 +135,11 @@ jobs:
             deb=$(ls "$BUNDLE"/deb/*.deb)
             dpkg-deb --info "$deb"
             dpkg-deb --contents "$deb" > contents.txt
-            grep -q ' \./usr/bin/scip-desktop$' contents.txt
-            grep -q ' \./usr/lib/SCIP/resources/postgres/bin/postgres$' contents.txt
-            grep -q ' \./usr/lib/SCIP/resources/node/node$' contents.txt
-            grep -q ' \./usr/lib/SCIP/resources/ai/scip-ai$' contents.txt
+            # Listed with or without a leading "./", depending on who wrote the archive.
+            resources=usr/lib/SCIP/resources
+            for file in usr/bin/scip-desktop $resources/postgres/bin/postgres $resources/node/node $resources/ai/scip-ai; do
+              grep -Eq " (\./)?$file\$" contents.txt || { echo "missing from the package: $file" >&2; exit 1; }
+            done
             # Tauri drops linked folders and copies linked files: the staging must leave none.
             if grep ' -> ' contents.txt; then echo 'symbolic links in the package' >&2; exit 1; fi
           else
@@ -218,6 +219,31 @@ jobs:
           if-no-files-found: error
           compression-level: 0
 
+  # The .deb on systems that have nothing of the build: the dependencies it declares must be
+  # enough. Each image installs it with apt, as a user would, and runs the same end-to-end check
+  # with the Node.js runtime the package embeds (apps/desktop/scripts/e2e-linux-container.sh).
+  # The images are the distributions' own, taken by tag: they are test beds, nothing of them ships.
+  linux-distributions:
+    name: ${{ matrix.image }}
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ['ubuntu:22.04', 'ubuntu:24.04', 'debian:12', 'debian:13']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: scip-linux-amd64
+          path: dist
+      # --init: something must reap the processes SCIP stops, as init does on a real system.
+      - name: Install and run SCIP in a clean image
+        run: >-
+          docker run --rm --init --volume "$PWD:/repo:ro" "${{ matrix.image }}"
+          bash /repo/apps/desktop/scripts/e2e-linux-container.sh
+
   # The one job of this repository that may write, and only to add files to a release.
   #
   # On a version tag it attaches the two packages built above, from the commit of that tag, to
@@ -227,7 +253,7 @@ jobs:
   # by the Ed25519 signature of the Windows installer, hence the SHA256SUMS file next to them.
   release:
     name: attach to the release
-    needs: package
+    needs: [package, linux-distributions]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 90

@@ -102,15 +102,26 @@ export async function stagePostgresUnix() {
   // What the bundle is made of, version by version: read before conda's own records are pruned.
   const packages = execFileSync(micromamba, ['list', '--no-rc', '--prefix', prefix], { env, encoding: 'utf8' });
 
-  prune(prefix);
+  // Links first, while everything they point to is still there; then the pruning.
+  const installed = extensions(prefix);
   flattenLinks(prefix, { libraryAliases: true });
+  prune(prefix);
   writeFileSync(join(prefix, 'PACKAGES.txt'), packages);
   for (const tool of TOOLS) {
     if (!existsSync(join(prefix, 'bin', tool))) throw new Error(`${tool} is missing from the conda environment`);
   }
+  const kept = extensions(prefix);
+  const lost = installed.filter((control) => !kept.includes(control));
+  console.log(`  extensions: ${kept.length} control files, postgis in ${kept.filter((c) => /[\\/]postgis\.control$/.test(c)).join(', ') || 'none'}`);
+  if (lost.length > 0) throw new Error(`staging removed extension control files:\n${lost.join('\n')}`);
   signUnsignedBinaries(prefix);
   // While it still sits where it was created: what is checked here is what the package installs.
-  await selfTest(prefix);
+  try {
+    await selfTest(prefix);
+  } catch (error) {
+    describeEnvironment(prefix);
+    throw error;
+  }
 
   const target = join(RESOURCES_DIR, 'postgres');
   rmSync(target, { recursive: true, force: true });
@@ -140,6 +151,24 @@ function claim(prefix) {
         `owner (sudo mkdir -p "${dirname(prefix)}" && sudo chown "$USER" "${dirname(prefix)}"), or set ${PREFIX_ENV}.`,
     );
   }
+}
+
+/** Every `*.control` file of the environment, relative to it: what `CREATE EXTENSION` can find. */
+function extensions(prefix) {
+  return [...walk(prefix)]
+    .filter(({ path }) => path.endsWith('.control'))
+    .map(({ path }) => path.slice(prefix.length + 1))
+    .sort();
+}
+
+/** What a failed self-test needs to be understood from a build log, on a system nobody is at. */
+function describeEnvironment(prefix) {
+  const list = (dir) => (existsSync(join(prefix, dir)) ? readdirSync(join(prefix, dir)).join(' ') : '(missing)');
+  console.error(`  environment at ${prefix}`);
+  for (const dir of ['', 'share', 'share/extension', 'share/postgresql', 'lib/postgresql']) {
+    console.error(`    ${dir || '.'}: ${list(dir).slice(0, 1500)}`);
+  }
+  console.error(`    control files: ${extensions(prefix).join(' ') || 'none'}`);
 }
 
 function prune(prefix) {
@@ -194,7 +223,14 @@ async function selfTest(prefix) {
     { env },
   );
   try {
-    sql('CREATE EXTENSION postgis');
+    try {
+      sql('CREATE EXTENSION postgis');
+    } catch (error) {
+      // What the server itself sees, for a build log read on another system.
+      console.error(`  extension_control_path: ${sql('SHOW extension_control_path')}`);
+      console.error(`  available: ${sql("SELECT string_agg(name, ' ' ORDER BY name) FROM pg_available_extensions")}`);
+      throw error;
+    }
     console.log(`  ${sql('SELECT version()')}`);
     console.log(`  ${sql('SELECT postgis_full_version()')}`);
     const metres = Number(sql("SELECT ST_Distance('SRID=4326;POINT(-0.2 5.6)'::geography, 'SRID=4326;POINT(-1.6 6.7)'::geography)"));
