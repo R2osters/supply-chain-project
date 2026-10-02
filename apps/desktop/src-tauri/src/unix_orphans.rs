@@ -155,8 +155,11 @@ fn leftovers(processes: &[Process], root: &Path, own_pid: u32, scip: &Path) -> L
     found
 }
 
-/// macOS: one process per line of `ps -xo pid=,ppid=,comm=`, where `comm` is the full path of
-/// the executable (it may hold spaces, so it is everything after the two numbers).
+/// macOS: one process per line of `ps -xo pid=,ppid=,comm=`. `comm` is the command as it was
+/// launched, the full path for everything SCIP starts; it may hold spaces, so it is everything
+/// after the two numbers. A PostgreSQL backend rewrites it into its role
+/// ("postgres: checkpointer") and is not recognised as ours: it is stopped through its server,
+/// which does not exit before its backends have.
 #[cfg(any(target_os = "macos", test))]
 fn parse_ps(listing: &str) -> Vec<Process> {
     listing
@@ -178,6 +181,17 @@ fn parse_ps(listing: &str) -> Vec<Process> {
 #[cfg(any(target_os = "linux", test))]
 fn parent_from_stat(stat: &str) -> Option<u32> {
     stat.rsplit_once(')')?.1.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// Linux: `/proc/<pid>/exe` of a process whose executable was replaced or removed while it ran
+/// ends in " (deleted)". Installing a newer package does exactly that to a SCIP that is open:
+/// its services are still this installation's, and its PostgreSQL still a PostgreSQL.
+#[cfg(any(target_os = "linux", test))]
+fn without_deleted_mark(executable: std::path::PathBuf) -> std::path::PathBuf {
+    match executable.to_str().and_then(|path: &str| path.strip_suffix(" (deleted)")) {
+        Some(path) => std::path::PathBuf::from(path),
+        None => executable,
+    }
 }
 
 #[cfg(unix)]
@@ -204,8 +218,10 @@ mod imp {
                     return Err(std::io::Error::last_os_error());
                 }
                 // SCIP died between fork and prctl: the request came too late to be honoured.
+                // An error made from a number: one with a message would allocate, which is
+                // not allowed between fork and exec.
                 if libc::getppid() != parent {
-                    return Err(std::io::Error::other("SCIP exited while starting this process"));
+                    return Err(std::io::Error::from_raw_os_error(libc::ESRCH));
                 }
                 Ok(())
             });
@@ -228,7 +244,8 @@ mod imp {
                     return None;
                 }
                 // The link, not the 15-character name: it is the whole path, and the kernel's.
-                let executable: PathBuf = std::fs::read_link(entry.path().join("exe")).ok()?;
+                let executable: PathBuf =
+                    super::without_deleted_mark(std::fs::read_link(entry.path().join("exe")).ok()?);
                 let stat: String = std::fs::read_to_string(entry.path().join("stat")).ok()?;
                 Some(Process { pid, parent: super::parent_from_stat(&stat)?, executable })
             })
@@ -502,6 +519,21 @@ mod tests {
         assert_eq!(parent_from_stat("812 (node) S 1 812 812 0 -1 4194304"), Some(1));
         assert_eq!(parent_from_stat("44 (my (odd) name) R 7 44 44 0"), Some(7));
         assert_eq!(parent_from_stat("garbage"), None);
+    }
+
+    #[test]
+    fn a_replaced_executable_is_still_the_same_program() {
+        // What /proc says of a PostgreSQL that was running while the package was upgraded.
+        let server = "/usr/lib/SCIP/resources/postgres/bin/postgres";
+        let replaced: PathBuf = without_deleted_mark(PathBuf::from(format!("{server} (deleted)")));
+        assert_eq!(replaced, PathBuf::from(server));
+        assert_eq!(without_deleted_mark(PathBuf::from(server)), PathBuf::from(server));
+
+        let listed = [Process { pid: 10, parent: 1, executable: replaced }, process(11, 10, server)];
+        let found = sorted(&listed, "/usr/lib/SCIP/resources", 99);
+        assert_eq!(found.postmasters, vec![10], "a server to shut down, not a process to kill");
+        assert_eq!(found.postgres, vec![10, 11]);
+        assert!(found.others.is_empty());
     }
 
     #[test]

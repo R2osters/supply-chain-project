@@ -25,7 +25,26 @@ pub fn pick_free_port() -> io::Result<u16> {
 
 /// True when nothing listens on 127.0.0.1:`port` right now.
 pub fn is_port_free(port: u16) -> bool {
-    TcpListener::bind(SocketAddrV4::new(Ipv4Addr::LOCALHOST, port)).is_ok()
+    let local: SocketAddrV4 = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+    // Its own statement: the probe must be closed before the port is asked for an answer.
+    let bindable: bool = TcpListener::bind(local).is_ok();
+    bindable && !answers(local)
+}
+
+/// macOS lets the bind above succeed while another program listens on the same port on every
+/// interface: Rust asks for address reuse on Unix, which there allows a more specific address.
+/// That program would still take the port from an API open to the local network, so on macOS
+/// the port is also tried the way a client would.
+#[cfg(target_os = "macos")]
+fn answers(local: SocketAddrV4) -> bool {
+    use std::net::{SocketAddr, TcpStream};
+    use std::time::Duration;
+    TcpStream::connect_timeout(&SocketAddr::V4(local), Duration::from_millis(300)).is_ok()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn answers(_local: SocketAddrV4) -> bool {
+    false
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
@@ -88,6 +107,15 @@ mod tests {
     #[test]
     fn occupied_port_is_not_free() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port: u16 = listener.local_addr().unwrap().port();
+        assert!(!is_port_free(port));
+    }
+
+    /// A program listening on every interface holds the port on 127.0.0.1 too.
+    #[cfg(unix)]
+    #[test]
+    fn a_port_taken_on_every_interface_is_not_free() {
+        let listener = TcpListener::bind("0.0.0.0:0").unwrap();
         let port: u16 = listener.local_addr().unwrap().port();
         assert!(!is_port_free(port));
     }
