@@ -3,6 +3,10 @@
 Track cargo from a supplier's gate to a customer's dock, and decide what to order, from whom,
 when and by which route. One product, two bounded contexts, and a closed loop between them.
 
+**Website:** <https://r2osters.github.io/supply-chain-project/> ·
+**Download for Windows:** [latest release](https://github.com/R2osters/supply-chain-project/releases/latest)
+(the site's source is in [`site/`](site/README.md))
+
 ```
 TRACK observes      shipment SHP-… will miss its promise
       ↓ durable domain event

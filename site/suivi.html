@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Suivi · SCIP</title>
+  <meta name="description" content="Track : camions, navires, avions et dangers sur une carte. Position estimée quand le GPS se tait, retards détectés en direct, six cartes lisibles hors ligne. Chaque couche marche sans clé.">
+  <meta name="theme-color" content="#e3e4e6">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/base.css?v=20261002e">
+  <link rel="stylesheet" href="css/suivi.css?v=20261002e">
+</head>
+<body>
+
+  <nav class="nav" aria-label="Navigation principale">
+    <a class="brand" href="index.html"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+    <div class="segmented">
+      <a href="suivi.html" aria-current="page">Suivi</a>
+      <a href="optimisation.html">Optimisation</a>
+      <a href="reseau.html">Réseau</a>
+    </div>
+    <a class="btn btn-sm cta" href="telecharger.html">Télécharger</a>
+  </nav>
+
+  <!-- ============ HÉROS : titre, puis la vraie Carte live en grand ; mot géant TRACK derrière ============ -->
+  <header class="hero load-seq tilt-zone">
+    <div class="ghost lo" style="--lo: 1" aria-hidden="true">TRACK</div>
+    <div class="wrap">
+      <div class="hero-head">
+        <div>
+          <p class="eyebrow lo lo-copy" style="--lo: 2">Track</p>
+          <h1 class="t-hero lo lo-copy" style="--lo: 3">Camions, navires, avions&nbsp;: <span class="accent">une seule carte.</span></h1>
+        </div>
+        <p class="t-body lo lo-copy" style="--lo: 4">Track suit la marchandise du portail du fournisseur au quai du client, et signale chaque retard dès qu&rsquo;il se dessine.</p>
+      </div>
+      <figure class="shot hero-shot lo lo-figure" style="--lo: 4">
+        <div class="shot-win tilt" data-tilt="2" data-tilt-base="perspective(2000px) rotateX(4deg)">
+          <img src="assets/screens/carte-live.webp" width="1600" height="1000" fetchpriority="high" decoding="async" alt="Écran Carte live de SCIP : « 2 véhicule(s) en écart · 2 en retard », onze camions de démonstration sur le Ghana, filtres Tous, En mouvement, À risque, En retard, À l'arrêt, Démo, panneau Flotte et légende.">
+        </div>
+        <figcaption>Track · Carte live <span class="demo-tag">données démo</span> <span class="cap-note">onze camions simulés, marqués « Démo »</span></figcaption>
+      </figure>
+    </div>
+  </header>
+
+  <!-- ============ Trois sources pour la flotte ============ -->
+  <section class="section">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Balises · Drive</p>
+          <h2 class="t-section reveal">Balise, téléphone, <span class="accent">simulation.</span></h2>
+        </div>
+        <p class="t-body reveal">Quand une balise se tait, la carte affiche « Position estimée » avec son cercle d&rsquo;incertitude : « Estimée ±N&nbsp;km ».</p>
+      </div>
+      <div class="cols-3">
+        <article class="col reveal">
+          <span class="mono n">01</span>
+          <h3 class="t-card">Balise GT06</h3>
+          <p>Les traceurs GT06 et Concox parlent à SCIP en TCP, port 5023. À activer dans Réglages, Réseau local.</p>
+        </article>
+        <article class="col reveal">
+          <span class="mono n">02</span>
+          <h3 class="t-card">Téléphone du chauffeur</h3>
+          <p>La page /drive enregistre livraisons, signatures et photos hors connexion, puis synchronise. L&rsquo;envoi de la position attend le HTTPS local, pas encore livré, et s&rsquo;arrête dès que l&rsquo;écran du téléphone s&rsquo;éteint.</p>
+        </article>
+        <article class="col reveal">
+          <span class="mono n">03</span>
+          <h3 class="t-card">Simulation</h3>
+          <p>Les camions du jeu de démo sont simulés et marqués. Le trafic autour l&rsquo;est aussi, sur les vraies routes.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Sources de données + Situation et Navires réels ============ -->
+  <section class="section layers-section">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Carte live · Navires · Situation</p>
+          <h2 class="t-section reveal">Mer, air, route, <span class="accent">dangers.</span></h2>
+        </div>
+        <p class="t-body reveal">Chaque couche marche sans clé. Une clé gratuite, saisie dans Réglages, Sources de données, élargit la couverture.</p>
+      </div>
+      <div class="layers-grid">
+        <ul class="layers">
+          <li class="reveal">
+            <b>Navires</b>
+            <span class="src"><span class="chip free">sans clé</span> mer Baltique (Digitraffic)</span>
+            <span class="src"><span class="chip">avec clé</span> monde (AISStream)</span>
+          </li>
+          <li class="reveal">
+            <b>Avions</b>
+            <span class="src"><span class="chip free">sans clé</span> monde (OpenSky, puis adsb.lol)</span>
+            <span class="src"><span class="chip">avec clé</span> quota ×10 (identifiants OpenSky)</span>
+          </li>
+          <li class="reveal">
+            <b>Trafic routier</b>
+            <span class="src"><span class="chip free">sans clé</span> simulé ; mesuré à Rennes et Grenoble</span>
+            <span class="src"><span class="chip">avec clé</span> monde (TomTom)</span>
+          </li>
+          <li class="reveal">
+            <b>Dangers</b>
+            <span class="src"><span class="chip free">sans clé</span> USGS, NOAA, GDACS, NASA EONET, toutes les 5&nbsp;min</span>
+            <span class="src"><span class="chip">avec clé</span> feux au jour près (NASA FIRMS)</span>
+          </li>
+        </ul>
+        <div class="stack">
+          <figure class="shot stack-a reveal">
+            <div class="shot-win" data-float="16">
+              <img src="assets/screens/situation.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Situation de SCIP : « 9 sites exposés à des dangers actifs », carte des dangers, signaux classés (inondations relevées par GDACS) et panneau Exposition.">
+            </div>
+            <figcaption>Track · Situation <span class="demo-tag">données démo</span> <span class="cap-note">les dangers sont réels, relevés le jour de la capture</span></figcaption>
+          </figure>
+          <figure class="shot stack-b reveal">
+            <div class="shot-win" data-float="-10">
+              <img src="assets/screens/navires.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Écran Navires de SCIP : « Les 8 navires sont dans les temps », les huit navires du jeu de démonstration.">
+            </div>
+            <figcaption>Track · Navires <span class="demo-tag">données démo</span> <span class="cap-note">les huit navires de démo sont simulés ; les navires réels de la Baltique s&rsquo;affichent dans la couche « Navires AIS » de la Carte live</span></figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Hors ligne ============ -->
+  <section class="section offline-section" id="horsligne">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Hors ligne</p>
+          <h2 class="t-section reveal">Internet coupé, <span class="accent">cartes lisibles.</span></h2>
+        </div>
+        <p class="t-body reveal">Un fond de carte mondial de 4&nbsp;Mo vit dans le logiciel : côtes, frontières, fleuves, lacs, villes. Sans réseau, les six cartes restent lisibles, sans le détail rue par rue.</p>
+      </div>
+      <ul class="tabs offline-tabs reveal" aria-label="Les six cartes du logiciel">
+        <li>Control</li><li>Carte live</li><li>Navires</li><li>Situation</li><li>Fiche d&rsquo;expédition</li><li>Tournées</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ Retards et preuves : la fiche d'expédition réelle ============ -->
+  <section class="section delay-section">
+    <div class="wrap">
+      <div class="head">
+        <div>
+          <p class="eyebrow reveal">Expéditions · Livraisons · Incidents</p>
+          <h2 class="t-section reveal">Retard détecté, <span class="accent">livraison prouvée.</span></h2>
+        </div>
+        <p class="t-body reveal">L&rsquo;ETA est recalculée toutes les 30 secondes, avec sa fenêtre d&rsquo;arrivée et sa confiance.</p>
+      </div>
+      <div class="delay-grid">
+        <figure class="shot reveal">
+          <div class="shot-win" data-float="14">
+            <img src="assets/screens/expedition-shp-demo-0054.webp" width="1600" height="1000" loading="lazy" decoding="async" alt="Fiche de l'expédition SHP-DEMO-0054, Accra vers Kumasi, en retard : départ, promis, arrivée estimée, trajet prévu et réel, moteur d'ETA avec fenêtre d'arrivée à 80 % et « Retard certain de 66 min ».">
+          </div>
+          <figcaption>Track · Fiche d&rsquo;expédition <span class="demo-tag">données démo</span></figcaption>
+        </figure>
+        <div class="proofs">
+          <div class="proof panel reveal">
+            <span class="pill-tag">Expéditions</span>
+            <b class="t-card">Un retard déclenche le recalcul</b>
+            <p>L&rsquo;expédition passe « en retard », une alerte part, Optimise recalcule.</p>
+          </div>
+          <div class="proof panel reveal">
+            <span class="pill-tag">Livraisons</span>
+            <b class="t-card">Signature et photos</b>
+            <p>Enregistrées sur le téléphone du chauffeur, même sans réseau, puis jointes à la livraison.</p>
+          </div>
+          <div class="proof panel reveal">
+            <span class="pill-tag">Incidents</span>
+            <b class="t-card">Déclarés à la main</b>
+            <p>Un incident se crée depuis un signal de Situation. Un retard seul n&rsquo;en crée pas.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section cta-section">
+    <div class="wrap">
+      <h2 class="t-hero reveal">Suivez votre flotte <span class="accent">depuis votre PC.</span></h2>
+      <div class="hero-actions reveal">
+        <a class="btn" href="telecharger.html">Télécharger SCIP <span data-rel="n">0.2.1</span> <span class="circle" aria-hidden="true">↗</span></a>
+        <a class="btn outline" href="optimisation.html">Voir Optimise</a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="cols">
+      <div>
+        <a class="brand-foot" href="index.html"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5Zm8 4.2L5.6 8.9v5.4l6.4 3.6 6.4-3.6V8.9Z M9.6 10.2a2.4 2.4 0 1 0 4.8 0a2.4 2.4 0 1 0 -4.8 0Z" fill="currentColor" fill-rule="evenodd"/><path d="M10.9 10.2a1.1 1.1 0 1 0 2.2 0a1.1 1.1 0 1 0 -2.2 0Z" fill="currentColor"/></svg><span>SCIP</span></a>
+        <p class="meta">Supply Chain Intelligence Platform. Suivre la marchandise du portail du fournisseur au quai du client, et décider quoi commander, chez qui, quand et par quel itinéraire.</p>
+      </div>
+      <div>
+        <h4>Pages</h4>
+        <a href="suivi.html">Suivi</a>
+        <a href="optimisation.html">Optimisation</a>
+        <a href="reseau.html">Réseau</a>
+        <a href="telecharger.html">Télécharger</a>
+      </div>
+      <div>
+        <h4>Projet</h4>
+        <a href="https://github.com/R2osters/supply-chain-project">Code source</a>
+        <a href="https://github.com/R2osters/supply-chain-project/releases/latest">Version <span data-rel="n">0.2.1</span></a>
+        <a href="reseau.html#securite">Sécurité</a>
+      </div>
+      <div>
+        <h4>Le film</h4>
+        <a href="index.html#film">Le Signal · 2 min 50</a>
+      </div>
+    </div>
+    <p class="legal"><span>SCIP <span data-rel="n">0.2.1</span></span><span>Logiciel Windows</span><span>Projet d&rsquo;école, non commercial</span></p>
+  </footer>
+
+  <script src="js/site.js?v=20261002e" defer></script>
+</body>
+</html>

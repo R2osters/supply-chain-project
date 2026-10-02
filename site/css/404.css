@@ -1,0 +1,19 @@
+/* ============================================================
+   SCIP — page 404. Mot géant « 404 » gris sur gris, copie à
+   gauche, deux actions : retour à l'accueil, téléchargement.
+   ============================================================ */
+
+.lost {
+  position: relative; min-height: 100svh; overflow: hidden;
+  display: flex; align-items: center;
+  padding: clamp(110px, 16vh, 180px) var(--gutter) clamp(60px, 8vh, 110px);
+}
+.lost .ghost { right: -0.04em; bottom: -0.08em; font-size: 46vw; }
+.lost-copy { position: relative; z-index: 2; max-width: 1480px; margin: 0 auto; width: 100%; }
+.lost-copy .t-hero { max-width: 16ch; }
+.lost-copy .t-body { margin-top: 22px; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 32px; }
+@media (max-width: 700px) {
+  .lost { padding-top: 160px; }
+  .hero-actions .btn { width: 100%; }
+}

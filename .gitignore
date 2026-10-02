@@ -42,3 +42,8 @@ apps/web/public/basemap/
 
 # Signing keys (the update key lives in %USERPROFILE%\.scip, never here)
 *.pem
+
+# Public site (site/): the original film is 194 MB, above GitHub's 100 MB file limit; the site
+# serves the lighter assets/video/scip-le-signal-web.mp4. wdf-work/ holds local review captures.
+site/assets/video/scip-le-signal.mp4
+wdf-work/
