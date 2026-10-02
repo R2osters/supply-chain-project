@@ -1,6 +1,6 @@
 [package]
 name = "scip-installer"
-version = "0.2.1"
+version = "0.3.0"
 description = "SCIP Setup: custom installer and uninstaller for the SCIP desktop app"
 authors = ["SCIP"]
 edition = "2021"
