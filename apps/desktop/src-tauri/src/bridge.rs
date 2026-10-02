@@ -131,7 +131,7 @@ async fn create_backup(state: tauri::State<'_, Arc<AppState>>) -> Result<BackupI
 fn open_backups_folder(app: AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     let dir = backups_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    crate::backup::ensure_backups_dir(&dir).map_err(|e| e.to_string())?;
     app.opener().open_path(dir.display().to_string(), None::<&str>).map_err(|e| e.to_string())
 }
 
@@ -240,7 +240,12 @@ fn start_updater(app: &AppHandle, state: &AppState, ctx: &RuntimeContext) {
     *slot = Some(Arc::clone(&updater));
     drop(slot);
     if !updater.enabled() {
-        log::info!("updates disabled: no publisher key in this build");
+        if cfg!(windows) {
+            log::info!("updates disabled: no publisher key in this build");
+        } else {
+            updater.manual();
+            log::info!("updates are manual on this system: new versions come from the site");
+        }
         return;
     }
     let spawned = std::thread::Builder::new().name("updater".into()).spawn(move || {
@@ -357,6 +362,12 @@ fn prepare(app: &AppHandle, state: &AppState) -> Result<RuntimeContext, ErrorEve
     *state.data_dir.lock().unwrap() = Some(dirs.root.clone());
     let bundled: Option<PathBuf> = app.path().resource_dir().ok();
     let resources = resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), bundled.as_deref());
+    // macOS and Linux, where nothing ties the sidecars to this process: what a killed SCIP left
+    // running is stopped here, before `prepare` picks the ports. This is the window's boot, so
+    // the single-instance lock is held: a second launch never gets this far.
+    if let Some(root) = &resources {
+        crate::unix_orphans::stop_leftovers(root);
+    }
     startup::prepare(dirs, resources)
 }
 

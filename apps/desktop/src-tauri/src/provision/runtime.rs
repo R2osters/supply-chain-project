@@ -13,7 +13,9 @@ use super::{ConfigUpdate, Runtime};
 use crate::events::{ErrorCode, ErrorEvent, EventSink, StepStatus, SupervisorEvent};
 use crate::paths::DataDirs;
 use crate::secrets::{self, DatabaseConfig, LocalConfig};
-use crate::services::{resolve_resources_root, RuntimeContext, StartupStep, RESOURCES_DIR_ENV};
+use crate::services::{
+    bundled_resource_dir, resolve_resources_root, RuntimeContext, StartupStep, RESOURCES_DIR_ENV,
+};
 use crate::startup;
 use crate::supervisor::clock::SystemClock;
 use crate::supervisor::health::NetProber;
@@ -38,14 +40,15 @@ pub struct SupervisorRuntime {
 
 impl SupervisorRuntime {
     /// Same lookups as the app: `SCIP_DATA_DIR`/`LOCALAPPDATA`, then `SCIP_RESOURCES_DIR` or
-    /// `resources/` next to the executable (Tauri's resource folder on Windows).
+    /// `resources/` next to the executable (Tauri's resource folder on Windows; elsewhere,
+    /// `bundled_resource_dir` says where).
     pub fn from_process_env(out: Arc<Emitter>, external: Option<ExternalDatabase>) -> Self {
-        let exe_dir: Option<PathBuf> =
-            std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf));
+        let bundled: Option<PathBuf> =
+            std::env::current_exe().ok().and_then(|exe| exe.parent().map(bundled_resource_dir));
         Self {
             out,
             dirs: DataDirs::from_process_env().map_err(|e| e.to_string()),
-            resources_root: resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), exe_dir.as_deref()),
+            resources_root: resolve_resources_root(std::env::var(RESOURCES_DIR_ENV).ok(), bundled.as_deref()),
             external,
             ctx: None,
             supervisor: None,

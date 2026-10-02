@@ -100,6 +100,7 @@ pub(crate) fn build_command(command: &ProcessCommand) -> Command {
         cmd.current_dir(dir);
     }
     hide_console_window(&mut cmd);
+    crate::unix_orphans::die_with_parent(&mut cmd);
     cmd
 }
 

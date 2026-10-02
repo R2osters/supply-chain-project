@@ -54,7 +54,12 @@ pub struct UpdateConfig {
 
 impl UpdateConfig {
     /// `None` when no public key is compiled in nor given: a development build never updates.
+    /// `None` too on macOS and Linux: the feed describes the Windows installer, there is nothing
+    /// to download and run there, and a new version is fetched from the site (`Updater::manual`).
     pub fn from_env() -> Option<Self> {
+        if !cfg!(windows) {
+            return None;
+        }
         let key_override: Option<String> =
             if KEY_OVERRIDE_ALLOWED { std::env::var(PUBLIC_KEY_ENV).ok() } else { None };
         Self::resolve(std::env::var(FEED_ENV).ok(), key_override, EMBEDDED_PUBLIC_KEY)

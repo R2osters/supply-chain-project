@@ -1,6 +1,8 @@
 /** What the desktop shell reports about updates (apps/desktop/src-tauri/src/update/updater.rs). */
 export type UpdateState =
   | { state: 'disabled' }
+  /** macOS and Linux: no automatic update, a new version is downloaded from the site. */
+  | { state: 'manual' }
   | { state: 'idle' }
   | { state: 'checking' }
   | { state: 'upToDate' }
@@ -22,6 +24,7 @@ export interface UpdateView {
   /** i18n key of the one-line summary. */
   key:
     | 'settings.update.disabled'
+    | 'settings.update.manual'
     | 'settings.update.idle'
     | 'settings.update.offline'
     | 'settings.update.checking'
@@ -42,6 +45,8 @@ export function updateView(status: UpdateStatus): UpdateView {
   switch (status.state) {
     case 'disabled':
       return { ...base, tone: 'info', key: 'settings.update.disabled', canCheck: false };
+    case 'manual':
+      return { ...base, tone: 'info', key: 'settings.update.manual', canCheck: false };
     case 'idle':
       return status.offline
         ? { ...base, tone: 'info', key: 'settings.update.offline' }

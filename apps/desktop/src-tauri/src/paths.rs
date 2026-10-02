@@ -2,6 +2,9 @@
 //!
 //! Everything lives under one per-user root (`%LOCALAPPDATA%\com.scip.desktop` by default) so a
 //! backup, an uninstall or a support request only ever has to point at a single folder.
+//!
+//! macOS and Linux have no `%LOCALAPPDATA%`: the root is under `~/Library/Application Support`
+//! on macOS and under `$XDG_DATA_HOME` (`~/.local/share`) on Linux, closed to other accounts.
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -32,7 +35,9 @@ pub struct DataDirs {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PathsError {
-    #[error("cannot locate the data folder: set {DATA_DIR_ENV} or LOCALAPPDATA")]
+    #[error(
+        "cannot locate the data folder: set {DATA_DIR_ENV} (or LOCALAPPDATA on Windows, HOME elsewhere)"
+    )]
     NoDataRoot,
     #[error("cannot create {path}: {source}")]
     Create { path: PathBuf, source: io::Error },
@@ -55,10 +60,7 @@ impl DataDirs {
     pub fn resolve(lookup: impl Fn(&str) -> Option<String>) -> Result<Self, PathsError> {
         let root: PathBuf = match non_empty(lookup(DATA_DIR_ENV)) {
             Some(explicit) => PathBuf::from(explicit),
-            None => {
-                let local: String = non_empty(lookup("LOCALAPPDATA")).ok_or(PathsError::NoDataRoot)?;
-                Path::new(&local).join(APP_FOLDER)
-            }
+            None => per_user_folder(&lookup).ok_or(PathsError::NoDataRoot)?.join(APP_FOLDER),
         };
         Ok(Self::from_root(root))
     }
@@ -74,7 +76,8 @@ impl DataDirs {
             std::fs::create_dir_all(dir)
                 .map_err(|source: io::Error| PathsError::Create { path: dir.clone(), source })?;
         }
-        Ok(())
+        restrict_to_owner(&self.root)
+            .map_err(|source: io::Error| PathsError::Create { path: self.root.clone(), source })
     }
 
     pub fn log_file(&self, name: &str) -> PathBuf {
@@ -84,6 +87,38 @@ impl DataDirs {
 
 fn non_empty(value: Option<String>) -> Option<String> {
     value.filter(|v: &String| !v.trim().is_empty())
+}
+
+/// The per-user folder applications keep their data in. `LOCALAPPDATA` is Windows'; macOS and
+/// Linux, which never set it, derive theirs from the home folder.
+fn per_user_folder(lookup: &impl Fn(&str) -> Option<String>) -> Option<PathBuf> {
+    if let Some(local) = non_empty(lookup("LOCALAPPDATA")) {
+        return Some(PathBuf::from(local));
+    }
+    if !cfg!(unix) {
+        return None;
+    }
+    let home = || non_empty(lookup("HOME")).map(PathBuf::from);
+    if cfg!(target_os = "macos") {
+        return home().map(|home: PathBuf| home.join("Library").join("Application Support"));
+    }
+    non_empty(lookup("XDG_DATA_HOME"))
+        .map(PathBuf::from)
+        .or_else(|| home().map(|home: PathBuf| home.join(".local").join("share")))
+}
+
+/// Windows keeps `%LOCALAPPDATA%` to its user through the profile's ACL. macOS and Linux give no
+/// such guarantee (`~/.local/share` can be readable by every account), and this folder holds the
+/// database, its password and the signing secrets: only its owner may enter it.
+#[cfg(unix)]
+pub(crate) fn restrict_to_owner(dir: &Path) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+pub(crate) fn restrict_to_owner(_dir: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 #[cfg(test)]
@@ -130,5 +165,42 @@ mod tests {
         assert!(dirs.logs.is_dir() && dirs.files.is_dir() && dirs.models.is_dir());
         assert!(!dirs.pgdata.exists());
         assert_eq!(dirs.log_file("api"), dirs.logs.join("api.log"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_defaults_to_application_support() {
+        let dirs = DataDirs::resolve(env(&[("HOME", "/Users/a"), ("XDG_DATA_HOME", "/x")])).unwrap();
+        assert_eq!(dirs.root, Path::new("/Users/a/Library/Application Support").join("com.scip.desktop"));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn linux_follows_xdg_then_the_home_folder() {
+        let dirs = DataDirs::resolve(env(&[("HOME", "/home/a")])).unwrap();
+        assert_eq!(dirs.root, Path::new("/home/a/.local/share").join("com.scip.desktop"));
+        let dirs = DataDirs::resolve(env(&[("HOME", "/home/a"), ("XDG_DATA_HOME", "/data")])).unwrap();
+        assert_eq!(dirs.root, Path::new("/data").join("com.scip.desktop"));
+        let dirs = DataDirs::resolve(env(&[("HOME", "/home/a"), ("XDG_DATA_HOME", " ")])).unwrap();
+        assert_eq!(dirs.root, Path::new("/home/a/.local/share").join("com.scip.desktop"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_does_not_fall_back_on_the_home_folder() {
+        let unix_only = env(&[("HOME", "C:/Users/a"), ("XDG_DATA_HOME", "C:/x")]);
+        assert!(matches!(DataDirs::resolve(unix_only), Err(PathsError::NoDataRoot)));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_data_folder_is_closed_to_other_accounts() {
+        use std::os::unix::fs::PermissionsExt;
+        let tmp = tempfile::tempdir().unwrap();
+        let dirs = DataDirs::from_root(tmp.path().join("SCIP"));
+        std::fs::create_dir_all(&dirs.root).unwrap();
+        std::fs::set_permissions(&dirs.root, std::fs::Permissions::from_mode(0o755)).unwrap();
+        dirs.ensure_created().unwrap();
+        assert_eq!(std::fs::metadata(&dirs.root).unwrap().permissions().mode() & 0o777, 0o700);
     }
 }

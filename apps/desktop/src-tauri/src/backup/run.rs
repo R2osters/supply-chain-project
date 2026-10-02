@@ -97,7 +97,8 @@ pub fn create_backup(ctx: &RuntimeContext, dir: &Path, kind: BackupKind) -> Resu
             "SCIP utilise une base PostgreSQL externe : sauvegardez-la avec les outils de ce serveur.".into(),
         ));
     }
-    std::fs::create_dir_all(dir).map_err(|e| BackupError::io(format!("création de {}", dir.display()), e))?;
+    super::ensure_backups_dir(dir)
+        .map_err(|e| BackupError::io(format!("création de {}", dir.display()), e))?;
 
     let mut name: String = file_name(&stamp(), kind);
     let mut n = 2;

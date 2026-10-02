@@ -3,6 +3,8 @@
 //! There is no server to issue them and no operator to type them, so the app mints its own.
 //! They never leave the machine: the sidecars receive them through environment variables.
 //! The file sits in the user's `%LOCALAPPDATA%`, whose ACL already restricts it to that user.
+//! macOS and Linux have no such ACL: there the file is created readable by its owner only, in a
+//! data folder closed to other accounts (`paths.rs`).
 
 use std::io;
 use std::path::{Path, PathBuf};
@@ -138,8 +140,28 @@ fn write_config(path: &Path, config: &LocalConfig) -> Result<(), SecretsError> {
     }
     let json: String = serde_json::to_string_pretty(config).expect("config is always serialisable");
     let tmp: PathBuf = path.with_extension("json.tmp");
-    std::fs::write(&tmp, json).map_err(to_err)?;
+    write_private(&tmp, json.as_bytes()).map_err(to_err)?;
     std::fs::rename(&tmp, path).map_err(to_err)
+}
+
+/// macOS and Linux: a file only its owner can read. The mode is given when the file is created,
+/// so the secrets are never on disk under a wider one; the leftover of an interrupted write is
+/// removed first, because an existing file would keep the mode it has.
+#[cfg(unix)]
+fn write_private(path: &Path, contents: &[u8]) -> io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => return Err(e),
+        _ => {}
+    }
+    std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(path)?.write_all(contents)
+}
+
+/// Windows: the profile's ACL already keeps the folder to its user.
+#[cfg(not(unix))]
+fn write_private(path: &Path, contents: &[u8]) -> io::Result<()> {
+    std::fs::write(path, contents)
 }
 
 #[cfg(test)]
@@ -233,6 +255,26 @@ mod tests {
         let config: LocalConfig = serde_json::from_str(r#"{"database":{"mode":"embedded"}}"#).unwrap();
         assert_eq!(config.database, Some(DatabaseConfig::Embedded));
         assert!(config.extra.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_file_is_readable_by_its_owner_only_from_creation_and_after_a_rewrite() {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = |path: &Path| std::fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        let tmp = tempfile::tempdir().unwrap();
+        let path: PathBuf = tmp.path().join("config.json");
+        let mut config: LocalConfig = load_or_create(&path).unwrap();
+        assert_eq!(mode(&path), 0o600);
+
+        // An interrupted write left a world-readable temp file behind: it must not set the mode.
+        let leftover: PathBuf = path.with_extension("json.tmp");
+        std::fs::write(&leftover, "{}").unwrap();
+        std::fs::set_permissions(&leftover, std::fs::Permissions::from_mode(0o644)).unwrap();
+        config.simulator = Some(false);
+        save(&path, &config).unwrap();
+        assert_eq!(mode(&path), 0o600);
+        assert!(!leftover.exists());
     }
 
     #[test]

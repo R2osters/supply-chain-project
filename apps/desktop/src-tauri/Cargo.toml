@@ -48,6 +48,10 @@ windows-sys = { version = "0.61", features = [
   "Win32_System_Threading",
 ] }
 
+[target.'cfg(unix)'.dependencies]
+# macOS and Linux have no job object: signals and PR_SET_PDEATHSIG do its work (unix_orphans.rs).
+libc = "0.2"
+
 [dev-dependencies]
 tempfile = "3"
 

@@ -32,6 +32,9 @@ pub trait Fetcher: Send + Sync {
 pub enum UpdateState {
     /// A build without the publisher's public key never updates.
     Disabled,
+    /// macOS and Linux: the feed carries the Windows installer only, so a new version is
+    /// downloaded from the site by hand.
+    Manual,
     Idle,
     Checking,
     UpToDate,
@@ -115,6 +118,14 @@ impl Updater {
 
     pub fn enabled(&self) -> bool {
         self.config.is_some()
+    }
+
+    /// macOS and Linux: says "manual" where an updater without a feed would say "disabled",
+    /// which reads as a build made without the publisher's key. No effect when there is a feed.
+    pub fn manual(&self) {
+        if self.config.is_none() {
+            self.set(UpdateState::Manual);
+        }
     }
 
     pub fn status(&self) -> UpdateStatus {
@@ -655,6 +666,31 @@ mod tests {
         );
         assert_eq!(u.check_now().state, UpdateState::Disabled);
         assert!(!u.enabled());
+    }
+
+    #[test]
+    fn a_system_without_installer_says_manual_and_never_checks() {
+        let dir = tempfile::tempdir().unwrap();
+        let fetcher = Arc::new(FakeFetcher {
+            feed: Mutex::new(Err(UpdateError::Network("x".into()))),
+            body: vec![],
+            downloads: AtomicUsize::new(0),
+        });
+        let u = Updater::new(
+            None,
+            Version::parse("0.2.0").unwrap(),
+            dir.path().to_path_buf(),
+            fetcher,
+            Box::new(|_| {}),
+        );
+        u.manual();
+        assert_eq!(u.check_now().state, UpdateState::Manual);
+        assert_eq!(serde_json::to_value(u.status()).unwrap()["state"], "manual");
+
+        // An updater that has a feed keeps its own states.
+        let (with_feed, _) = updater(dir.path(), Err(UpdateError::Network("offline".into())), b"");
+        with_feed.manual();
+        assert_eq!(with_feed.status().state, UpdateState::Idle);
     }
 
     /// Needs the internet: `cargo test -- --ignored the_real_feed`. Proves the HTTPS stack
