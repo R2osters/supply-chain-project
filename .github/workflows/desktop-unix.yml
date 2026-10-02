@@ -60,6 +60,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/desktop/src-tauri
+          # A failed check must not cost the next run ten minutes of compilation.
+          cache-on-failure: true
       - name: Linux libraries and disk space
         if: runner.os == 'Linux'
         run: |
@@ -81,18 +83,26 @@ jobs:
           key: basemap-sources-${{ runner.os }}-${{ hashFiles('apps/web/scripts/fetch-basemap.mjs') }}
       - run: npm ci
 
-      - name: Desktop shell tests and lint
+      # Lint, tests and packaging each report on their own: one run then says everything that is
+      # wrong on a system, instead of stopping at the first step. Any failure still fails the job.
+      - name: Desktop shell lint
         working-directory: apps/desktop/src-tauri
         run: |
           # Tauri's build script embeds the frontend folder, which must exist even for tests.
           mkdir -p ../web-dist
           cargo fmt --check
           cargo clippy --all-targets -- -D warnings
+      - name: Desktop shell tests
+        if: ${{ !cancelled() }}
+        working-directory: apps/desktop/src-tauri
+        run: |
+          mkdir -p ../web-dist
           cargo test
 
       # A conda environment is tied to the folder it is created in, so the embedded PostgreSQL
       # is created where the package will install it (scripts/stage-postgres-unix.mjs).
       - name: Folder the embedded PostgreSQL is built for
+        if: ${{ !cancelled() }}
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
             sudo mkdir -p /usr/lib/SCIP/resources
@@ -102,8 +112,11 @@ jobs:
           fi
       # The web export is staged by the build itself (beforeBuildCommand).
       - name: Stage runtimes, API and AI
+        id: stage
+        if: ${{ !cancelled() }}
         run: node apps/desktop/scripts/stage-all.mjs node postgres api ai defaults
       - name: Drop what staging no longer needs
+        if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
         run: |
           rm -rf services/ai/.venv-build services/ai/build services/ai/dist apps/desktop/.cache/mamba
           if [ "$RUNNER_OS" = Linux ]; then sudo rm -rf /usr/lib/SCIP; else rm -rf /Applications/SCIP.app; fi
@@ -111,9 +124,12 @@ jobs:
       # No Apple Developer ID and no notarisation: the application gets an ad-hoc signature
       # (tauri.macos.conf.json), which macOS requires to run anything on Apple Silicon.
       - name: Build SCIP and its package
+        id: build
+        if: ${{ !cancelled() && steps.stage.outcome == 'success' }}
         run: npm run build --workspace @scip/desktop
 
       - name: Package layout
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
             deb=$(ls "$BUNDLE"/deb/*.deb)
@@ -137,6 +153,8 @@ jobs:
             ls -la "$BUNDLE"/dmg
           fi
       - name: Install the package
+        id: install
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
             sudo apt-get install -y "./$(ls "$BUNDLE"/deb/*.deb)"
@@ -151,6 +169,7 @@ jobs:
             apps/desktop/src-tauri/resources/api apps/desktop/src-tauri/resources/ai \
             apps/desktop/src-tauri/resources/web "$BUNDLE"/macos "$BUNDLE"/deb/*/
       - name: End-to-end check of the installed package
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           # No GPU on the runner: WebKitGTK must not try its accelerated paths.
           WEBKIT_DISABLE_DMABUF_RENDERER: '1'
@@ -168,7 +187,7 @@ jobs:
       # "Open Anyway" here, so this only tells whether the embedded programs still run under
       # the mark, which decides the install instructions (DEPLOYMENT.md, "Install on a Mac").
       - name: Gatekeeper, as a downloaded copy would meet it
-        if: runner.os == 'macOS'
+        if: ${{ !cancelled() && runner.os == 'macOS' && steps.install.outcome == 'success' }}
         continue-on-error: true
         run: |
           app=/Applications/SCIP.app

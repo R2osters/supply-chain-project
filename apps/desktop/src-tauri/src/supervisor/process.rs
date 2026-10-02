@@ -216,4 +216,35 @@ mod tests {
         assert!(content.contains("hello"), "log was: {content}");
         assert!(content.contains("[stderr] oops"), "log was: {content}");
     }
+
+    /// The same check on macOS and Linux, where the shell is `sh`. On Linux it also proves a
+    /// child still starts with the request to die with its parent (`unix_orphans`).
+    #[cfg(unix)]
+    #[test]
+    fn real_process_output_lands_in_the_log_on_unix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let log: PathBuf = tmp.path().join("logs").join("echo.log");
+        let cmd = ProcessCommand::new("sh").args(["-c", "echo hello; echo oops 1>&2"]);
+        let mut child = StdSpawner.spawn(&cmd, &log).unwrap();
+        let deadline: Instant = Instant::now() + Duration::from_secs(10);
+        let exit: ExitInfo = loop {
+            if let Some(exit) = child.try_wait().unwrap() {
+                break exit;
+            }
+            assert!(Instant::now() < deadline, "sh did not exit");
+            std::thread::sleep(Duration::from_millis(20));
+        };
+        assert!(exit.success());
+        // Pump threads may still be flushing right after exit.
+        let mut content: String = String::new();
+        for _ in 0..50 {
+            content = std::fs::read_to_string(&log).unwrap_or_default();
+            if content.contains("hello") && content.contains("[stderr] oops") {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(content.contains("hello"), "log was: {content}");
+        assert!(content.contains("[stderr] oops"), "log was: {content}");
+    }
 }
