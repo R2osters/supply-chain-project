@@ -167,9 +167,15 @@ function headless(args, { stdin, timeoutMs }) {
 
 const apiIsUp = async () => (await http('/health')).status === 200;
 
-async function openApplication() {
+/**
+ * Opens the application and waits for its API. `replacing` holds the services of a run that
+ * was killed: one of them may still answer on the port, and stopping them is this launch's
+ * first job, so the API is only asked once they are gone.
+ */
+async function openApplication({ replacing = [] } = {}) {
   const child = spawn(INSTALL.exe, [], { env, stdio: 'ignore', detached: true });
   child.unref();
+  await waitFor('the services of the killed run to be stopped', 2 * 60_000, () => replacing.every((p) => !alive(p.pid)));
   await waitFor('the API on port 3001', 6 * 60_000, apiIsUp);
   return child;
 }
@@ -290,9 +296,12 @@ try {
   await step('terminated: its services stop with it', async () => {
     // Linux: each service asked the kernel for a signal at its parent's death. macOS: the
     // watcher the application started notices and stops them.
+    const watching = watchers(shell.pid);
+    check(watching.length === (MACOS ? 1 : 0), `expected ${MACOS ? 'one watcher' : 'no watcher'}, found ${watching.length}`);
     process.kill(shell.pid, 'SIGTERM');
     await waitFor('the services to stop on their own', 90_000, () => !alive(shell.pid) && sidecars().length === 0);
-    await waitFor('the watcher to finish', 30_000, () => watchers(shell.pid).length === 0);
+    // By pid: once the application is dead its watcher is nobody's child any more.
+    await waitFor('the watcher to finish', 30_000, () => watching.every((p) => !alive(p.pid)));
   });
 
   await step('kill -9, then a new launch: nothing survives, port 3001 is taken back', async () => {
@@ -303,8 +312,9 @@ try {
     watchers(shell.pid).forEach((p) => signal(p.pid, 'SIGKILL'));
     process.kill(shell.pid, 'SIGKILL');
     await sleep(5000);
+    // Linux: already none, the kernel signalled them. macOS: all three, left to the next launch.
     console.log(`  after kill -9: ${describe(services())}`);
-    shell = await openApplication();
+    shell = await openApplication({ replacing: before });
     const survivors = before.filter((p) => alive(p.pid));
     check(survivors.length === 0, `processes of the killed run are still alive: ${describe(survivors)}`);
     check(services().length === 3, `expected three services after the restart, found ${describe(services())}`);

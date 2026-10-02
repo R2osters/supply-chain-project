@@ -17,6 +17,10 @@ apt-get install -y --no-install-recommends xvfb xauth dbus
 # stops whatever runs from its own resources without a SCIP above it, and that would be the check.
 install -m 755 /usr/lib/SCIP/resources/node/node /usr/local/bin/node
 
+# An X server started by an ordinary account cannot create the folder its socket lives in.
+mkdir -p /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix
+
 # PostgreSQL refuses to run as root, and nobody runs SCIP as root.
 useradd --create-home scip
 runuser -u scip -- env HOME=/home/scip \

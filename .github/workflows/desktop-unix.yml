@@ -6,7 +6,8 @@ name: desktop-unix
 on:
   push:
     branches: [master]
-    tags: ['v*']
+    # A version, as npm run release tags it: v0.3.0, v0.3.0-beta.1.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
   pull_request:
     paths:
       - 'apps/**'
@@ -19,7 +20,8 @@ on:
 
 concurrency:
   group: desktop-unix-${{ github.ref }}
-  cancel-in-progress: true
+  # Never on a tag: cancelling there could leave a release with one package out of two.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 # Read the code, nothing else. One job below, on a version tag only, is given more: see `release`.
 permissions:
@@ -201,7 +203,10 @@ jobs:
           xattr -dr com.apple.quarantine "$app"
           "$res/postgres/bin/postgres" --version
 
+      # As soon as the package is built, even when a check above failed: the other systems
+      # still get to try it. A release needs every job green anyway (see `release`).
       - name: Name the package after its version and system
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
           mkdir -p dist
@@ -213,6 +218,7 @@ jobs:
           ls -la dist
       # Not a release: unsigned and for testing, like the Windows artifact of desktop.yml.
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         with:
           name: scip-${{ matrix.name }}
           path: dist/*
@@ -226,6 +232,8 @@ jobs:
   linux-distributions:
     name: ${{ matrix.image }}
     needs: package
+    # Whatever happened on macOS: the .deb is there or the download below fails.
+    if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
@@ -254,7 +262,8 @@ jobs:
   release:
     name: attach to the release
     needs: [package, linux-distributions]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # The push of the tag itself, not a run started by hand from it; and every job above green.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
