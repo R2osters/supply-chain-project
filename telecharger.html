@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
-  <link rel="stylesheet" href="css/base.css?v=20261002e">
-  <link rel="stylesheet" href="css/telecharger.css?v=20261002e">
+  <link rel="stylesheet" href="css/base.css?v=20261002f">
+  <link rel="stylesheet" href="css/telecharger.css?v=20261002f">
 </head>
 <body>
 
@@ -59,13 +59,37 @@
           <p class="eyebrow reveal">Autres versions</p>
           <h2 class="t-section reveal">Tous les <span class="accent">téléchargements.</span></h2>
         </div>
-        <p class="t-body reveal">SCIP est un logiciel Windows (10 version 1809 ou plus récent, 64 bits). Il n&rsquo;existe pas de version macOS ni Linux.</p>
+        <p class="t-body reveal" data-unless="unix">SCIP est un logiciel Windows (10 version 1809 ou plus récent, 64 bits). Il n&rsquo;existe pas de version macOS ni Linux.</p>
+        <p class="t-body reveal" data-if="unix" hidden>SCIP est d&rsquo;abord un logiciel Windows (10 version 1809 ou plus récent, 64 bits). Les versions macOS et Linux sont préliminaires : leurs limites sont écrites sous chaque bouton.</p>
       </div>
       <ul class="versions panel reveal">
         <li>
           <b>Windows 64 bits</b>
           <span class="mono"><span data-rel="file">SCIP&#8209;Setup&#8209;0.2.1.exe</span> · <span data-rel="size">342&nbsp;Mo</span></span>
           <span class="actions"><a class="btn btn-sm" data-rel="link" href="https://github.com/R2osters/supply-chain-project/releases/latest">Télécharger</a></span>
+        </li>
+        <!-- macOS et Linux : affichés par js/site.js seulement quand la dernière release contient les deux paquets. -->
+        <li data-if="unix" hidden>
+          <span class="name"><b>macOS</b> <span class="chip">version préliminaire</span></span>
+          <span class="mono"><span data-rel="mac-file"></span> · <span data-rel="mac-size"></span></span>
+          <span class="actions"><a class="btn btn-sm outline" data-rel="mac-link" href="https://github.com/R2osters/supply-chain-project/releases/latest">Télécharger</a></span>
+          <ul class="notes">
+            <li>Pour Mac à puce Apple (M1 ou plus récent), macOS 13.5 ou plus récent.</li>
+            <li class="long">Application non signée : macOS refuse de l&rsquo;ouvrir au premier lancement. Glissez SCIP dans Applications, puis autorisez&#8209;le dans Réglages Système → Confidentialité et sécurité → «&nbsp;Ouvrir quand même&nbsp;», ou tapez dans le Terminal <code>xattr -dr com.apple.quarantine /Applications/SCIP.app</code></li>
+            <li>Mise à jour manuelle : la nouvelle version se télécharge sur cette page.</li>
+            <li>Construite et testée automatiquement, pas encore essayée par une personne sur un vrai Mac.</li>
+          </ul>
+        </li>
+        <li data-if="unix" hidden>
+          <span class="name"><b>Linux</b> <span class="chip">version préliminaire</span></span>
+          <span class="mono"><span data-rel="linux-file"></span> · <span data-rel="linux-size"></span></span>
+          <span class="actions"><a class="btn btn-sm outline" data-rel="linux-link" href="https://github.com/R2osters/supply-chain-project/releases/latest">Télécharger</a></span>
+          <ul class="notes">
+            <li>Paquet .deb pour PC 64 bits (x86_64) : Ubuntu 22.04 ou plus récent, Debian 12 ou plus récent.</li>
+            <li>Installation dans un terminal : <code data-rel="linux-command"></code></li>
+            <li>Mise à jour manuelle : la nouvelle version se télécharge sur cette page.</li>
+            <li>Construite et testée automatiquement, pas encore essayée par une personne sur un vrai poste Linux.</li>
+          </ul>
         </li>
         <li>
           <b>Toutes les versions</b>
@@ -155,7 +179,8 @@
         <p class="t-body reveal">SCIP est un projet d&rsquo;école, personnel et non commercial. Voici où il s&rsquo;arrête aujourd&rsquo;hui.</p>
       </div>
       <ul class="limits">
-        <li class="reveal"><b>Windows seulement</b><span>Il n&rsquo;existe pas de version macOS ni Linux.</span></li>
+        <li class="reveal" data-unless="unix"><b>Windows seulement</b><span>Il n&rsquo;existe pas de version macOS ni Linux.</span></li>
+        <li class="reveal" data-if="unix" hidden><b>macOS et Linux : préliminaires</b><span>Non signées, sans mise à jour automatique, pas encore essayées par une personne sur une vraie machine. Une sauvegarde faite sous Windows s&rsquo;y restaure ; l&rsquo;inverse n&rsquo;est pas possible.</span></li>
         <li class="reveal"><b>Pas d&rsquo;application mobile</b><span>Le chauffeur ouvre la page /drive sur son téléphone, via le réseau local.</span></li>
         <li class="reveal"><b>Position du téléphone</b><span>Elle exige le HTTPS sur le réseau local, pas encore livré, et s&rsquo;arrête dès que l&rsquo;écran du téléphone s&rsquo;éteint.</span></li>
         <li class="reveal"><b>Exports</b><span>Pas d&rsquo;export CSV ni PDF.</span></li>
@@ -202,6 +227,6 @@
     <p class="legal"><span>SCIP <span data-rel="n">0.2.1</span></span><span>Logiciel Windows</span><span>Projet d&rsquo;école, non commercial</span></p>
   </footer>
 
-  <script src="js/site.js?v=20261002e" defer></script>
+  <script src="js/site.js?v=20261002f" defer></script>
 </body>
 </html>

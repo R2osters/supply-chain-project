@@ -67,6 +67,8 @@ a { color: inherit; }
 ::selection { background: color-mix(in srgb, var(--info) 25%, transparent); }
 :focus-visible { outline: 2px solid var(--info); outline-offset: 2px; border-radius: 4px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* l'attribut hidden l'emporte sur les display des composants (grilles, flex) */
+[hidden] { display: none !important; }
 
 /* ---------- Type ---------- */
 h1, h2, h3 { margin: 0; font-family: var(--display); font-weight: 700; letter-spacing: -.01em; }
