@@ -11,7 +11,18 @@ l'échelle 2, jeu de démo, interface en français.
 | `conseils-pourquoi.png` | Optimise · Conseils | la même recommandation dépliée : « Le calcul porte sur Accra Central DC seul : ce site est sous son point de commande. Les 4 798 unités détenues dans les autres entrepôts ne le desservent pas sans transfert. », coût −GHS 58 672, « accepter et exécuter » |
 | `control.png` | Track · Control | « 3 décisions en attente, 1 critique » |
 | `commandes.png` | Réseau · Commandes | le bon de commande créé en acceptant le conseil : origine « Recommandation », brouillon, Tema Port Distributors, WH-ACC, GHS 58 672 |
-| `installeur-04-type.png` | Installeur · Type | aperçu de l'installeur : « Données fictives (Demo Distribution Ghana) » |
+
+## L'installeur 0.3.0
+
+Même méthode que pour la 0.2.1 (`../v0.2.1/README.md`) : aperçu navigateur de `apps/installer/ui/`,
+960×640 à l'échelle 2, bandeau « aperçu » masqué, numéros de version de l'aperçu remplacés par ceux de
+la release (0.3.0, mise à jour depuis 0.2.1). Le dossier affiché est celui d'un utilisateur fictif ;
+l'écran Système et l'écran Installation montrent des valeurs d'exemple (système, espace, tailles).
+
+`installeur-01-bienvenue.png`, `-03-systeme`, `-04-type` (« Données fictives (Demo Distribution
+Ghana) »), `-05-base-de-donnees`, `-06-organisation`, `-08-administrateur`, `-09-recapitulatif`,
+`-10-installation`, `-11-termine`, puis `installeur-mise-a-jour.png` (« SCIP 0.2.1 est installé sur
+ce poste. Cet assistant le met à jour en version 0.3.0 ») et `installeur-desinstallation.png`.
 
 ## Ce qui a été vérifié sur cette installation
 
