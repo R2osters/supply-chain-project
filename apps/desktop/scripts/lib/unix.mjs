@@ -51,6 +51,11 @@ function loaderName(file) {
   }
 }
 
+/** Every symbolic link under `root`. */
+export function linksUnder(root) {
+  return [...walk(root)].filter(({ entry }) => entry.isSymbolicLink()).map(({ path }) => path);
+}
+
 /**
  * Leaves no symbolic link under `root`: each one becomes a plain copy of what it points to.
  *
@@ -62,12 +67,27 @@ function loaderName(file) {
  * that load the library has to exist: the file takes that name and the links next to it go.
  */
 export function flattenLinks(root, { libraryAliases = false } = {}) {
+  const counts = { dropped: 0, renamed: 0, copied: 0, folders: 0 };
+  // A linked folder is replaced by a copy that may hold links of its own: they are the next
+  // pass's. A folder linked into itself would never end, hence the limit.
+  for (let pass = 1; flattenOnce(root, libraryAliases, counts); pass += 1) {
+    if (pass === 8) throw new Error(`links under ${root} keep coming back: a folder linked into itself?`);
+  }
+  const left = linksUnder(root);
+  if (left.length > 0) throw new Error(`links left under ${root}:\n${left.slice(0, 20).join('\n')}`);
+  console.log(
+    `  links in ${root}: ${counts.renamed} libraries renamed, ${counts.dropped} links dropped, ` +
+      `${counts.copied} files and ${counts.folders} folders copied`,
+  );
+}
+
+/** One pass; true when it copied a folder, whose content has not been looked at yet. */
+function flattenOnce(root, libraryAliases, counts) {
   const realRoot = realpathSync(root);
   const byTarget = new Map();
-  const counts = { dropped: 0, renamed: 0, copied: 0, folders: 0 };
+  let copiedFolder = false;
 
-  for (const { path, entry } of [...walk(root)]) {
-    if (!entry.isSymbolicLink()) continue;
+  for (const path of linksUnder(root)) {
     let target;
     try {
       target = realpathSync(path);
@@ -77,9 +97,12 @@ export function flattenLinks(root, { libraryAliases = false } = {}) {
       continue;
     }
     if (statSync(target).isDirectory()) {
+      // Links inside are kept as they are written (relative ones stay relative) and handled
+      // by the next pass, instead of trusting the copy to resolve them.
       rmSync(path);
-      cpSync(target, path, { recursive: true, dereference: true });
+      cpSync(target, path, { recursive: true, verbatimSymlinks: true });
       counts.folders += 1;
+      copiedFolder = true;
       continue;
     }
     if (!byTarget.has(target)) byTarget.set(target, []);
@@ -111,10 +134,7 @@ export function flattenLinks(root, { libraryAliases = false } = {}) {
     }
     counts.copied += toCopy.length;
   }
-  console.log(
-    `  links in ${root}: ${counts.renamed} libraries renamed, ${counts.dropped} links dropped, ` +
-      `${counts.copied} files and ${counts.folders} folders copied`,
-  );
+  return copiedFolder;
 }
 
 const MACH_O_MAGICS = new Set([0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe, 0xcafebabe, 0xbebafeca]);

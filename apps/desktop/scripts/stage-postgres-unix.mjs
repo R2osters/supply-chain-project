@@ -9,10 +9,20 @@
 // zones, OpenSSL configuration). So it is created at the path the installed application will
 // have, then moved into resources/, from where the package puts it back at that very path.
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { CACHE_DIR, PLATFORM_KEY, RESOURCES_DIR, download, isMain, run, sha256 } from './lib/fetch.mjs';
 import { flattenLinks, signUnsignedBinaries, sizeMb, walk } from './lib/unix.mjs';
 
@@ -53,6 +63,7 @@ const UNUSED = [
   'lib/pgxs',
   'lib/pkgconfig',
   'lib/postgresql/pgxs',
+  'lib/terminfo',
   'libexec',
   'man',
   'sbin',
@@ -102,6 +113,7 @@ export async function stagePostgresUnix() {
   // What the bundle is made of, version by version: read before conda's own records are pruned.
   const packages = execFileSync(micromamba, ['list', '--no-rc', '--prefix', prefix], { env, encoding: 'utf8' });
 
+  gatherExtensions(prefix);
   // Links first, while everything they point to is still there; then the pruning.
   const installed = extensions(prefix);
   flattenLinks(prefix, { libraryAliases: true });
@@ -159,6 +171,31 @@ function extensions(prefix) {
     .filter(({ path }) => path.endsWith('.control'))
     .map(({ path }) => path.slice(prefix.length + 1))
     .sort();
+}
+
+/**
+ * Brings every extension to the folder this server reads, the one that holds plpgsql.control.
+ *
+ * conda-forge's PostGIS for Apple Silicon installs its control files and scripts in
+ * share/postgresql/extension, while the PostgreSQL it is built for looks in share/extension:
+ * `CREATE EXTENSION postgis` answers "extension is not available". The Linux package does not
+ * have the fault. Scripts are read from the folder of their control file, so they move together.
+ */
+function gatherExtensions(prefix) {
+  const controls = extensions(prefix);
+  const servers = controls.find((control) => basename(control) === 'plpgsql.control');
+  if (!servers) throw new Error(`plpgsql.control is not in ${prefix}: where does this server read its extensions?`);
+  const home = join(prefix, dirname(servers));
+  const strays = [...new Set(controls.map((control) => join(prefix, dirname(control))))].filter((dir) => dir !== home);
+  for (const dir of strays) {
+    for (const name of readdirSync(dir)) {
+      if (existsSync(join(home, name))) throw new Error(`${name} is in both ${dir} and ${home}`);
+      // A link moves as a link: the upgrade scripts point at a template next to them.
+      renameSync(join(dir, name), join(home, name));
+    }
+    rmSync(dir, { recursive: true });
+    console.log(`  extensions of ${dir.slice(prefix.length + 1)} moved to ${home.slice(prefix.length + 1)}`);
+  }
 }
 
 /** What a failed self-test needs to be understood from a build log, on a system nobody is at. */
