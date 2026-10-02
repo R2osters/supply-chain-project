@@ -51,6 +51,7 @@ from datetime import date, timedelta
 from scipy import stats
 
 from .data_quality import validate_positive
+from ..formatting import fr_num
 
 #: Below this many units of mean daily demand, the normal approximation is unreliable.
 SLOW_MOVER_THRESHOLD = 1.0
@@ -247,7 +248,7 @@ def optimize_inventory(
     if eoq is not None:
         order_quantity = max(eoq, rop - position)
         quantity_basis = (
-            f"de la quantité économique de commande (EOQ) de {eoq:.0f} unités, relevée si "
+            f"de la quantité économique de commande (EOQ) de {fr_num(eoq)} unités, relevée si "
             "nécessaire pour repasser au-dessus du point de commande"
         )
     else:
@@ -314,10 +315,10 @@ def optimize_inventory(
 
 def _reasons(**kw) -> list[str]:
     reasons = [
-        f"La position de stock est de {kw['position']:.0f} unités "
-        f"({kw['free_stock']:.0f} disponibles en stock + {kw['incoming']:.0f} déjà en commande) "
-        f"pour un point de commande de {kw['rop']:.0f}.",
-        f"Stock de sécurité {kw['buffer']:.0f} = z({kw['service_level']:.0%}) × σ_LTD "
+        f"La position de stock est de {fr_num(kw['position'])} unités "
+        f"({fr_num(kw['free_stock'])} disponibles en stock + {fr_num(kw['incoming'])} déjà en commande) "
+        f"pour un point de commande de {fr_num(kw['rop'])}.",
+        f"Stock de sécurité {fr_num(kw['buffer'])} = z({kw['service_level']:.0%}) × σ_LTD "
         f"= {kw['z']:.3f} × {kw['sigma_ltd']:.1f}.",
         f"σ_LTD combine la variabilité de la demande (σ_d = {kw['demand_std']:.1f}/jour sur "
         f"{kw['lead_time_days']:.1f} jours) et celle du délai d’approvisionnement "
@@ -352,7 +353,7 @@ def _reasons(**kw) -> list[str]:
 
     if kw["reorder_required"]:
         reasons.append(
-            f"Commander maintenant : {kw['order_quantity']:.0f} unités, quantité calculée à partir "
+            f"Commander maintenant : {fr_num(kw['order_quantity'])} unités, quantité calculée à partir "
             f"{kw['quantity_basis']}."
         )
     else:
@@ -399,7 +400,7 @@ def _assumptions(**kw) -> list[str]:
     if kw["incoming"] > 0:
         arrival = kw["incoming_arrival_days"]
         assumptions.append(
-            f"{kw['incoming']:.0f} unités entrantes sont comptées dans la position"
+            f"{fr_num(kw['incoming'])} unités entrantes sont comptées dans la position"
             + (
                 f" et sont supposées arriver sous {arrival:.0f} jour(s)."
                 if arrival is not None

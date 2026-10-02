@@ -8,6 +8,7 @@ import { DOMAIN_EVENTS, DomainEventsService } from '../events/domain-events.serv
 import { HazardsService } from '../hazards/hazards.service';
 import { AiClientService } from './ai-client.service';
 import { anomalyEventDescription } from './anomaly-labels';
+import { orderingPositions, siteKey } from './ordering-position';
 
 const DAY_MS = 86_400_000;
 
@@ -567,7 +568,7 @@ export class AiService {
     const [inventories, suppliers, shipments] = await Promise.all([
       this.prisma.inventory.findMany({
         where: { companyId },
-        include: { product: true, warehouse: { select: { id: true } } },
+        include: { product: true, warehouse: { select: { id: true, name: true } } },
       }),
       this.prisma.supplier.findMany({
         where: { companyId, isActive: true },
@@ -606,6 +607,32 @@ export class AiService {
       ]),
     );
 
+    // The same statistics per warehouse, for a product judged on one site (ordering-position.ts).
+    const siteDemandStats = await this.prisma.$queryRaw<
+      Array<{ productId: string; warehouseId: string; mean_daily: number | null; std_daily: number | null }>
+    >`
+      WITH daily AS (
+        SELECT "productId", "warehouseId", DATE("occurredAt") AS day, SUM(quantity) AS qty
+          FROM "inventory_movements"
+         WHERE "companyId" = ${companyId}
+           AND type = 'OUT'
+           AND "occurredAt" >= NOW() - INTERVAL '90 days'
+         GROUP BY "productId", "warehouseId", DATE("occurredAt")
+      )
+      SELECT "productId",
+             "warehouseId",
+             AVG(qty)::double precision        AS mean_daily,
+             STDDEV_SAMP(qty)::double precision AS std_daily
+        FROM daily
+       GROUP BY "productId", "warehouseId"
+    `;
+    const statsBySite = new Map(
+      siteDemandStats.map((row) => [
+        siteKey(row.productId, row.warehouseId),
+        { mean: Number(row.mean_daily ?? 0), std: Number(row.std_daily ?? 0) },
+      ]),
+    );
+
     const totalSpend = suppliers.reduce(
       (sum, supplier) =>
         sum +
@@ -616,60 +643,46 @@ export class AiService {
       0,
     );
 
-    /**
-     * One entry per *product*, not per inventory row.
-     *
-     * `inventory` is keyed by (product, warehouse), so a SKU stocked in three DCs produced three
-     * rows — and the recommendation engine, which keys on productId, emitted three near-identical
-     * "order SKU-010" recommendations that differed only by rounding. Stock is network-wide for
-     * the ordering decision, so it is summed here, and the warehouse holding the largest share
-     * becomes the receiving location on the resulting purchase order.
-     */
-    const byProduct = new Map<
-      string,
-      {
-        productId: string;
-        sku: string;
-        currentStock: number;
-        reservedStock: number;
-        incomingQuantity: number;
-        unitCost: number;
-        serviceLevel: number;
-        warehouseId: string;
-        largestShare: number;
-      }
-    >();
-
-    for (const row of inventories) {
-      const available = Number(row.availableStock);
-      const existing = byProduct.get(row.productId);
-
-      if (!existing) {
-        byProduct.set(row.productId, {
-          productId: row.productId,
-          sku: row.product.sku,
-          currentStock: available,
-          reservedStock: Number(row.reservedStock),
-          incomingQuantity: Number(row.incomingStock),
-          unitCost: Number(row.product.unitCost),
-          serviceLevel: row.product.serviceLevel,
-          warehouseId: row.warehouseId,
-          largestShare: available,
-        });
-        continue;
-      }
-
-      existing.currentStock += available;
-      existing.reservedStock += Number(row.reservedStock);
-      existing.incomingQuantity += Number(row.incomingStock);
-      if (available > existing.largestShare) {
-        existing.largestShare = available;
-        existing.warehouseId = row.warehouseId;
-      }
+    // Orders nobody has confirmed yet are not incoming stock in the ledger, but they are on
+    // order: without them an accepted advice would be given again until its draft is confirmed.
+    const unconfirmedItems = await this.prisma.purchaseOrderItem.findMany({
+      where: {
+        purchaseOrder: { companyId, status: { in: ['DRAFT', 'PENDING'] }, warehouseId: { not: null } },
+      },
+      select: {
+        productId: true,
+        quantity: true,
+        receivedQuantity: true,
+        purchaseOrder: { select: { warehouseId: true } },
+      },
+    });
+    const unconfirmedBySite = new Map<string, number>();
+    for (const item of unconfirmedItems) {
+      const key = siteKey(item.productId, item.purchaseOrder.warehouseId as string);
+      const outstanding = Number(item.quantity) - Number(item.receivedQuantity);
+      unconfirmedBySite.set(key, (unconfirmedBySite.get(key) ?? 0) + Math.max(outstanding, 0));
     }
 
-    const products = [...byProduct.values()].map((entry) => {
-      const stats = statsByProduct.get(entry.productId);
+    // One position per product: its tightest site when one is short, the network otherwise.
+    const positions = orderingPositions(
+      inventories.map((row) => ({
+        productId: row.productId,
+        sku: row.product.sku,
+        warehouseId: row.warehouseId,
+        warehouseName: row.warehouse.name,
+        availableStock: Number(row.availableStock),
+        reservedStock: Number(row.reservedStock),
+        incomingStock: Number(row.incomingStock),
+        unconfirmedOrderStock: unconfirmedBySite.get(siteKey(row.productId, row.warehouseId)) ?? 0,
+        reorderPoint: Number(row.reorderPoint),
+        unitCost: Number(row.product.unitCost),
+        serviceLevel: row.product.serviceLevel,
+      })),
+      statsByProduct,
+      statsBySite,
+    );
+
+    const products = positions.map((entry) => {
       const leadTimes = suppliers
         .filter((s) => s.products.some((p) => p.productId === entry.productId))
         .map((s) => s.observedLeadTimeDays);
@@ -688,8 +701,8 @@ export class AiService {
         sku: entry.sku,
         currentStock: entry.currentStock,
         reservedStock: entry.reservedStock,
-        averageDailyDemand: stats?.mean ?? 0,
-        demandStdDev: stats?.std ?? 0,
+        averageDailyDemand: entry.demand.mean,
+        demandStdDev: entry.demand.std,
         leadTimeDays: fastestIndex >= 0 ? leadTimes[fastestIndex] : 7,
         leadTimeStdDevDays: fastestIndex >= 0 ? leadTimeStds[fastestIndex] : 0,
         incomingQuantity: entry.incomingQuantity,
@@ -698,6 +711,9 @@ export class AiService {
         serviceLevel: entry.serviceLevel,
         warehouseId: entry.warehouseId,
         orderingCost: null,
+        // Tells the engine, and through it the reader, that other warehouses were left out.
+        siteName: entry.site?.name ?? null,
+        stockElsewhere: entry.site?.stockElsewhere ?? null,
       };
     });
 

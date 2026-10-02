@@ -51,6 +51,7 @@ import time
 from dataclasses import dataclass, field
 
 from ortools.linear_solver import pywraplp
+from ..formatting import fr_num
 
 #: Solver time limit. These problems are tiny; a limit this size only ever catches pathology.
 SOLVER_TIME_LIMIT_MS = 10_000
@@ -183,7 +184,7 @@ def allocate(
     demand_constraint.SetCoefficient(unmet, 1.0)
     constraints_described.append(
         f"Le total réparti + la demande non couverte doit être égal à la demande de "
-        f"{demand_quantity:,.0f} unités."
+        f"{fr_num(demand_quantity)} unités."
     )
 
     # --- capacity and MOQ linking -----------------------------------------
@@ -204,12 +205,12 @@ def allocate(
             moq.SetCoefficient(y, -supplier.minimum_order_quantity)
             constraints_described.append(
                 f"{supplier.name} : commander 0 ou au moins "
-                f"{supplier.minimum_order_quantity:,.0f} unités (MOQ), et jamais plus de "
-                f"{capacity:,.0f} (capacité)."
+                f"{fr_num(supplier.minimum_order_quantity)} unités (MOQ), et jamais plus de "
+                f"{fr_num(capacity)} (capacité)."
             )
         else:
             constraints_described.append(
-                f"{supplier.name} : capacité de {capacity:,.0f} unités, pas de quantité minimale "
+                f"{supplier.name} : capacité de {fr_num(capacity)} unités, pas de quantité minimale "
                 "de commande."
             )
 
@@ -218,7 +219,7 @@ def allocate(
         budget_constraint = solver.Constraint(0.0, budget, "budget")
         for supplier in suppliers:
             budget_constraint.SetCoefficient(quantities[supplier.supplier_id], supplier.unit_price)
-        constraints_described.append(f"Les dépenses d’achat ne doivent pas dépasser {budget:,.2f}.")
+        constraints_described.append(f"Les dépenses d’achat ne doivent pas dépasser {fr_num(budget, 2)}.")
 
     # --- concentration -----------------------------------------------------
     if max_supplier_share_percent is not None and 0 < max_supplier_share_percent < 1:
@@ -426,21 +427,21 @@ def _reasons(**kw) -> list[str]:
             notes.append("limité par sa capacité")
 
         reasons.append(
-            f"{line.name} : {line.quantity:,.0f} unités ({line.share_percent:.1f}%) à "
-            f"{line.unit_price:,.2f}/unité, délai d’approvisionnement de "
+            f"{line.name} : {fr_num(line.quantity)} unités ({line.share_percent:.1f}%) à "
+            f"{fr_num(line.unit_price, 2)}/unité, délai d’approvisionnement de "
             f"{supplier.lead_time_days:.0f} jours"
             + (f" — {', '.join(notes)}." if notes else ".")
         )
 
     total_cost = sum(kw["breakdown"].values())
     reasons.append(
-        f"Coût total modélisé {total_cost:,.2f} : "
-        f"{kw['breakdown']['purchase']:,.2f} d’achat, "
-        f"{kw['breakdown']['transport']:,.2f} de transport, "
-        f"{kw['breakdown']['holding']:,.2f} de possession, "
-        f"{kw['breakdown']['delayPenalty']:,.2f} de pénalité de retard, "
-        f"{kw['breakdown']['riskPenalty']:,.2f} de pénalité de risque, "
-        f"{kw['breakdown']['stockoutPenalty']:,.2f} de pénalité de rupture."
+        f"Coût total modélisé {fr_num(total_cost, 2)} : "
+        f"{fr_num(kw['breakdown']['purchase'], 2)} d’achat, "
+        f"{fr_num(kw['breakdown']['transport'], 2)} de transport, "
+        f"{fr_num(kw['breakdown']['holding'], 2)} de possession, "
+        f"{fr_num(kw['breakdown']['delayPenalty'], 2)} de pénalité de retard, "
+        f"{fr_num(kw['breakdown']['riskPenalty'], 2)} de pénalité de risque, "
+        f"{fr_num(kw['breakdown']['stockoutPenalty'], 2)} de pénalité de rupture."
     )
 
     reasons.append(
@@ -451,7 +452,7 @@ def _reasons(**kw) -> list[str]:
 
     if kw["unmet"] > 0:
         reasons.append(
-            f"{kw['unmet']:,.0f} unités n’ont pas pu être couvertes du tout — la capacité cumulée "
+            f"{fr_num(kw['unmet'])} unités n’ont pas pu être couvertes du tout — la capacité cumulée "
             "des fournisseurs est inférieure au besoin. Ajoutez un fournisseur ou réduisez la "
             "commande."
         )

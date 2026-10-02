@@ -54,6 +54,7 @@ from .schemas import (
     SupplierScoreResponse,
     SupplierScoringWeights,
 )
+from .formatting import fr_num
 
 logger = logging.getLogger("scip.ai")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -238,14 +239,14 @@ async def optimize_inventory(request: InventoryOptimizeRequest) -> InventoryOpti
     )
 
     summary = (
-        f"{request.sku} : commander {policy.recommended_order_quantity:,.0f} unités maintenant "
-        f"(point de commande {policy.reorder_point:,.0f}, stock de sécurité "
-        f"{policy.safety_stock:,.0f})."
+        f"{request.sku} : commander {fr_num(policy.recommended_order_quantity)} unités maintenant "
+        f"(point de commande {fr_num(policy.reorder_point)}, stock de sécurité "
+        f"{fr_num(policy.safety_stock)})."
         if policy.reorder_required
         else (
             f"{request.sku} : pas de commande nécessaire pour l’instant — "
             f"{policy.days_of_cover_remaining:.1f} jours de couverture pour un point de commande "
-            f"de {policy.reorder_point:,.0f}."
+            f"de {fr_num(policy.reorder_point)}."
         )
     )
 
@@ -342,10 +343,10 @@ async def allocate_order(request: AllocationRequest) -> AllocationResponse:
     payload = result.to_dict()
 
     if result.lines:
-        split = ", ".join(f"{line.name} {line.quantity:,.0f}" for line in result.lines)
+        split = ", ".join(f"{line.name} {fr_num(line.quantity)}" for line in result.lines)
         summary = (
-            f"Répartir {request.demand_quantity:,.0f} unités ainsi : {split} — coût total modélisé "
-            f"{result.objective_value:,.0f}, manque attendu {result.stockout_risk:.1%}."
+            f"Répartir {fr_num(request.demand_quantity)} unités ainsi : {split} — coût total modélisé "
+            f"{fr_num(result.objective_value)}, manque attendu {result.stockout_risk:.1%}."
         )
     else:
         summary = "Aucune répartition réalisable n’a été trouvée pour les contraintes fournies."
@@ -522,7 +523,7 @@ async def optimize_route(request: RouteOptimizeRequest) -> RouteOptimizeResponse
     summary = (
         f"{len(result.routes)} tournée(s) couvrant "
         f"{len(request.stops) - len(result.unassigned_stops)} arrêt(s) sur {len(request.stops)}, "
-        f"{result.total_distance_km:,.0f} km, coût estimé {result.total_cost:,.0f}."
+        f"{fr_num(result.total_distance_km)} km, coût estimé {fr_num(result.total_cost)}."
     )
 
     return RouteOptimizeResponse(
@@ -568,9 +569,9 @@ async def simulate_scenario(request: ScenarioSimulateRequest) -> ScenarioSimulat
         iterations=result.iterations,
         explanation=Explanation(
             summary=(
-                f"{request.sku} : coût du cas de base {base.total_cost:,.0f} avec un risque de "
+                f"{request.sku} : coût du cas de base {fr_num(base.total_cost)} avec un risque de "
                 f"rupture de {base.stockout_risk:.0%} ; pire cas "
-                f"{worst.total_cost:,.0f} avec {worst.stockout_risk:.0%}."
+                f"{fr_num(worst.total_cost)} avec {worst.stockout_risk:.0%}."
             ),
             reasons=result.reasons,
             assumptions=result.assumptions,

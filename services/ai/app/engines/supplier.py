@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Sequence
+from ..formatting import fr_num
 
 DEFAULT_WEIGHTS: dict[str, float] = {
     "price": 0.30,
@@ -189,7 +190,7 @@ def _supplier_reasons(
     weakest = min(weighted, key=lambda c: weighted[c])
 
     reasons = [
-        f"Le prix unitaire {raw['price']:,.2f} se normalise à {normalized['price']:.2f} "
+        f"Le prix unitaire {fr_num(raw['price'], 2)} se normalise à {normalized['price']:.2f} "
         f"(1.00 = le moins cher de cet ensemble).",
         f"Le délai d’approvisionnement de {raw['lead_time']:.0f} jours se normalise à "
         f"{normalized['lead_time']:.2f} (1.00 = le plus rapide de cet ensemble).",
@@ -201,7 +202,7 @@ def _supplier_reasons(
 
     if supplier.minimum_order_quantity and supplier.minimum_order_quantity > 0:
         reasons.append(
-            f"Quantité minimale de commande de {supplier.minimum_order_quantity:,.0f} unités — "
+            f"Quantité minimale de commande de {fr_num(supplier.minimum_order_quantity)} unités — "
             "hors score, mais contrainte stricte dans la répartition."
         )
     return reasons

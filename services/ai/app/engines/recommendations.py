@@ -26,6 +26,7 @@ from typing import Sequence
 
 from .allocation import SupplierOption, allocate
 from .inventory import optimize_inventory
+from ..formatting import fr_num
 
 #: Days of cover below which a stockout is treated as imminent rather than approaching.
 CRITICAL_COVER_DAYS = 3.0
@@ -156,6 +157,24 @@ def _index_suppliers_by_product(suppliers: Sequence[dict]) -> dict[str, list[dic
     return index
 
 
+def _site_note(product: dict) -> list[str]:
+    """Says, first, that the figures are those of one warehouse and why the others were left out.
+
+    Without it a reader who knows another warehouse is full would take the advice for a mistake.
+    """
+    site_name = product.get("siteName")
+    if not site_name:
+        return []
+    note = f"Le calcul porte sur {site_name} seul : ce site est sous son point de commande."
+    elsewhere = float(product.get("stockElsewhere") or 0)
+    if elsewhere > 0:
+        note += (
+            f" Les {fr_num(elsewhere)} unités détenues dans les autres entrepôts ne le desservent pas "
+            "sans transfert."
+        )
+    return [note]
+
+
 def _for_product(
     product: dict, suppliers_by_product: dict[str, list[dict]], today: date
 ) -> list[Recommendation]:
@@ -208,7 +227,7 @@ def _for_product(
             "requiredByDate": (today + timedelta(days=max(policy.days_of_cover_remaining, 0))).isoformat(),
         }
 
-        reasons = list(policy.reasons)
+        reasons = _site_note(product) + list(policy.reasons)
 
         if allocation is not None and allocation.lines:
             payload["lines"] = [
@@ -225,15 +244,15 @@ def _for_product(
             cost_delta = allocation.cost_breakdown.get("purchase", quantity * unit_cost)
             rec_type = "SPLIT_ORDER" if len(allocation.lines) > 1 else "ORDER_NOW"
             title = (
-                f"Commander {quantity:,.0f} unités de {sku} — réparties entre "
+                f"Commander {fr_num(quantity)} unités de {sku} — réparties entre "
                 f"{len(allocation.lines)} fournisseurs"
                 if len(allocation.lines) > 1
-                else f"Commander {quantity:,.0f} unités de {sku} auprès de {allocation.lines[0].name}"
+                else f"Commander {fr_num(quantity)} unités de {sku} auprès de {allocation.lines[0].name}"
             )
         else:
             cost_delta = quantity * unit_cost
             rec_type = "ORDER_NOW"
-            title = f"Commander {quantity:,.0f} unités de {sku}"
+            title = f"Commander {fr_num(quantity)} unités de {sku}"
             if not candidates:
                 reasons.append(
                     "Aucun fournisseur n’est lié à ce produit, donc aucune répartition n’a pu être "
@@ -283,7 +302,7 @@ def _for_product(
                 type="INCREASE_SAFETY_STOCK",
                 priority="MEDIUM",
                 title=(
-                    f"Relever le stock de sécurité de {sku} de {extra_units:,.0f} unités "
+                    f"Relever le stock de sécurité de {sku} de {fr_num(extra_units)} unités "
                     f"(niveau de service {service_level:.0%} → {target_service:.0%})"
                 ),
                 subject_type="PRODUCT",
@@ -296,13 +315,14 @@ def _for_product(
                     "reorderPoint": round(stronger.reorder_point, 2),
                     "serviceLevel": target_service,
                 },
-                reasons=[
+                reasons=_site_note(product)
+                + [
                     f"La probabilité de rupture est de {policy.stockout_probability:.1%} alors que "
                     "la position est encore au-dessus du point de commande — le stock tampon est "
                     "sous-dimensionné pour la variabilité observée.",
                     f"Relever l’objectif de {service_level:.0%} à {target_service:.0%} ajoute "
-                    f"{extra_units:,.0f} unités de stock tampon, pour un coût de possession "
-                    f"d’environ {extra_units * unit_cost * 0.25:,.0f} par an.",
+                    f"{fr_num(extra_units)} unités de stock tampon, pour un coût de possession "
+                    f"d’environ {fr_num(extra_units * unit_cost * 0.25)} par an.",
                 ]
                 + policy.reasons[:3],
                 assumptions=stronger.assumptions,
@@ -339,13 +359,13 @@ def _for_product(
                         "suggestedMaxStock": round(demand * OVERSTOCK_COVER_DAYS, 2),
                     },
                     reasons=[
-                        f"{current:,.0f} unités en stock pour une demande de {demand:,.1f}/jour — "
+                        f"{fr_num(current)} unités en stock pour une demande de {fr_num(demand, 1)}/jour — "
                         f"{policy.days_of_cover_remaining:.0f} jours de couverture.",
-                        f"Environ {excess_units:,.0f} unités au-delà d’un objectif de "
-                        f"{OVERSTOCK_COVER_DAYS:.0f} jours, soit {tied_up:,.0f} immobilisés en "
+                        f"Environ {fr_num(excess_units)} unités au-delà d’un objectif de "
+                        f"{OVERSTOCK_COVER_DAYS:.0f} jours, soit {fr_num(tied_up)} immobilisés en "
                         "fonds de roulement.",
                         f"Avec un coût de possession de 25 %/an, cela représente environ "
-                        f"{tied_up * 0.25:,.0f} par an.",
+                        f"{fr_num(tied_up * 0.25)} par an.",
                         "Suspendez les réapprovisionnements, écoulez le stock ou transférez-le vers "
                         "un site en manque.",
                     ],
@@ -570,11 +590,11 @@ def _overall_reasons(
     total_release = -sum(r.cost_delta or 0 for r in recommendations if (r.cost_delta or 0) < 0)
     if total_spend:
         reasons.append(
-            f"Appliquer les recommandations de commande engage environ {total_spend:,.0f}."
+            f"Appliquer les recommandations de commande engage environ {fr_num(total_spend)}."
         )
     if total_release:
         reasons.append(
-            f"Les recommandations de réduction de stock libéreraient environ {total_release:,.0f} "
+            f"Les recommandations de réduction de stock libéreraient environ {fr_num(total_release)} "
             "par an en coût de possession."
         )
 

@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Sequence
 
 from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+from ..formatting import fr_num
 
 EARTH_RADIUS_M = 6_371_008.8
 
@@ -196,7 +197,7 @@ def optimize_routes(
     )
     constraints_described.append(
         "La charge de chaque véhicule ne doit pas dépasser sa capacité : "
-        + ", ".join(f"{v.name} {v.capacity_units:,.0f}" for v in vehicles)
+        + ", ".join(f"{v.name} {fr_num(v.capacity_units)}" for v in vehicles)
         + "."
     )
 
@@ -413,15 +414,15 @@ def _reasons(
     reasons = [
         f"{len(stops) - len(unassigned)} arrêt(s) sur {len(stops)} desservi(s) par "
         f"{len(routes)} véhicule(s) sur {len(vehicles)}.",
-        f"Total {total_distance:,.1f} km pour un coût estimé de {total_cost:,.2f}.",
+        f"Total {fr_num(total_distance, 1)} km pour un coût estimé de {fr_num(total_cost, 2)}.",
     ]
 
     for route in routes:
         names = " → ".join(step["name"] for step in route.sequence)
         reasons.append(
             f"{route.vehicle_name} : {names} "
-            f"({route.distance_km:,.1f} km, {route.duration_minutes:,.0f} min, "
-            f"{route.load_units:,.0f} unités, {route.fuel_liters:,.1f} L)."
+            f"({fr_num(route.distance_km, 1)} km, {fr_num(route.duration_minutes)} min, "
+            f"{fr_num(route.load_units)} unités, {fr_num(route.fuel_liters, 1)} L)."
         )
 
     idle = len(vehicles) - len(routes)
