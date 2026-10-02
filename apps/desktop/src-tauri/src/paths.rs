@@ -73,9 +73,10 @@ impl DataDirs {
     /// directory and is the only thing that should decide what goes in there.
     pub fn ensure_created(&self) -> Result<(), PathsError> {
         for dir in [&self.root, &self.files, &self.models, &self.logs] {
-            std::fs::create_dir_all(dir)
+            create_private_dir(dir)
                 .map_err(|source: io::Error| PathsError::Create { path: dir.clone(), source })?;
         }
+        // A root that existed already keeps the mode it had: close it too.
         restrict_to_owner(&self.root)
             .map_err(|source: io::Error| PathsError::Create { path: self.root.clone(), source })
     }
@@ -119,6 +120,19 @@ pub(crate) fn restrict_to_owner(dir: &Path) -> io::Result<()> {
 #[cfg(not(unix))]
 pub(crate) fn restrict_to_owner(_dir: &Path) -> io::Result<()> {
     Ok(())
+}
+
+/// `create_dir_all`, and on macOS and Linux a folder (with the parents it lacks) that is closed
+/// to other accounts from the moment it exists, not a moment later.
+#[cfg(unix)]
+pub(crate) fn create_private_dir(dir: &Path) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().recursive(true).mode(0o700).create(dir)
+}
+
+#[cfg(not(unix))]
+pub(crate) fn create_private_dir(dir: &Path) -> io::Result<()> {
+    std::fs::create_dir_all(dir)
 }
 
 #[cfg(test)]
@@ -196,11 +210,21 @@ mod tests {
     #[test]
     fn the_data_folder_is_closed_to_other_accounts() {
         use std::os::unix::fs::PermissionsExt;
+        let mode = |dir: &Path| std::fs::metadata(dir).unwrap().permissions().mode() & 0o777;
         let tmp = tempfile::tempdir().unwrap();
+
+        // Created here: private from the start, with the parent it lacked and what is inside.
+        let fresh = DataDirs::from_root(tmp.path().join("share").join("com.scip.desktop"));
+        fresh.ensure_created().unwrap();
+        assert_eq!(mode(&fresh.root), 0o700);
+        assert_eq!(mode(&tmp.path().join("share")), 0o700);
+        assert_eq!(mode(&fresh.files), 0o700);
+
+        // Found there with a wider mode (an older SCIP, a restored home folder): closed as well.
         let dirs = DataDirs::from_root(tmp.path().join("SCIP"));
         std::fs::create_dir_all(&dirs.root).unwrap();
         std::fs::set_permissions(&dirs.root, std::fs::Permissions::from_mode(0o755)).unwrap();
         dirs.ensure_created().unwrap();
-        assert_eq!(std::fs::metadata(&dirs.root).unwrap().permissions().mode() & 0o777, 0o700);
+        assert_eq!(mode(&dirs.root), 0o700);
     }
 }

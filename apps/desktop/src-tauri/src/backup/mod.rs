@@ -62,8 +62,7 @@ pub fn ensure_backups_dir(dir: &std::path::Path) -> std::io::Result<()> {
     if dir.is_dir() {
         return Ok(());
     }
-    std::fs::create_dir_all(dir)?;
-    crate::paths::restrict_to_owner(dir)
+    crate::paths::create_private_dir(dir)
 }
 
 #[cfg(test)]
