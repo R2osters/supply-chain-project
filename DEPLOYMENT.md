@@ -228,11 +228,15 @@ packages are not covered by the Ed25519 signature: `shasum -a 256 -c SHA256SUMS`
 
 - Updates are manual: Settings → Mises à jour says so, and nothing is downloaded in the background.
 - A backup made on Windows restores on macOS and Linux. The reverse does not: `pg_restore` 16
-  cannot read the archive of a `pg_dump` 18, and SCIP then falls back on its safety backup.
+  cannot read the archive of a `pg_dump` 18. A backup's manifest carries the major version of its
+  PostgreSQL (`postgresMajor`, absent in backups made before, which are all 16), and SCIP refuses
+  a backup from a newer one before touching anything, saying why.
 - The data folder, `config.json` and the backups are readable by their owner only (modes 700 and
   600): nothing there plays the part of the ACL of `%LOCALAPPDATA%`.
-- No Job Object: on Linux every service asks the kernel for a signal when SCIP dies; on both
-  systems SCIP stops, at start-up, whatever a killed SCIP left running.
+- No Job Object. On Linux every service asks the kernel for a signal when SCIP dies; on macOS a
+  watcher (`scip-desktop --reap`) waits for SCIP to die and stops them. On both, SCIP stops at
+  start-up whatever a killed SCIP left running from its resources, and nothing else: while a
+  backup or a restore runs without a window, the window refuses to open and says so.
 - The headless modes are the same: `/Applications/SCIP.app/Contents/MacOS/scip-desktop --backup`
   on a Mac, `scip-desktop --backup` on Linux.
 

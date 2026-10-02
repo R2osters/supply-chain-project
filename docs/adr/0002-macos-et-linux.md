@@ -53,18 +53,24 @@ On veut pouvoir installer SCIP sur un Mac et sur un PC Linux, sans machine de bu
 ## Conséquences
 
 - **Sauvegardes.** Une sauvegarde faite sous Windows (PostgreSQL 16) se restaure sur macOS et
-  Linux. L'inverse échoue : `pg_restore` 16 ne lit pas l'archive d'un `pg_dump` 18, et SCIP
-  reprend alors la sauvegarde de sécurité prise avant la restauration. L'écart disparaîtra quand
-  Windows passera à PostgreSQL 18.
+  Linux. L'inverse n'est pas possible : `pg_restore` 16 ne lit pas l'archive d'un `pg_dump` 18.
+  Le manifeste d'une sauvegarde porte donc la version majeure de PostgreSQL (champ facultatif,
+  absent = 16), et SCIP refuse la restauration avant de toucher à quoi que ce soit, avec la
+  raison. L'écart disparaîtra quand Windows passera à PostgreSQL 18.
 - **Emplacement imposé.** Le PostgreSQL embarqué est construit pour le dossier où le paquet
   l'installe : `/Applications/SCIP.app` sur Mac, `/usr/lib/SCIP` sous Linux. Lancé d'ailleurs
   (depuis l'image disque, depuis Téléchargements), SCIP le dit et s'arrête.
 - **Non signé.** Sur Mac, Gatekeeper bloque l'application téléchargée : il faut l'autoriser dans
   Réglages Système → Confidentialité et sécurité, ou retirer l'attribut de quarantaine
   ([DEPLOYMENT.md](../../DEPLOYMENT.md#macos-and-linux)).
-- **Processus.** macOS et Linux n'ont pas l'objet Job de Windows. Sous Linux, chaque service
-  demande au noyau un signal à la mort de SCIP ; sur les deux systèmes, SCIP arrête au démarrage
-  ce qu'un SCIP tué aurait laissé (`apps/desktop/src-tauri/src/unix_orphans.rs`).
+- **Processus.** macOS et Linux n'ont pas l'objet Job de Windows
+  (`apps/desktop/src-tauri/src/unix_orphans.rs`). Sous Linux, chaque service demande au noyau un
+  signal à la mort de SCIP. Sur macOS, qui n'a pas cette demande, SCIP lance un veilleur
+  (`scip-desktop --reap`) qui attend sa mort et arrête alors ses services. Sur les deux, SCIP
+  arrête à son démarrage ce qu'un SCIP tué aurait laissé : les processus de l'utilisateur lancés
+  depuis ses ressources et qui n'ont plus de SCIP vivant au-dessus d'eux. Un service qui en a
+  encore un (une sauvegarde en cours sans fenêtre) n'est jamais touché : la fenêtre refuse alors
+  de démarrer et le dit.
 - **Fichiers privés.** Le dossier de données est fermé aux autres comptes de l'ordinateur (mode
   700), `config.json` et les sauvegardes aussi (600) : rien n'y joue le rôle de la liste de
   contrôle d'accès de `%LOCALAPPDATA%`.
