@@ -28,7 +28,8 @@ Captures prises après Réglages → « Préparer la démo » (`docs/DEMO-scenar
 | `commandes.png` | Réseau · Commandes | « 1 commande en retard sur 3 ouvertes » |
 
 SCIP 0.2.1 ne produit pas de recommandation de commande pour le SKU-006 dans ce scénario (voir
-« Écarts constatés ») : aucune capture ne montre « Commander … chez le fournisseur C ».
+« Écarts constatés ») : aucune capture ne montre « Commander … chez le fournisseur C ». Le défaut est
+corrigé après la 0.2.1 ; les écrans correspondants sont dans `../v0.2.2/`.
 
 ## Optimise, avec un résultat
 
@@ -63,17 +64,21 @@ SCIP 0.2.1 ne produit pas de recommandation de commande pour le SKU-006 dans ce 
 
 ## Écarts constatés dans le logiciel
 
-Relevés pendant les captures ; à corriger dans le logiciel, pas à masquer sur le site.
+Relevés pendant les captures ; à corriger dans le logiciel, pas à masquer sur le site. Les points
+1, 4 et 5 sont corrigés après la 0.2.1.
 
-1. Le scénario de démo ne donne pas de recommandation de commande pour le SKU-006 : « Préparer la
-   démo » ne met le produit en pénurie qu'à WH-ACC, alors que le moteur additionne le stock des
-   trois entrepôts (`apps/api/src/modules/ai/ai.service.ts`, `demo-rehearsal.service.ts`).
+1. **Corrigé.** Le scénario de démo ne donnait pas de recommandation de commande pour le SKU-006 :
+   « Préparer la démo » ne met le produit en pénurie qu'à WH-ACC, alors que le moteur additionnait
+   le stock des trois entrepôts. Un site sous son point de commande est maintenant évalué seul
+   (`apps/api/src/modules/ai/ordering-position.ts`).
 2. Allocation : « Part max par fournisseur » attend une fraction (0,5) ; saisir 50 renvoie
    « maxSupplierSharePercent doit valoir au plus 1 ».
 3. Carte live : le type de véhicule s'affiche en anglais (« truck small »).
-4. Allocation : les nombres des explications gardent le format anglais (« 20,000 unités »).
-5. Installeur, écran Type : le jeu de démo est nommé « Accra Foods Distribution », alors que
-   l'entreprise créée s'appelle « Demo Distribution Ghana ».
+4. **Corrigé.** Les nombres des explications du moteur gardaient le format anglais (« 20,000
+   unités ») ; ils s'écrivent maintenant « 20 000 » et « 354 020,50 ». Les décimales isolées
+   (« 3.1 jours », « 96.5% ») gardent encore le point.
+5. **Corrigé.** Installeur, écran Type : le jeu de démo était nommé « Accra Foods Distribution »,
+   alors que l'entreprise créée s'appelle « Demo Distribution Ghana ».
 6. Conseils : le sous-titre d'une recommandation répète son titre.
 
 ## Refaire les captures

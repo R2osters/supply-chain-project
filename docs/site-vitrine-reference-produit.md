@@ -107,10 +107,12 @@ Entreprise « Demo Distribution Ghana », devise GHS (`apps/api/prisma/seed.ts`,
 | Comptes | Admin société, Supply chain, Logistique, Achats, Entrepôt, Chauffeur |
 
 `SHP-0142` n'existe pas dans le logiciel : c'est l'expédition du film « Le Signal ». « 3 000 unités
-chez le fournisseur C » vient du schéma du `README.md` : une illustration, pas un écran. En 0.2.1, le
-scénario de démo ne produit d'ailleurs aucune recommandation de commande pour le SKU-006 (défaut
-relevé dans `docs/captures/v0.2.1/README.md`) : le site ne montre pas cet écran tant qu'il n'existe
-pas.
+chez le fournisseur C » vient du schéma du `README.md` : une illustration, pas un écran. La version
+0.2.1 ne produit aucune recommandation de commande pour le SKU-006 dans le scénario de démo. Après
+correction (version suivante), l'écran Conseils affiche « Commander 2 963 unités de SKU-006 auprès de
+Tema Port Distributors », priorité critique, avec pour première raison « Le calcul porte sur Accra
+Central DC seul : ce site est sous son point de commande. » Le site montre l'écran de la version
+qu'il propose au téléchargement.
 
 ## 5. Chiffres autorisés
 
