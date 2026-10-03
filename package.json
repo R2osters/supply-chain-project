@@ -2,7 +2,7 @@
   "name": "scip",
   "version": "0.1.0",
   "private": true,
-  "description": "SCIP — Supply Chain Intelligence Platform, Windows desktop app (tracking + optimization)",
+  "description": "SCIP — Supply Chain Intelligence Platform, desktop app for Windows, macOS and Linux (tracking + optimization)",
   "workspaces": [
     "packages/*",
     "apps/*"
