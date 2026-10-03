@@ -182,8 +182,10 @@ Don't :
 1. Les tokens sont dans `site/css/base.css` ; ils recopient globals.css.
    Si la charte du logiciel change, changer là d'abord.
 2. Nouvelle capture : la prendre sur le logiciel réel en 1440×900 à 2x, la
-   convertir en WebP 1600 de large dans `site/assets/screens/`, donner
-   `width`, `height` et un `alt` qui décrit ce qu'on y lit.
+   convertir en WebP 1600 de large dans `site/assets/screens/` (1280 pour
+   l'installeur ; Pillow, rééchantillonnage LANCZOS, qualité 82, method 6 :
+   les réglages des captures en place), donner `width`, `height` et un `alt`
+   qui décrit ce qu'on y lit.
 3. Référence produit : `docs/site-vitrine-reference-produit.md` (branche de
    l'application) et le README des captures. Vérifier chaque phrase contre
    ces deux fichiers.
